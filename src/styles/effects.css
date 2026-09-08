@@ -1,0 +1,301 @@
+/* =============================================================================
+ * Effects layer — the visual signature of Aurora Noir.
+ * Every animation here is compositor-only (transform / opacity / filter) so the
+ * main thread stays free while the page is scrolled or recorded.
+ * ========================================================================== */
+
+@property --ring-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ring-sweep {
+  to {
+    --ring-angle: 360deg;
+  }
+}
+
+@keyframes aurora {
+  0%,
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%  { transform: translate3d(6%, -8%, 0) scale(1.18); }
+  66%  { transform: translate3d(-7%, 5%, 0) scale(0.92); }
+}
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); }
+  to   { transform: translate3d(0, 0, 0) rotate(360deg); }
+}
+@keyframes sheen {
+  0%   { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+  22%  { opacity: 0.85; }
+  60%, 100% { transform: translateX(240%) skewX(-18deg); opacity: 0; }
+}
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r, 120px)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--orbit-r, 120px)) rotate(-360deg); }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.85); opacity: 0.6; }
+  70%  { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes tick-up {
+  0% { background-color: color-mix(in oklab, var(--up) 26%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes tick-down {
+  0% { background-color: color-mix(in oklab, var(--down) 26%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@layer components {
+  /* --- Layout rails ------------------------------------------------------- */
+  .shell {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+    max-width: 84rem;
+  }
+  @media (min-width: 768px) { .shell { padding-inline: 2rem; } }
+
+  /* --- Aurora field: three counter-rotating haloes over a void ------------ */
+  .aurora-field {
+    position: absolute;
+    inset: -30%;
+    pointer-events: none;
+    filter: blur(84px) saturate(165%);
+    will-change: transform;
+  }
+  .aurora-field::before,
+  .aurora-field::after,
+  .aurora-field > i {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    mix-blend-mode: screen;
+  }
+  .light .aurora-field::before,
+  .light .aurora-field::after,
+  .light .aurora-field > i { mix-blend-mode: multiply; }
+
+  .aurora-field::before {
+    inset-block-start: 6%;
+    inset-inline-start: 10%;
+    width: max(52vw, 26rem); height: max(52vw, 26rem);
+    background: radial-gradient(circle at 50% 50%, var(--halo-a), transparent 68%);
+    animation: var(--animate-aurora);
+  }
+  .aurora-field::after {
+    inset-block-start: 22%;
+    inset-inline-end: 4%;
+    width: max(46vw, 23rem); height: max(46vw, 23rem);
+    background: radial-gradient(circle at 50% 50%, var(--halo-b), transparent 68%);
+    animation: var(--animate-aurora);
+    animation-delay: -8s;
+    animation-direction: reverse;
+  }
+  .aurora-field > i {
+    inset-block-end: 2%;
+    inset-inline-start: 34%;
+    width: max(42vw, 21rem); height: max(42vw, 21rem);
+    background: radial-gradient(circle at 50% 50%, var(--halo-c), transparent 70%);
+    animation: var(--animate-aurora);
+    animation-delay: -15s;
+  }
+
+  /* --- Film grain: kills gradient banding on dark surfaces ---------------- */
+  .grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  /* --- Blueprint grid ----------------------------------------------------- */
+  .grid-lines {
+    background-image:
+      linear-gradient(to right, var(--line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 78%);
+  }
+
+  /* --- Glass surface ------------------------------------------------------ */
+  .glass {
+    background: var(--surface);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    border: 1px solid var(--line);
+  }
+
+  /* --- Hairline: a 1px gradient edge that catches the aurora -------------- */
+  .hairline { position: relative; }
+  .hairline::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      140deg,
+      color-mix(in oklab, var(--brand-soft) 55%, transparent),
+      color-mix(in oklab, var(--fg) 8%, transparent) 32%,
+      transparent 55%,
+      color-mix(in oklab, var(--accent) 40%, transparent)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+
+  /* --- Cursor spotlight: driven by --mx/--my set in JS -------------------- */
+  .spotlight { position: relative; isolation: isolate; }
+  .spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.4s var(--ease-out-expo);
+    background: radial-gradient(
+      320px circle at var(--mx, 50%) var(--my, 50%),
+      color-mix(in oklab, var(--brand) 22%, transparent),
+      transparent 62%
+    );
+    pointer-events: none;
+    z-index: -1;
+  }
+  .spotlight:hover::after { opacity: 1; }
+
+  /* --- Sweeping conic edge light ------------------------------------------
+   * The sweep animates the gradient's own angle, not the element. Rotating
+   * the element sent its corners sweeping outside the card as visible beams —
+   * an absolutely positioned child is not clipped by its rounded parent.
+   * Keeping the box static means the only bleed is the blur radius, which is
+   * held under the inset so this reads as an edge light, never a halo.
+   */
+  .glow-ring { position: relative; }
+  .glow-ring::before {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    border-radius: inherit;
+    background: conic-gradient(
+      from var(--ring-angle),
+      transparent 0deg,
+      var(--brand-soft) 40deg,
+      var(--accent) 90deg,
+      transparent 150deg,
+      transparent 360deg
+    );
+    animation: ring-sweep 7s linear infinite;
+    opacity: 0;
+    transition: opacity 0.45s var(--ease-out-expo);
+    z-index: -1;
+    filter: blur(2.5px);
+  }
+  .glow-ring:hover::before { opacity: 0.85; }
+
+  /* --- Button sheen ------------------------------------------------------- */
+  .sheen { position: relative; overflow: hidden; }
+  .sheen > .sheen-bar {
+    position: absolute;
+    inset-block: -50%;
+    inline-size: 45%;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.4), transparent);
+    animation: var(--animate-sheen);
+    pointer-events: none;
+  }
+
+  /* --- Gradient type ------------------------------------------------------ */
+  .text-aurora {
+    background-image: linear-gradient(
+      100deg,
+      var(--fg) 0%,
+      var(--brand-soft) 38%,
+      var(--accent) 62%,
+      var(--fg) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 9s linear infinite;
+  }
+
+  /* --- Marquee rail ------------------------------------------------------- */
+  .marquee { display: flex; overflow: hidden; user-select: none; }
+  .marquee > * { flex-shrink: 0; display: flex; animation: var(--animate-marquee); }
+  .marquee:hover > * { animation-play-state: paused; }
+
+  /* --- Edge masks --------------------------------------------------------- */
+  .mask-x {
+    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  }
+  .mask-b {
+    mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  }
+
+  /* --- Section eyebrow ---------------------------------------------------- */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-subtle);
+  }
+}
+
+@layer components {
+  /* --- Long-form legal copy -------------------------------------------- */
+  .prose-legal :where(h2) {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    margin-block: 3rem 1rem;
+    scroll-margin-top: 7rem;
+  }
+  .prose-legal :where(h3) {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-block: 2rem 0.75rem;
+  }
+  .prose-legal :where(p) {
+    color: var(--fg-muted);
+    line-height: 1.75;
+    margin-block: 0 1rem;
+  }
+  .prose-legal :where(ul) {
+    margin-block: 0 1.25rem;
+    padding-inline-start: 1.25rem;
+    list-style: disc;
+    color: var(--fg-muted);
+  }
+  .prose-legal :where(li) {
+    margin-block: 0.5rem;
+    line-height: 1.7;
+    padding-inline-start: 0.35rem;
+  }
+  .prose-legal :where(li)::marker { color: var(--brand-soft); }
+  .prose-legal :where(a) {
+    color: var(--brand-soft);
+    text-underline-offset: 4px;
+  }
+  .prose-legal :where(a):hover { text-decoration: underline; }
+  .prose-legal :where(strong) { color: var(--fg); font-weight: 600; }
+}

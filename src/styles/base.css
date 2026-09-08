@@ -1,0 +1,99 @@
+/* =============================================================================
+ * Base layer — document defaults, focus policy, motion policy, scrollbars.
+ * ========================================================================== */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: clip;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    line-height: 1.05;
+  }
+
+  p { text-wrap: pretty; }
+
+  /* Visible only for keyboard users — pointer interaction stays clean. */
+  :focus-visible {
+    outline: 2px solid var(--brand-soft);
+    outline-offset: 3px;
+    border-radius: var(--radius-xs);
+  }
+  :focus:not(:focus-visible) { outline: none; }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--brand) 45%, transparent);
+    color: var(--fg);
+  }
+
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--fg) 18%, transparent);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--fg) 32%, transparent); background-clip: content-box; }
+
+  /* Numerals must never jitter when live prices tick. */
+  [data-numeric] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+    letter-spacing: -0.02em;
+  }
+
+  img, svg, video, canvas { display: block; max-width: 100%; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Deliberately unlayered.
+ *
+ * When this app is embedded in a host that injects its own *unlayered* body
+ * reset (an artifact viewer, an email-style preview shell), that reset beats
+ * everything inside `@layer base` regardless of specificity — cascade layers
+ * always lose to unlayered rules. Restating the ground here keeps the page on
+ * its own tokens instead of borrowing the host's.
+ */
+html,
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+}
