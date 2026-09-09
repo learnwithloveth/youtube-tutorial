@@ -73,7 +73,7 @@ export const PRIMARY_NAV: NavColumn[] = [
         heading: 'Platform',
         items: [
           { label: 'Novex Wallet', href: '/wallet', description: 'Self-custody with MPC key shards.', icon: Wallet },
-          { label: 'Mobile app', href: '/app', description: 'iOS & Android, 4.9★ rated.', icon: Smartphone },
+          { label: 'Mobile app', href: '/mobile', description: 'iOS & Android, 4.9★ rated.', icon: Smartphone },
           { label: 'Security', href: '/security', description: 'Proof-of-reserves, HSM cold storage.', icon: ShieldCheck },
           { label: 'Features', href: '/features', description: 'Everything the engine can do.', icon: Sparkles },
         ],
@@ -135,7 +135,7 @@ export const FOOTER_NAV: { heading: string; links: { label: string; href: string
     links: [
       { label: 'Features', href: '/features' },
       { label: 'Novex Wallet', href: '/wallet' },
-      { label: 'Mobile app', href: '/app' },
+      { label: 'Mobile app', href: '/mobile' },
       { label: 'Security', href: '/security' },
       { label: 'Institutional', href: '/institutional' },
       { label: 'Developers', href: '/developers' },

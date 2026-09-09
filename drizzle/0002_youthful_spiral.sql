@@ -1,0 +1,1 @@
+ALTER TABLE "id_users" ADD COLUMN "role" text DEFAULT 'customer' NOT NULL;

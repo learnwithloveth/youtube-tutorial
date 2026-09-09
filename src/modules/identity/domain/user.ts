@@ -18,6 +18,20 @@ import type { PasswordHash } from './password';
 export type UserStatus = 'active' | 'locked' | 'disabled';
 
 /**
+ * What a user is allowed to reach.
+ *
+ * Two values, deliberately, rather than a permission matrix. This context knows
+ * "customer" from "operator" and nothing finer; which *operations* an operator
+ * may perform is a question for the operations context that owns them, and
+ * modelling it here would drag those rules into identity.
+ *
+ * The default is `customer`. A role is granted deliberately — there is no code
+ * path that promotes anyone, because promotion is an administrative act with an
+ * audit trail, not something a registration form does.
+ */
+export type UserRole = 'customer' | 'admin';
+
+/**
  * Lockout thresholds.
  *
  * Bounded and time-based rather than permanent: a permanent lock on failed attempts
@@ -36,6 +50,7 @@ export interface UserProps {
   email: EmailAddress;
   passwordHash: PasswordHash;
   status: UserStatus;
+  role: UserRole;
   emailVerifiedAt: Date | null;
   failedAttempts: number;
   lockedUntil: Date | null;
@@ -58,6 +73,8 @@ export class User {
       email: input.email,
       passwordHash: input.passwordHash,
       status: 'active',
+      // Never `admin`. Registration cannot grant privilege.
+      role: 'customer',
       emailVerifiedAt: null,
       failedAttempts: 0,
       lockedUntil: null,
@@ -88,6 +105,13 @@ export class User {
   }
   get status(): UserStatus {
     return this.props.status;
+  }
+  get role(): UserRole {
+    return this.props.role;
+  }
+
+  get isAdmin(): boolean {
+    return this.props.role === 'admin';
   }
   get emailVerifiedAt(): Date | null {
     return this.props.emailVerifiedAt;

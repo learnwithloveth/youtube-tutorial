@@ -1,0 +1,47 @@
+import type { Asset } from './market-types';
+
+/**
+ * Static catalogue. In production this is hydrated from the `/v3/markets`
+ * REST snapshot and then kept current over the WebSocket ticker channel;
+ * the shape below is intentionally identical to that payload.
+ */
+export const ASSETS: readonly Asset[] = [
+  { id: 'btc', symbol: 'BTC', name: 'Bitcoin', glyph: '₿', hue: '#F7931A', category: 'Layer 1', price: 94820.44, change24h: 2.41, change7d: 8.12, marketCap: 1_874_000_000_000, volume24h: 41_200_000_000, supply: 19_780_000, apy: 0, blurb: 'The original settlement layer and the deepest book on Novex.' },
+  { id: 'eth', symbol: 'ETH', name: 'Ethereum', glyph: 'Ξ', hue: '#8A92B2', category: 'Layer 1', price: 4218.9, change24h: 3.87, change7d: 11.4, marketCap: 507_400_000_000, volume24h: 22_900_000_000, supply: 120_300_000, apy: 3.6, blurb: 'Programmable money and the settlement rail for most of DeFi.' },
+  { id: 'sol', symbol: 'SOL', name: 'Solana', glyph: '◎', hue: '#14F195', category: 'Layer 1', price: 238.16, change24h: 6.02, change7d: 18.9, marketCap: 114_800_000_000, volume24h: 8_640_000_000, supply: 482_000_000, apy: 7.1, blurb: 'Sub-second finality with parallel execution at 65k TPS.' },
+  { id: 'usdc', symbol: 'USDC', name: 'USD Coin', glyph: '$', hue: '#2775CA', category: 'Stablecoin', price: 1.0001, change24h: 0.01, change7d: -0.01, marketCap: 61_200_000_000, volume24h: 12_100_000_000, supply: 61_190_000_000, apy: 5.2, blurb: 'Fully reserved dollars, attested monthly by a top-4 auditor.' },
+  { id: 'xrp', symbol: 'XRP', name: 'XRP', glyph: '✕', hue: '#3f4956', category: 'Payments', price: 2.61, change24h: -1.24, change7d: 4.3, marketCap: 149_900_000_000, volume24h: 6_310_000_000, supply: 57_400_000_000, blurb: 'Cross-border settlement in three seconds for a fraction of a cent.' },
+  { id: 'bnb', symbol: 'BNB', name: 'BNB', glyph: '◈', hue: '#F3BA2F', category: 'Layer 1', price: 712.33, change24h: 1.18, change7d: 2.9, marketCap: 103_200_000_000, volume24h: 2_480_000_000, supply: 144_900_000, apy: 2.4, blurb: 'Gas and governance for one of the largest EVM ecosystems.' },
+  { id: 'ada', symbol: 'ADA', name: 'Cardano', glyph: '₳', hue: '#0033AD', category: 'Layer 1', price: 1.04, change24h: -2.66, change7d: -1.2, marketCap: 37_400_000_000, volume24h: 1_190_000_000, supply: 35_900_000_000, apy: 4.1, blurb: 'Peer-reviewed proof-of-stake with formal-methods tooling.' },
+  { id: 'link', symbol: 'LINK', name: 'Chainlink', glyph: '⬡', hue: '#375BD2', category: 'DeFi', price: 26.72, change24h: 4.44, change7d: 9.8, marketCap: 17_100_000_000, volume24h: 1_040_000_000, supply: 640_000_000, apy: 4.8, blurb: 'Oracle infrastructure securing north of $20B in value.' },
+  { id: 'avax', symbol: 'AVAX', name: 'Avalanche', glyph: '▲', hue: '#E84142', category: 'Layer 1', price: 42.18, change24h: 5.31, change7d: 12.6, marketCap: 17_600_000_000, volume24h: 892_000_000, supply: 417_000_000, apy: 6.9, blurb: 'Subnet architecture built for app-specific throughput.' },
+  { id: 'arb', symbol: 'ARB', name: 'Arbitrum', glyph: '◐', hue: '#12AAFF', category: 'Layer 2', price: 1.14, change24h: 7.92, change7d: 21.4, marketCap: 5_100_000_000, volume24h: 641_000_000, supply: 4_460_000_000, apy: 3.2, blurb: 'The largest optimistic rollup by total value secured.' },
+  { id: 'op', symbol: 'OP', name: 'Optimism', glyph: '◑', hue: '#FF0420', category: 'Layer 2', price: 2.38, change24h: 6.14, change7d: 15.1, marketCap: 3_900_000_000, volume24h: 388_000_000, supply: 1_640_000_000, apy: 3.0, blurb: 'The OP Stack powering a superchain of L2s.' },
+  { id: 'matic', symbol: 'POL', name: 'Polygon', glyph: '⬢', hue: '#8247E5', category: 'Layer 2', price: 0.62, change24h: -3.11, change7d: 1.9, marketCap: 6_200_000_000, volume24h: 512_000_000, supply: 10_000_000_000, apy: 4.4, blurb: 'zkEVM scaling with an aggregation layer for shared liquidity.' },
+  { id: 'uni', symbol: 'UNI', name: 'Uniswap', glyph: '🦄', hue: '#FF007A', category: 'DeFi', price: 16.44, change24h: 3.02, change7d: 6.7, marketCap: 9_860_000_000, volume24h: 486_000_000, supply: 600_000_000, blurb: 'The AMM that defined on-chain price discovery.' },
+  { id: 'aave', symbol: 'AAVE', name: 'Aave', glyph: '◍', hue: '#B6509E', category: 'DeFi', price: 348.9, change24h: 8.16, change7d: 24.2, marketCap: 5_240_000_000, volume24h: 402_000_000, supply: 15_000_000, apy: 5.4, blurb: 'Non-custodial liquidity markets across eleven networks.' },
+  { id: 'rndr', symbol: 'RENDER', name: 'Render', glyph: '⧉', hue: '#FF4B14', category: 'AI', price: 9.42, change24h: 11.24, change7d: 33.8, marketCap: 4_880_000_000, volume24h: 621_000_000, supply: 518_000_000, blurb: 'Distributed GPU compute for rendering and inference.' },
+  { id: 'tao', symbol: 'TAO', name: 'Bittensor', glyph: '⨁', hue: '#00CCB0', category: 'AI', price: 612.4, change24h: 9.08, change7d: 27.1, marketCap: 5_310_000_000, volume24h: 288_000_000, supply: 8_670_000, apy: 12.4, blurb: 'An incentive market for machine intelligence.' },
+  { id: 'dot', symbol: 'DOT', name: 'Polkadot', glyph: '●', hue: '#E6007A', category: 'Layer 1', price: 8.96, change24h: -1.42, change7d: 3.1, marketCap: 13_700_000_000, volume24h: 421_000_000, supply: 1_530_000_000, apy: 11.2, blurb: 'Shared security across a heterogeneous parachain network.' },
+  { id: 'atom', symbol: 'ATOM', name: 'Cosmos', glyph: '⚛', hue: '#6F7390', category: 'Layer 1', price: 11.28, change24h: 2.09, change7d: 5.4, marketCap: 4_420_000_000, volume24h: 214_000_000, supply: 392_000_000, apy: 9.8, blurb: 'The interchain: sovereign chains connected by IBC.' },
+  { id: 'imx', symbol: 'IMX', name: 'Immutable', glyph: '◆', hue: '#0BE5F1', category: 'Gaming', price: 2.04, change24h: 5.77, change7d: 14.2, marketCap: 3_610_000_000, volume24h: 184_000_000, supply: 1_770_000_000, apy: 2.1, blurb: 'Zero-gas NFT minting purpose-built for game studios.' },
+  { id: 'ondo', symbol: 'ONDO', name: 'Ondo', glyph: '◉', hue: '#3B82F6', category: 'RWA', price: 1.88, change24h: 6.41, change7d: 19.7, marketCap: 2_940_000_000, volume24h: 241_000_000, supply: 1_560_000_000, blurb: 'Tokenised treasuries bringing TradFi yield on-chain.' },
+  { id: 'ldo', symbol: 'LDO', name: 'Lido DAO', glyph: '◇', hue: '#00A3FF', category: 'DeFi', price: 2.42, change24h: -0.88, change7d: 4.9, marketCap: 2_170_000_000, volume24h: 128_000_000, supply: 897_000_000, blurb: 'Liquid staking for a third of all staked ether.' },
+  { id: 'inj', symbol: 'INJ', name: 'Injective', glyph: '◭', hue: '#00D2FF', category: 'DeFi', price: 31.7, change24h: 7.18, change7d: 16.8, marketCap: 3_120_000_000, volume24h: 302_000_000, supply: 98_400_000, apy: 8.6, blurb: 'A finance-native L1 with an on-chain central limit order book.' },
+  { id: 'near', symbol: 'NEAR', name: 'NEAR', glyph: '◎', hue: '#00EC97', category: 'AI', price: 6.84, change24h: 4.26, change7d: 10.3, marketCap: 8_400_000_000, volume24h: 486_000_000, supply: 1_228_000_000, apy: 8.1, blurb: 'Chain abstraction and sharded execution for consumer apps.' },
+  { id: 'usdt', symbol: 'USDT', name: 'Tether', glyph: '₮', hue: '#26A17B', category: 'Stablecoin', price: 0.9998, change24h: -0.01, change7d: 0.0, marketCap: 142_800_000_000, volume24h: 68_400_000_000, supply: 142_830_000_000, apy: 4.8, blurb: 'The most liquid dollar proxy in digital assets.' },
+];
+
+export const ASSET_BY_ID = new Map(ASSETS.map((a) => [a.id, a]));
+export const ASSET_CATEGORIES = [...new Set(ASSETS.map((a) => a.category))].sort();
+
+/**
+ * The first listed asset, as a definite value.
+ *
+ * `ASSETS[0]` is typed `Asset | undefined` under `noUncheckedIndexedAccess`.
+ * The catalogue is a non-empty literal, so checking once here is cheaper than
+ * asserting at every default-selection site.
+ */
+const first = ASSETS[0];
+if (!first) throw new Error('The asset catalogue is empty.');
+export const FIRST_ASSET = first;

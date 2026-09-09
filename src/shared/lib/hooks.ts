@@ -124,3 +124,26 @@ export function useInterval(callback: () => void, delayMs: number | null): void 
     return () => window.clearInterval(id);
   }, [delayMs]);
 }
+
+/**
+ * Closes something when a pointer goes down outside it.
+ *
+ * `pointerdown` rather than `click`, because a menu that waits for a full click
+ * stays open through the press and only closes on release — which reads as lag,
+ * and lets the click land on whatever is underneath.
+ */
+export function useOutsideClick<T extends HTMLElement>(
+  ref: React.RefObject<T | null>,
+  handler: () => void,
+  active = true,
+): void {
+  useEffect(() => {
+    if (!active) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const node = ref.current;
+      if (node && !node.contains(event.target as Node)) handler();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [ref, handler, active]);
+}

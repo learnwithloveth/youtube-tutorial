@@ -1,6 +1,6 @@
 import type { UserId } from '@/shared/kernel/ids';
 
-import type { User } from '../domain/user';
+import type { User, UserRole } from '../domain/user';
 
 /**
  * Identity DTOs — the module's public data contract.
@@ -22,6 +22,7 @@ export interface CurrentUserDto {
   id: UserId;
   email: string;
   emailVerified: boolean;
+  role: UserRole;
   createdAt: string;
 }
 
@@ -30,6 +31,7 @@ export function toCurrentUserDto(user: User): CurrentUserDto {
     id: user.id,
     email: user.email.value,
     emailVerified: user.isEmailVerified,
+    role: user.role,
     createdAt: user.createdAt.toISOString(),
   };
 }

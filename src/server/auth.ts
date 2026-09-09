@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 
 import type { CurrentUserDto } from '@/modules/identity';
@@ -99,3 +99,20 @@ export async function requireUser(returnTo?: string): Promise<CurrentUserDto> {
  * produces a logout that does not log anyone out.
  */
 export { SESSION_COOKIE_NAME as SESSION_COOKIE };
+
+/**
+ * The signed-in user, required to be an operator.
+ *
+ * A signed-out visitor is sent to sign in. A signed-in customer gets a 404, not
+ * a 403: telling them the console exists and they are not allowed in confirms
+ * the URL is real, which is the first thing an attacker wants to know. As far as
+ * a customer is concerned, `/admin` is not a page.
+ *
+ * This is the authorisation boundary for the console. The proxy's cookie check
+ * cannot do it — the proxy never unseals the cookie, so it cannot know a role.
+ */
+export async function requireAdmin(returnTo?: string): Promise<CurrentUserDto> {
+  const user = await requireUser(returnTo);
+  if (user.role !== 'admin') notFound();
+  return user;
+}

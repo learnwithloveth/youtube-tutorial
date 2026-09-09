@@ -36,6 +36,11 @@ export const users = pgTable(
       .notNull()
       .default('active'),
 
+    /** Access tier. Granted administratively, never by registration. */
+    role: text('role', { enum: ['customer', 'admin'] })
+      .notNull()
+      .default('customer'),
+
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
 
     failedAttempts: integer('failed_attempts').notNull().default(0),

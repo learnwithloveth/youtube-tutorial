@@ -24,7 +24,7 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
   { path: '/features', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/security', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/wallet', priority: 0.7, changeFrequency: 'monthly' },
-  { path: '/app', priority: 0.6, changeFrequency: 'monthly' },
+  { path: '/mobile', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/institutional', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/developers', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/blog', priority: 0.6, changeFrequency: 'weekly' },

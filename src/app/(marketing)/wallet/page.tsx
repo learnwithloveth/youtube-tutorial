@@ -101,7 +101,7 @@ export default async function WalletPage() {
         align="left"
         actions={
           <>
-            <ButtonLink href="/app" size="lg" sheen>
+            <ButtonLink href="/mobile" size="lg" sheen>
               Download the wallet
               <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
             </ButtonLink>

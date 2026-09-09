@@ -57,7 +57,7 @@ export function TwoFactorForm() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          router.push('/');
+          router.push('/app');
         }}
       >
         <fieldset>

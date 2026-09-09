@@ -20,6 +20,10 @@ const eslintConfig = defineConfig([
     'build/**',
     'next-env.d.ts',
     'drizzle/**',
+    // The Vite source the dashboard and admin console were ported from. It is
+    // reference material, not part of this build — it imports react-router-dom
+    // and import.meta.env, neither of which exists here.
+    'novex/**',
   ]),
 
   {

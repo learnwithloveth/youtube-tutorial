@@ -54,12 +54,15 @@ async function requestContext(): Promise<{ userAgent: string | null; ipAddress: 
   };
 }
 
+/** Where a signed-in user goes when nothing else asked for a destination. */
+const DEFAULT_SIGNED_IN_PATH = '/app';
+
 function safeRedirectTarget(raw: FormDataEntryValue | null): string {
   const value = typeof raw === 'string' ? raw : '';
   // Only same-site absolute paths. Accepting anything else turns the `next`
   // parameter into an open redirect, which is a phishing primitive: a link to the
   // real login page that lands on an attacker's copy.
-  if (!value.startsWith('/') || value.startsWith('//')) return '/';
+  if (!value.startsWith('/') || value.startsWith('//')) return DEFAULT_SIGNED_IN_PATH;
   return value;
 }
 
@@ -86,8 +89,9 @@ export async function signUpAction(
     cookieOptions(new Date(result.value.expiresAt)),
   );
 
-  // Outside the try/return flow on purpose: `redirect` works by throwing, so it
-  // must not sit inside anything that catches.
+  // The design's onboarding continues into identity verification; that screen
+  // ends at the dashboard. Outside the try/return flow on purpose: `redirect`
+  // works by throwing, so it must not sit inside anything that catches.
   redirect('/verify-identity');
 }
 

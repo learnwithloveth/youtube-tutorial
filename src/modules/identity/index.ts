@@ -14,6 +14,7 @@
  */
 
 export type { CurrentUserDto, SessionDto } from './application/dto';
+export type { UserRole } from './domain/user';
 export type { IdentityError } from './application/errors';
 export { presentIdentityError } from './application/errors';
 

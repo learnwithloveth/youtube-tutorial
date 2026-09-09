@@ -20,7 +20,9 @@ export function VerifyIdentityForm() {
   const router = useRouter();
   const [step, setStep] = useState(0);
 
-  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : router.push('/'));
+  // Finishing onboarding lands in the application, not back on the marketing
+  // site — there is now somewhere signed-in to land.
+  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : router.push('/app'));
 
   return (
     <div>
