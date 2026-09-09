@@ -109,6 +109,9 @@ module.exports = {
           '(^|/)tsconfig\\.json$',
           '^src/app/',
           '^src/instrumentation\\.ts$',
+          // Reached only through a bundler alias in vitest.config.mts, so the
+          // static graph cannot see who imports it.
+          '^src/test/',
         ],
       },
       to: {},

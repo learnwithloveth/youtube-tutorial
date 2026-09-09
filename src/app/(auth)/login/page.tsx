@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 
 import { LoginForm } from './_components/login-form';
 
@@ -19,5 +20,13 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-  return <LoginForm />;
+  // `LoginForm` reads `next` and `reset` from the query string via
+  // `useSearchParams`, which forces a client-side bailout. Without a boundary
+  // that bailout propagates to the whole route and Next refuses to prerender it;
+  // with one, the shell is still static and only the form waits.
+  return (
+    <Suspense fallback={<div className="min-h-[28rem]" aria-hidden />}>
+      <LoginForm />
+    </Suspense>
+  );
 }

@@ -1,0 +1,175 @@
+/**
+ * User — the aggregate root of the Identity context.
+ *
+ * Scope discipline: to Identity a user is *credentials and access state*. Their
+ * verification tier belongs to Compliance, their balances to Ledger, their orders to
+ * Trading. Letting those fields creep in here is how a 40-field god object forms
+ * that every team edits and nobody understands.
+ *
+ * Pure domain. No framework, no I/O.
+ */
+
+import { err, ok, type Result } from '@/shared/kernel/result';
+import type { UserId } from '@/shared/kernel/ids';
+
+import type { EmailAddress } from './email-address';
+import type { PasswordHash } from './password';
+
+export type UserStatus = 'active' | 'locked' | 'disabled';
+
+/**
+ * Lockout thresholds.
+ *
+ * Bounded and time-based rather than permanent: a permanent lock on failed attempts
+ * turns a guessing attempt against someone else's account into a denial of service
+ * against that person.
+ */
+export const MAX_FAILED_ATTEMPTS = 5;
+export const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
+export type AuthenticationFailure =
+  | { _tag: 'AccountLocked'; until: Date }
+  | { _tag: 'AccountDisabled' };
+
+export interface UserProps {
+  id: UserId;
+  email: EmailAddress;
+  passwordHash: PasswordHash;
+  status: UserStatus;
+  emailVerifiedAt: Date | null;
+  failedAttempts: number;
+  lockedUntil: Date | null;
+  createdAt: Date;
+  version: number;
+}
+
+export class User {
+  private constructor(private props: UserProps) {}
+
+  /** Registration. The only way a new User comes into existence. */
+  static register(input: {
+    id: UserId;
+    email: EmailAddress;
+    passwordHash: PasswordHash;
+    now: Date;
+  }): User {
+    return new User({
+      id: input.id,
+      email: input.email,
+      passwordHash: input.passwordHash,
+      status: 'active',
+      emailVerifiedAt: null,
+      failedAttempts: 0,
+      lockedUntil: null,
+      createdAt: input.now,
+      version: 0,
+    });
+  }
+
+  /**
+   * Reconstruction from storage.
+   *
+   * Separate from `register` on purpose: a row written under last month's rules must
+   * still load today. Re-running registration validation on read turns a policy
+   * change into a data outage.
+   */
+  static rehydrate(props: UserProps): User {
+    return new User(props);
+  }
+
+  get id(): UserId {
+    return this.props.id;
+  }
+  get email(): EmailAddress {
+    return this.props.email;
+  }
+  get passwordHash(): PasswordHash {
+    return this.props.passwordHash;
+  }
+  get status(): UserStatus {
+    return this.props.status;
+  }
+  get emailVerifiedAt(): Date | null {
+    return this.props.emailVerifiedAt;
+  }
+  get failedAttempts(): number {
+    return this.props.failedAttempts;
+  }
+  get lockedUntil(): Date | null {
+    return this.props.lockedUntil;
+  }
+  get createdAt(): Date {
+    return this.props.createdAt;
+  }
+  get version(): number {
+    return this.props.version;
+  }
+
+  get isEmailVerified(): boolean {
+    return this.props.emailVerifiedAt !== null;
+  }
+
+  isLockedAt(now: Date): boolean {
+    return this.props.lockedUntil !== null && this.props.lockedUntil > now;
+  }
+
+  /**
+   * Whether this account may attempt authentication at all.
+   *
+   * Called BEFORE verifying the password, so a locked account never consumes the
+   * (deliberately expensive) hash comparison.
+   */
+  canAttemptAuthentication(now: Date): Result<void, AuthenticationFailure> {
+    if (this.props.status === 'disabled') {
+      return err({ _tag: 'AccountDisabled' });
+    }
+    if (this.isLockedAt(now)) {
+      return err({ _tag: 'AccountLocked', until: this.props.lockedUntil! });
+    }
+    return ok(undefined);
+  }
+
+  /** Records a failed attempt, locking the account once the threshold is crossed. */
+  recordFailedAttempt(now: Date): void {
+    const attempts = this.props.failedAttempts + 1;
+    this.props = {
+      ...this.props,
+      failedAttempts: attempts,
+      lockedUntil:
+        attempts >= MAX_FAILED_ATTEMPTS ? new Date(now.getTime() + LOCKOUT_DURATION_MS) : null,
+      status: this.props.status === 'active' && attempts >= MAX_FAILED_ATTEMPTS
+        ? 'locked'
+        : this.props.status,
+    };
+  }
+
+  /** Clears the failure counter after a successful authentication. */
+  recordSuccessfulAuthentication(): void {
+    this.props = {
+      ...this.props,
+      failedAttempts: 0,
+      lockedUntil: null,
+      status: this.props.status === 'locked' ? 'active' : this.props.status,
+    };
+  }
+
+  /**
+   * Replaces the stored credential.
+   *
+   * Used both for a genuine password change and for transparent re-hashing when the
+   * cost parameters have been raised since the hash was created.
+   */
+  replacePasswordHash(passwordHash: PasswordHash): void {
+    this.props = { ...this.props, passwordHash };
+  }
+
+  verifyEmail(now: Date): void {
+    if (this.props.emailVerifiedAt !== null) return; // idempotent
+    this.props = { ...this.props, emailVerifiedAt: now };
+  }
+
+  /** Snapshot for the persistence mapper. Infrastructure use only. */
+  snapshot(): Readonly<UserProps> {
+    return { ...this.props };
+  }
+}

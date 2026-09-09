@@ -1,0 +1,55 @@
+name: novex-dev
+
+services:
+  # Local Postgres.
+  #
+  # The `pgdata` volume was already declared with no service attached to it, so
+  # this fills that in. It also removes a real hazard: the Neon URL in .env.local
+  # is shared with the `main` branch, which has its own migration history and
+  # already holds that branch's tables. Two divergent histories against one
+  # database is how a migration aborts halfway, which is exactly what happened
+  # before drizzle/0001 was made idempotent.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: novex
+      POSTGRES_PASSWORD: novex
+      POSTGRES_DB: novex
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Lets `depends_on: condition: service_healthy` work, and tells you the
+    # difference between "starting" and "accepting connections".
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U novex -d novex']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Catches every outbound email locally. UI on http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
+  # Receives OTLP traces/metrics so the telemetry path is exercised in dev,
+  # not discovered to be broken in staging.
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+    ports:
+      - '16686:16686'
+      - '4318:4318'
+
+volumes:
+  pgdata:
+  # Declared but unused: nothing in the stack runs Redis yet. Sessions are
+  # Postgres rows and the app has no cache tier, so adding one would be a
+  # service with no reader. Left here for when something needs it.
+  redisdata:

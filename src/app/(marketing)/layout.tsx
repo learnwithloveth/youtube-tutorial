@@ -1,4 +1,8 @@
+import { getCurrentUser } from '@/server/auth';
 import { AmbientBackdrop } from '@/shared/ui/visuals/ambient-backdrop';
+
+import { AccountMenu } from '../_components/account-menu';
+import { VerificationBanner } from '../_components/verification-banner';
 
 import { Footer } from './_components/footer';
 import { Navbar } from './_components/navbar';
@@ -15,7 +19,9 @@ import { Navbar } from './_components/navbar';
  * Component the chrome is rendered once on the server rather than re-rendered in
  * the browser on every route change.
  */
-export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+
   return (
     <div className="flex min-h-dvh flex-col">
       <AmbientBackdrop />
@@ -25,7 +31,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
-      <Navbar />
+      {user && !user.emailVerified ? <VerificationBanner email={user.email} /> : null}
+      <Navbar account={<AccountMenu />} />
       <main id="main" className="flex-1">
         {children}
       </main>

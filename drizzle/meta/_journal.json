@@ -8,6 +8,13 @@
       "when": 1788939838716,
       "tag": "0000_odd_ultimates",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788961957807,
+      "tag": "0001_even_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

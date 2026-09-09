@@ -14,16 +14,16 @@ export function AuthHeading({ title, body }: { title: string; body: ReactNode })
 export function AuthFooterLink({
   prompt,
   label,
-  to,
+  href,
 }: {
   prompt: string;
   label: string;
-  to: string;
+  href: string;
 }) {
   return (
     <p className="mt-8 text-center text-sm text-fg-muted">
       {prompt}{' '}
-      <Link href={to} className="font-medium text-brand-soft underline-offset-4 hover:underline">
+      <Link href={href} className="font-medium text-brand-soft underline-offset-4 hover:underline">
         {label}
       </Link>
     </p>

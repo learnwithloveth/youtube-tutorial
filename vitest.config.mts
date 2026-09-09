@@ -17,13 +17,20 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'server-only': fileURLToPath(new URL('./src/test/server-only-stub.ts', import.meta.url)),
     },
   },
   test: {
     projects: [
       {
         resolve: {
-          alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+          alias: {
+            '@': fileURLToPath(new URL('./src', import.meta.url)),
+            // See src/test/server-only-stub.ts for why this alias exists.
+            'server-only': fileURLToPath(
+              new URL('./src/test/server-only-stub.ts', import.meta.url),
+            ),
+          },
         },
         test: {
           name: 'unit',
@@ -34,7 +41,13 @@ export default defineConfig({
       },
       {
         resolve: {
-          alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+          alias: {
+            '@': fileURLToPath(new URL('./src', import.meta.url)),
+            // See src/test/server-only-stub.ts for why this alias exists.
+            'server-only': fileURLToPath(
+              new URL('./src/test/server-only-stub.ts', import.meta.url),
+            ),
+          },
         },
         test: {
           name: 'integration',

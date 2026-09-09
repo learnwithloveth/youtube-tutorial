@@ -1,11 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { Button } from '@/shared/ui/primitives/button';
-import { TextField, SelectField } from '@/shared/ui/primitives/field';
-import { AuthFooterLink, AuthHeading, PasswordStrength, SocialAuth } from '../../_components/auth-shared';
+import { useActionState, useState } from 'react';
+
+import { PASSWORD_MIN_LENGTH } from '@/modules/identity';
+import { SelectField, TextField } from '@/shared/ui/primitives/field';
+
+import { signUpAction } from '../../actions';
+import { IDLE_FORM_STATE } from '../../_lib/form-state';
+import {
+  AuthFooterLink,
+  AuthHeading,
+  PasswordStrength,
+  SocialAuth,
+} from '../../_components/auth-shared';
+import { FormFeedback } from '../../_components/form-feedback';
+import { SubmitButton } from '../../_components/submit-button';
 
 const COUNTRIES = [
   { value: 'ng', label: 'Nigeria' },
@@ -19,8 +29,7 @@ const COUNTRIES = [
 ];
 
 export function SignupForm() {
-
-  const router = useRouter();
+  const [state, formAction] = useActionState(signUpAction, IDLE_FORM_STATE);
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
 
@@ -33,13 +42,9 @@ export function SignupForm() {
 
       <SocialAuth verb="Sign up" />
 
-      <form
-        className="space-y-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push('/verify-identity');
-        }}
-      >
+      <form action={formAction} className="space-y-5">
+        <FormFeedback state={state} />
+
         <TextField
           label="Email address"
           type="email"
@@ -57,12 +62,12 @@ export function SignupForm() {
             required
             autoComplete="new-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 12 characters"
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
             adornment={
               <button
                 type="button"
-                onClick={() => setVisible((v) => !v)}
+                onClick={() => setVisible((value) => !value)}
                 aria-label={visible ? 'Hide password' : 'Show password'}
                 className="transition-colors hover:text-fg"
               >
@@ -78,6 +83,7 @@ export function SignupForm() {
         <label className="flex items-start gap-3 text-sm text-fg-muted">
           <input
             type="checkbox"
+            name="acceptTerms"
             required
             className="mt-0.5 size-4 shrink-0 rounded-xs border-line accent-[var(--brand)]"
           />
@@ -94,13 +100,13 @@ export function SignupForm() {
           </span>
         </label>
 
-        <Button type="submit" size="lg" sheen className="w-full">
+        <SubmitButton pendingLabel="Creating your account…" className="w-full">
           Create account
           <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
-        </Button>
+        </SubmitButton>
       </form>
 
-      <AuthFooterLink prompt="Already have an account?" label="Log in" to="/login" />
+      <AuthFooterLink prompt="Already have an account?" label="Log in" href="/login" />
     </div>
   );
 }

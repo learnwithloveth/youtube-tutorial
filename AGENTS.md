@@ -24,6 +24,7 @@ short version: the rules that are easy to break by accident.
 | Import across folders | `docs/architecture.md` §2 — the dependency rule |
 | Touch **any** numeric amount | `docs/adr/0002-money-as-integer-minor-units.md` |
 | Touch a price, quote or feed | `docs/adr/0003-real-market-data-never-simulated.md` |
+| Touch a session, password, or token | `docs/adr/0004-identity-sessions-and-email-verification.md` |
 | Decide server vs client | `docs/architecture.md` §5 |
 | Set caching on a page | `docs/architecture.md` §6 |
 
@@ -64,7 +65,14 @@ is the default bundler, and `middleware` is now `proxy`.
 9. **A page's `revalidate` must be a literal.** Next reads segment config
    statically; an imported constant is not resolvable and the build fails.
 
-10. **The design is approved.** Port it faithfully. Change visual design or copy
+10. **Read the session only through `src/server/auth.ts`.** Never read the cookie
+    directly. Every Server Action re-derives its own authority — an action is a
+    public endpoint, and the page that rendered its form protects nothing.
+
+11. **Never issue a session from a verification link.** The token proves receipt
+    of mail, not identity. Links get prefetched and forwarded.
+
+12. **The design is approved.** Port it faithfully. Change visual design or copy
     only when it has become factually false — and say so in a comment at the
     site of the change, as `(marketing)/markets/page.tsx` does.
 
@@ -72,7 +80,7 @@ is the default bundler, and `middleware` is now `proxy`.
 
 ```bash
 pnpm verify          # typecheck + lint + boundaries + unit tests
-pnpm build           # the real check: 29 routes must prerender
+pnpm build           # the real check: every route must build
 ```
 
 Both must pass before a change is done.
@@ -89,4 +97,10 @@ Both must pass before a change is done.
 - **`useId` is not available in Server Components.** Pass an explicit id instead
   (see `Sparkline`), or hoist shared SVG defs to the layout (see `LogoGradients`).
 - **`server-only` needs the `react-server` export condition outside Next.**
-  Scripts run as `node --conditions=react-server --import tsx`.
+  Scripts run as `node --conditions=react-server --import tsx`. Vitest aliases it
+  to a stub instead — see `src/test/server-only-stub.ts`.
+- **A `'use server'` file may export only async functions.** A constant or an
+  object there is a build error, which is why `AuthFormState` and
+  `IDLE_FORM_STATE` live in `(auth)/_lib/form-state.ts`.
+- **`useSearchParams()` forces a client bailout.** On a prerendered route it must
+  sit inside `<Suspense>`, or the build refuses the whole page.

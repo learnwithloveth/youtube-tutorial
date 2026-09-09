@@ -36,6 +36,10 @@ src/
 │   │   ├── domain/            Pure. Imports nothing but the kernel.
 │   │   ├── application/       Ports, use cases, queries, DTOs
 │   │   └── infrastructure/    Drizzle repositories, HTTP feed, catalogue
+│   ├── identity/              Users, sessions, email verification
+│   │   ├── domain/            User, Session, VerificationToken, policy
+│   │   ├── application/       Ports, use cases, error catalogue, mail copy
+│   │   └── infrastructure/    scrypt, AES-GCM sealing, Drizzle, SMTP
 │   └── content/               Supporting context: editorial copy
 │
 ├── platform/              ══ SHARED INFRASTRUCTURE ══
@@ -43,7 +47,9 @@ src/
 │   ├── env/                   Zod-validated configuration
 │   └── observability/         Structured logging
 │
-├── server/                Read facade the pages actually call
+├── server/                Facades the pages actually call
+│   ├── market-data.ts         Read paths for quotes
+│   └── auth.ts                The one place a session is interpreted
 │
 └── shared/
     ├── kernel/            Money, BasisPoints, Result, Clock
@@ -249,3 +255,63 @@ The original design drove its prices from a seeded random walk in
 `features/markets/simulation.ts`. That file is gone. Invented prices on a page
 that looks like an exchange are a misrepresentation, and the whole `market-data`
 module is built so that the absence of a price renders as an absence.
+
+---
+
+## 10. Identity
+
+The `identity` module owns credentials and access state, and nothing else. A
+user's balances belong to a ledger context and their KYC tier to a compliance
+one; letting those fields in here is how a forty-field object forms that every
+team edits and nobody understands.
+
+### Sessions are rows, not tokens
+
+The cookie carries an AES-256-GCM sealed session id. The server holds the
+authority, which is what makes "log out all devices" take effect immediately
+rather than whenever a JWT would have expired. Authenticated encryption rather
+than a signature so tampering fails closed instead of decoding to some other id.
+
+`src/server/auth.ts` is the only place a session is interpreted. Pages call
+`getCurrentUser()` or `requireUser()`; nothing else reads the cookie. That keeps
+revocation, idle timeout and step-up freshness in one auditable place instead of
+re-implemented slightly differently at every call site.
+
+### Verification tokens
+
+Single-use, time-limited, stored as a SHA-256 digest, and scoped to the purpose
+they were issued for. Confirming an address gets 24 hours; a password reset gets
+15 minutes, because a reset link hands over the account and an inbox is not a
+vault.
+
+Two details carry most of the security, and both are easy to get wrong:
+
+- **The digest is a fast hash, not scrypt.** The token is 32 bytes of CSPRNG
+  output, so guessing is not a threat model and a slow KDF would only add ~100ms
+  to every link click. The digest exists so a *database leak* yields nothing
+  usable, which one SHA-256 achieves completely.
+- **Redemption checks the purpose.** Without it, an email-confirmation token —
+  long-lived, low-value, scanned by every mail filter in the chain — could be
+  replayed against password reset.
+
+Confirming an address never issues a session. A password reset revokes every
+existing one.
+
+### What is deliberately absent
+
+There is no rate limiting yet. Sign-in locks an account for 15 minutes after five
+failures, which bounds guessing against one account, but nothing bounds attempts
+per IP across accounts. `IdentityErrors.rateLimited` exists and has no producer.
+See [ADR-0004](adr/0004-identity-sessions-and-email-verification.md).
+
+### Mail
+
+`EmailSender` is a port; the SMTP adapter is the only implementation. Mailpit in
+development and a provider in production speak the same protocol, so the code
+path is identical and only configuration differs. With no `SMTP_HOST` set,
+messages are written to the log instead — a fresh clone still completes a signup
+and prints the link.
+
+Message *content* lives in the application layer, not the adapter, because the
+wording of a security email tells someone whether to be alarmed and belongs next
+to the rule that sends it.

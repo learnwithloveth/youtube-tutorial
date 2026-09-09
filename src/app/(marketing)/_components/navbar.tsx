@@ -4,11 +4,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 import { useEscape, useScrolled } from '@/shared/lib/hooks';
-import { ButtonLink } from '@/shared/ui/primitives/button-link';
 import { Wordmark } from '@/shared/ui/visuals/logo';
 
 import { PRIMARY_NAV } from '../_lib/navigation';
@@ -17,7 +16,16 @@ import { MegaMenuPanel } from './mega-menu';
 import { MobileNav } from './mobile-nav';
 import { ThemeToggle } from './theme-toggle';
 
-export function Navbar() {
+/**
+ * `account` is a slot, not an import.
+ *
+ * This component is interactive — hover menus, a drawer, scroll state — so it has
+ * to be a Client Component. The account area needs the session, which only the
+ * server can read. Passing the already-rendered element through as a prop is what
+ * lets a Server Component live inside a Client Component: it arrives as rendered
+ * output rather than as a module the browser has to execute.
+ */
+export function Navbar({ account }: { account: ReactNode }) {
   const [open, setOpen] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(false);
   const scrolled = useScrolled(10);
@@ -122,12 +130,7 @@ export function Navbar() {
 
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle className="hidden sm:grid" />
-            <ButtonLink href="/login" variant="ghost" size="sm" className="hidden sm:inline-flex">
-              Log in
-            </ButtonLink>
-            <ButtonLink href="/signup" size="sm" className="hidden sm:inline-flex">
-              Get started
-            </ButtonLink>
+            {account}
             <button
               type="button"
               className="grid size-10 place-items-center rounded-full border border-line text-fg lg:hidden"

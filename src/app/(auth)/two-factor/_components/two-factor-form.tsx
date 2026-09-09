@@ -101,7 +101,7 @@ export function TwoFactorForm() {
         Send a code to my phone instead
       </button>
 
-      <AuthFooterLink prompt="Lost your device?" label="Recover your account" to="/contact" />
+      <AuthFooterLink prompt="Lost your device?" label="Recover your account" href="/contact" />
     </div>
   );
 }
