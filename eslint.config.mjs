@@ -24,6 +24,10 @@ const eslintConfig = defineConfig([
     // reference material, not part of this build — it imports react-router-dom
     // and import.meta.env, neither of which exists here.
     'novex/**',
+    // The standalone Next 15 console package. Reference material, not part of
+    // this build — and it carries React 19.2 lint violations that Next 16's
+    // ruleset flags but its own toolchain did not.
+    'novex-admin/**',
   ]),
 
   {

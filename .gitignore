@@ -44,3 +44,4 @@ next-env.d.ts
 # material, not part of this build; excluded from tsconfig, eslint and
 # dependency-cruiser. Delete once nothing needs to be checked against it.
 /novex/
+/novex-admin/

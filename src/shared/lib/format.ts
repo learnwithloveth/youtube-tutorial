@@ -40,12 +40,53 @@ export function formatPrice(decimal: string, currency = 'USD'): string {
   }).format(value);
 }
 
+/**
+ * Compact notation, computed by hand rather than delegated to
+ * `Intl.NumberFormat({ notation: 'compact' })`.
+ *
+ * The stdlib version is not portable. Under `style: 'currency'` the currency's
+ * default `minimumFractionDigits` (2 for USD) interacts with compact rounding
+ * differently across ICU builds: Node renders 41_200_000_000 as "$41.2B" while
+ * some Chromium builds render "$41.20B". In a server-rendered app that
+ * divergence is not cosmetic — the prerendered HTML and the hydrated DOM
+ * disagree, React discards the subtree and logs hydration error #418.
+ *
+ * So the magnitude split and the mantissa precision are decided here, and Intl
+ * is used only for what is stable everywhere: digit grouping and the currency
+ * symbol. Precision targets three significant figures, which is what reads well
+ * in a stat tile: 412B, 41.2B, 4.12B.
+ */
+const COMPACT_UNITS = [
+  { min: 1e12, divisor: 1e12, suffix: 'T' },
+  { min: 1e9, divisor: 1e9, suffix: 'B' },
+  { min: 1e6, divisor: 1e6, suffix: 'M' },
+  { min: 1e3, divisor: 1e3, suffix: 'K' },
+] as const;
+
+function mantissaDigits(mantissa: number): number {
+  const magnitude = Math.abs(mantissa);
+  if (magnitude >= 100) return 0;
+  if (magnitude >= 10) return 1;
+  return 2;
+}
+
 export function formatCompact(decimal: string | number, currency?: string): string {
-  return formatter({
-    notation: 'compact',
-    maximumFractionDigits: 2,
+  const value = Number(decimal);
+  const abs = Math.abs(value);
+  const unit = COMPACT_UNITS.find((candidate) => abs >= candidate.min);
+
+  // Below 1K there is nothing to compact; render as-is on the same
+  // three-significant-figure budget so tiles stay visually consistent.
+  const mantissa = unit ? value / unit.divisor : value;
+  const digits = mantissaDigits(mantissa);
+
+  const body = formatter({
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
     ...(currency ? { style: 'currency', currency } : {}),
-  }).format(Number(decimal));
+  }).format(mantissa);
+
+  return unit ? `${body}${unit.suffix}` : body;
 }
 
 /** Signed percentage, e.g. "+2.41%". */
@@ -58,12 +99,25 @@ export function formatQuantity(value: string | number, digits = 6): string {
   return formatter({ maximumFractionDigits: digits }).format(Number(value));
 }
 
+/**
+ * Constructed once. `Intl.DateTimeFormat` is expensive to build and this is
+ * called per row on tables that render hundreds of rows.
+ *
+ * `timeZone` is pinned deliberately. An unpinned formatter resolves to the
+ * *host* zone: Next prerenders on a server (UTC in most deployments) and
+ * rehydrates in the reader's browser (anything). The two strings differ — a
+ * 23:30 UTC timestamp is "Sep 9" on the server and "Sep 10" in Lagos — React
+ * discards the server HTML for that subtree and logs hydration error #418.
+ */
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
 export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(iso));
+  return dateFormatter.format(new Date(iso));
 }
 
 /**
