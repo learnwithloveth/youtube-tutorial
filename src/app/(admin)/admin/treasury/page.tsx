@@ -1,138 +1,185 @@
-'use client';
+import type { Metadata } from 'next';
+import { TriangleAlert } from 'lucide-react';
 
-// A Client Component because it hands formatter *functions* to the charts
-// below. Functions cannot cross the server/client boundary as props, so a
-// Server Component doing this fails at request time rather than at build.
-
-import { AdminPageHeader, QuietButton } from '../../_components/admin-ui';
-import { Panel, PanelHeader } from '../../../_console/components/page-header';
-import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
-import { StatTile, Meter } from '@/shared/ui/charts/stat-tile';
-import { ChartFrame } from '@/shared/ui/charts/chart-frame';
-import { DonutChart } from '@/shared/ui/charts/donut-chart';
-import { Badge } from '@/shared/ui/primitives/badge';
-import { AssetMark } from '@/shared/ui/visuals/asset-mark';
-import { TREASURY } from '../../_data/data';
-import { money, moneyExact } from '../../../_console/data/format';
-import { formatCompact, formatQuantity } from '@/shared/lib/format';
+import type { TreasuryLineDto } from '@/modules/ledger';
+import { requireAdmin } from '@/server/auth';
+import { getPlatformTreasury } from '@/server/ledger';
 import { cn } from '@/shared/lib/cn';
+import { StatTile } from '@/shared/ui/charts/stat-tile';
 
-export default function TreasuryPage() {
+import { AdminPageHeader } from '../../_components/admin-ui';
+import { Panel, PanelHeader } from '../../../_console/components/page-header';
+import { usd } from '../../../(platform)/app/_lib/format-usd';
 
-  const total = TREASURY.reduce((s, w) => s + w.value, 0);
-  const hot = TREASURY.filter((w) => w.custody === 'hot');
-  const hotValue = hot.reduce((s, w) => s + w.value, 0);
-  const hotRatio = (hotValue / total) * 100;
+/**
+ * Treasury.
+ *
+ * ── What this page used to claim ───────────────────────────────────────────────
+ * Hot and cold wallets with addresses, a float ratio against a 2% ceiling, and a
+ * rebalance button. None of it existed: this application has no chain client, no
+ * custody integration and no hot wallet. The approvals queue ends at `payable` —
+ * money that has left the customer and not left the platform — and something with
+ * a hot wallet would have to pick those up. That something is not built.
+ *
+ * ── What is actually here ──────────────────────────────────────────────────────
+ * The other side of every double-entry transfer, which is genuinely the treasury:
+ * what is owed to customers, what has been earned in fees, and what is approved
+ * and waiting to be sent. Three real balances per asset, from the same rows the
+ * wallet and the approvals queue read.
+ */
 
-  const breach = hot.filter((w) => {
-    const paired = TREASURY.find((t) => t.asset === w.asset && t.custody === 'cold');
-    return paired ? w.value / (w.value + paired.value) > 0.02 : false;
-  });
+export const dynamic = 'force-dynamic';
 
-  const byAsset = [...new Set(TREASURY.map((w) => w.asset))]
-    .map((symbol) => {
-      const value = TREASURY.filter((w) => w.asset === symbol).reduce((s, w) => s + w.value, 0);
-      return { key: symbol, label: symbol, value, share: (value / total) * 100 };
-    })
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6);
+export const metadata: Metadata = {
+  title: 'Treasury',
+  robots: { index: false, follow: false },
+};
+
+const SECTIONS = [
+  {
+    purpose: 'custody' as const,
+    title: 'Owed to customers',
+    subtitle: 'Every balance the platform holds on somebody else’s behalf',
+  },
+  {
+    purpose: 'payable' as const,
+    title: 'Approved, not yet sent',
+    subtitle: 'Withdrawals that have left the customer and not left the platform',
+  },
+  {
+    purpose: 'fees' as const,
+    title: 'Fee revenue',
+    subtitle: 'Credited when a withdrawal is approved',
+  },
+];
+
+export default async function TreasuryPage() {
+  await requireAdmin('/admin/treasury');
+  const treasury = await getPlatformTreasury();
 
   return (
     <>
       <AdminPageHeader
         title="Treasury"
-        description="Custody split, hot-float ceiling and the daily reserve attestation."
-        actions={<QuietButton>Publish attestation</QuietButton>}
+        description="What the platform holds, owes and has earned — the platform side of every transfer."
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Assets under custody" value={formatCompact(total, 'USD')} delta={{ value: '8 assets shown', direction: 'flat', period: '' }} />
-        <StatTile label="Hot float" value={`${hotRatio.toFixed(2)}%`} delta={{ value: `${money(hotValue)}`, direction: 'flat', period: 'exposed' }} upIsGood={false} />
-        <StatTile label="Reserve ratio" value="104.2%" delta={{ value: 'Published 3h ago', direction: 'flat', period: '' }} />
-        <StatTile label="Insurance fund" value={money(250_000_000)} delta={{ value: 'Segregated', direction: 'flat', period: 'and attested' }} />
-      </div>
+      {treasury.degraded ? (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-down/35 bg-down/8 px-4 py-3">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
+          <p className="text-xs leading-relaxed text-fg-muted">
+            Some accounts could not be read. The figures below are incomplete —
+            treat them as a partial view, not a balance sheet.
+          </p>
+        </div>
+      ) : null}
 
-      <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1.3fr]">
-        <ChartFrame
-          title="Custody by asset"
-          subtitle="Cold and hot combined"
-          table={{
-            columns: ['Asset', 'Value', 'Share'],
-            numericFrom: 1,
-            rows: byAsset.map((a) => [a.label, moneyExact(a.value), `${a.share.toFixed(1)}%`]),
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatTile
+          label="Owed to customers"
+          // Null is a state, not a gap: a dash says a holding could not be priced,
+          // where a zero would say the platform owes nothing.
+          value={treasury.liabilityUsd === null ? '—' : usd(treasury.liabilityUsd)}
+          delta={{
+            value:
+              treasury.liabilityUsd === null
+                ? 'Not every holding could be priced'
+                : 'Total customer liability',
+            direction: 'flat',
+            period: '',
           }}
-        >
-          <DonutChart
-            slices={byAsset}
-            formatValue={money}
-            centerLabel="Custody"
-            centerValue={formatCompact(total, 'USD')}
-          />
-        </ChartFrame>
-
-        <Panel>
-          <PanelHeader
-            title="Hot float policy"
-            subtitle="Capped at 2% of custody and rebalanced hourly by policy engine, not by an operator"
-          />
-          <div className="space-y-5">
-            <Meter label="Platform hot float" value={hotValue} max={total * 0.02} formatValue={(v) => formatCompact(v, 'USD')} tone={hotRatio > 2 ? 'warn' : 'brand'} />
-            <Meter label="Cold storage" value={total - hotValue} max={total} formatValue={(v) => formatCompact(v, 'USD')} />
-          </div>
-          {breach.length > 0 ? (
-            <p className="mt-5 rounded-md border border-warn/35 bg-warn/8 p-3 text-2xs leading-relaxed text-fg-muted">
-              {breach.length} wallet{breach.length === 1 ? '' : 's'} above the 2% ceiling. The policy
-              engine sweeps on the next hourly run; no operator can raise the cap.
-            </p>
-          ) : (
-            <p className="mt-5 border-t border-line pt-4 text-2xs leading-relaxed text-fg-subtle">
-              Every wallet is inside its ceiling. Movements out of cold storage need quorum approval
-              from key holders in three separate jurisdictions.
-            </p>
-          )}
-        </Panel>
+          upIsGood={false}
+        />
+        <StatTile
+          label="Approved, not yet sent"
+          value={treasury.payableUsd === null ? '—' : usd(treasury.payableUsd)}
+          delta={{ value: 'Waiting on a payout run', direction: 'flat', period: '' }}
+          upIsGood={false}
+        />
+        <StatTile
+          label="Fee revenue"
+          value={treasury.feesUsd === null ? '—' : usd(treasury.feesUsd)}
+          delta={{ value: 'Since the ledger opened', direction: 'flat', period: '' }}
+        />
       </div>
 
-      <Panel>
-        <PanelHeader title="Wallets" subtitle="Every custody address the platform controls" />
-        <TableShell caption="Treasury wallets" minWidth="50rem">
-          <thead>
-            <tr>
-              <Th>Wallet</Th><Th>Custody</Th><Th>Region</Th>
-              <Th numeric>Balance</Th><Th numeric>Value</Th><Th numeric>{''}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {TREASURY.map((wallet) => (
-              <Tr key={wallet.id}>
-                <Td>
-                  <span className="flex items-center gap-2.5">
-                    <AssetMark symbol={wallet.asset} glyph={wallet.glyph} hue={wallet.hue} size="sm" />
-                    <span className="text-sm font-medium text-fg">{wallet.label}</span>
-                  </span>
-                </Td>
-                <Td>
-                  <Badge tone={wallet.custody === 'cold' ? 'up' : wallet.custody === 'warm' ? 'accent' : 'warn'}>
-                    {wallet.custody}
-                  </Badge>
-                </Td>
-                <Td>{wallet.region}</Td>
-                <Td numeric>{formatQuantity(wallet.balance, 4)}</Td>
-                <Td numeric className={cn('font-medium', wallet.custody === 'hot' ? 'text-warn' : 'text-fg')}>
-                  {formatCompact(wallet.value, 'USD')}
-                </Td>
-                <Td numeric>
-                  <QuietButton disabled={wallet.custody === 'cold'}>Sweep</QuietButton>
-                </Td>
-              </Tr>
-            ))}
-          </tbody>
-        </TableShell>
-        <p className="mt-4 text-2xs leading-relaxed text-fg-subtle">
-          Cold wallets cannot be swept from this console. Moving them requires the quorum ceremony,
-          which is deliberately not a button.
-        </p>
+      <div className="grid gap-4 xl:grid-cols-3">
+        {SECTIONS.map((section) => {
+          const lines = treasury.lines.filter((line) => line.purpose === section.purpose);
+
+          return (
+            <Panel key={section.purpose}>
+              <PanelHeader title={section.title} subtitle={section.subtitle} />
+
+              {lines.length === 0 ? (
+                <p className="py-6 text-center text-xs text-fg-subtle">
+                  {section.purpose === 'custody'
+                    ? 'No customer balances yet.'
+                    : section.purpose === 'payable'
+                      ? 'Nothing waiting to be sent.'
+                      : 'No fees earned yet.'}
+                </p>
+              ) : (
+                <ul className="divide-y divide-line/60">
+                  {lines.map((line) => (
+                    <TreasuryRow key={`${line.purpose}:${line.asset}`} line={line} />
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          );
+        })}
+      </div>
+
+      <Panel className="mt-4">
+        <PanelHeader title="What is not here" subtitle="And why it would be a fiction" />
+        <ul className="space-y-2.5 text-xs leading-relaxed text-fg-muted">
+          <li>
+            <span className="font-medium text-fg">Hot and cold wallets.</span> There is
+            no chain client and no custody integration, so there are no addresses to
+            show and no float to rebalance. A ratio against a ceiling would be two
+            invented numbers divided by each other.
+          </li>
+          <li>
+            <span className="font-medium text-fg">A reserve attestation.</span> Proving
+            reserves means signing a message from an address that holds them. Nothing
+            here holds an address.
+          </li>
+          <li>
+            {/* Named because it is the gap that matters operationally: money sits in
+                `payable` until something sends it, and nothing does. */}
+            <span className="font-medium text-fg">A payout run.</span> Approving a
+            withdrawal moves it to <span className="font-mono text-2xs">payable</span>{' '}
+            and stops. Something with a hot wallet and a signing policy has to pick
+            those up — that is the next real piece of this page, not a button on it.
+          </li>
+        </ul>
       </Panel>
     </>
   );
 }
+
+function TreasuryRow({ line }: { line: TreasuryLineDto }) {
+  return (
+    <li className="flex items-baseline justify-between gap-3 py-3">
+      <span className="font-mono text-xs text-fg">{line.asset}</span>
+      <span className="text-right">
+        <span data-numeric className="block text-sm text-fg">
+          {/* The magnitude, not the stored sign. `custody` is negative because that
+              is what makes a transfer sum to zero, and "-14.2 BTC" under "owed to
+              customers" invites exactly the wrong reading. */}
+          {line.magnitude}
+        </span>
+        <span
+          className={cn(
+            'block text-2xs',
+            line.valueUsd === null ? 'text-warn' : 'text-fg-subtle',
+          )}
+        >
+          {line.valueUsd === null ? 'Not priced' : usd(line.valueUsd)}
+        </span>
+      </span>
+    </li>
+  );
+}
+

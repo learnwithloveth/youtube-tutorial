@@ -3,6 +3,8 @@ import 'server-only';
 import { cache } from 'react';
 
 import { createMarketDataModule } from '@/modules/market-data/server';
+import { refreshTickers } from '@/modules/market-data';
+import { logger } from '@/platform/observability/logger';
 import {
   getCandles,
   getOrderBook,
@@ -38,15 +40,122 @@ import {
 
 const marketData = cache(() => createMarketDataModule());
 
+/**
+ * ── The feed heals itself, because nothing was winding it ─────────────────────
+ *
+ * `/api/market-data/refresh` exists and works, and is meant to be called by a cron
+ * roughly once a minute. Nothing was calling it. Quotes went five days stale,
+ * every one of them failed the five-minute freshness test, and the consequences
+ * landed a long way from the cause: portfolios showed "could not be priced",
+ * and withdrawals stopped — because the ledger's oracle accepts only a *live*
+ * quote and correctly refuses to let money leave against a stale one.
+ *
+ * A read path that depends on a scheduler somebody has to remember to configure
+ * is a read path that will be stale again. So a read that *finds* the data stale
+ * refreshes it. The cron endpoint stays — it is still the right way to keep quotes
+ * warm ahead of demand — but the application no longer breaks without it.
+ *
+ * Three properties make this safe to put on a render path:
+ *
+ *  - **It costs nothing when healthy.** Freshness is judged from the rows the read
+ *    already returned, so there is no extra query in the common case.
+ *  - **One refresh at a time.** Concurrent requests share a single in-flight
+ *    promise rather than each stampeding the upstream.
+ *  - **It gives up quickly.** A slow or failing upstream is raced against a
+ *    timeout and then left alone for a cooling-off period. A page renders with
+ *    stale data — which the UI already says out loud — rather than hanging.
+ */
+
+/** How long a render will wait for the upstream before serving what it has. */
+const REFRESH_TIMEOUT_MS = 4_000;
+
+/** Quiet period after a failure, so a broken upstream is not hit on every request. */
+const COOLDOWN_MS = 60_000;
+
+/*
+ * Module-level, which in a serverless runtime means per-instance. That is the
+ * right scope: it is a stampede guard, not a cache. Two instances each making one
+ * upstream call is fine; one instance making forty is not — and the write is
+ * idempotent either way, so a duplicated refresh costs a request, not correctness.
+ */
+let inFlight: Promise<void> | null = null;
+let lastAttemptAt = 0;
+
+async function refreshOnce(): Promise<void> {
+  const context = marketData();
+  const result = await refreshTickers({
+    instruments: context.instruments,
+    tickers: context.tickers,
+    feed: context.feed,
+  });
+
+  if (!result.ok) {
+    logger.warn({
+      event: 'ticker_autorefresh_failed',
+      module: 'market-data',
+      reason: result.error.kind,
+    });
+    return;
+  }
+
+  logger.info({ event: 'ticker_autorefresh', module: 'market-data', ...result.value });
+}
+
+/**
+ * True when a refresh ran and wrote something worth re-reading.
+ *
+ * Staleness is read off the quote states the caller already has rather than from a
+ * timestamp of our own — so the trigger is by construction the same rule the UI
+ * and the ledger's oracle apply. A second threshold here would eventually disagree
+ * with `MAX_TICKER_AGE_SECONDS`, and the failure would be a page that says
+ * "stale" while the refresher considers everything fine.
+ */
+async function refreshIfStale(markets: readonly MarketDto[]): Promise<boolean> {
+  // A listing with no quote at all counts as stale — that is a newly catalogued
+  // asset the feed has never been asked for, which is exactly how TRX ended up
+  // unpriceable while every other symbol had a row.
+  const missing = markets.some((market) => market.quote.state === 'unavailable');
+  const oldest = markets.some((market) => market.quote.state === 'stale');
+  if (!missing && !oldest) return false;
+
+  const now = Date.now();
+  if (inFlight === null && now - lastAttemptAt > COOLDOWN_MS) {
+    lastAttemptAt = now;
+    inFlight = refreshOnce().finally(() => {
+      inFlight = null;
+    });
+  }
+
+  const running = inFlight;
+  if (running === null) return false;
+
+  // Raced, not awaited outright. An upstream that has started timing out must not
+  // turn every page in the product into a four-second page.
+  const finished = await Promise.race([
+    running.then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), REFRESH_TIMEOUT_MS)),
+  ]);
+
+  return finished;
+}
+
 export const getMarkets = cache(
   async (options: ListMarketsOptions = {}): Promise<MarketDto[]> => {
     const context = marketData();
-    return listMarkets(
-      { instruments: context.instruments, tickers: context.tickers, clock: context.clock },
-      options,
-    );
+    const read = async () =>
+      listMarkets(
+        { instruments: context.instruments, tickers: context.tickers, clock: context.clock },
+        options,
+      );
+
+    const markets = await read();
+
+    // Re-read only when a refresh actually completed. Reading again after a
+    // timeout would cost a query to return the same rows.
+    return (await refreshIfStale(markets)) ? read() : markets;
   },
 );
+
 
 /** Returns the market for a slug, or null when no such asset is listed. */
 export const getMarket = cache(async (slug: string): Promise<MarketDto | null> => {

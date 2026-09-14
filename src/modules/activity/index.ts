@@ -33,6 +33,7 @@ export {
  * documents. It lives in `./server`.
  */
 export type { UserActivityOptions } from './application/queries/user-activity';
+export type { AuditTrailDto, AuditTrailOptions } from './application/queries/audit-trail';
 export type {
   ActivityDayDto,
   PlatformActivityDto,

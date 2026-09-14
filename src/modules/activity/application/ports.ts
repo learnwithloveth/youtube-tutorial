@@ -56,6 +56,23 @@ export interface ActivityRepository {
   ): Promise<{ path: string; views: number; totalSeconds: number }[]>;
 
   /**
+   * The whole platform's trail, newest first.
+   *
+   * Paged by offset rather than by cursor, for the reason `listForUser` is: an
+   * audit trail is append-only and read newest-first, so a page boundary shifts
+   * only when new events arrive at the head — and somebody reading page three of
+   * last week is looking at a fixed past, not a moving window.
+   */
+  listRecent(query: {
+    kinds?: readonly ActivityKind[] | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<ActivityEvent[]>;
+
+  /** Total matching `listRecent`, for the pager. */
+  countRecent(kinds?: readonly ActivityKind[] | undefined): Promise<number>;
+
+  /**
    * Platform-wide counts, one bucket per UTC day.
    *
    * Aggregated in the database for the same reason `topPathsForUser` is: a month

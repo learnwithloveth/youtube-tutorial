@@ -2,8 +2,15 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import type { ActivityKind, EventLocation, UserActivityDto } from '@/modules/activity';
+import type {
+  ActivityKind,
+  AuditTrailDto,
+  AuditTrailOptions,
+  EventLocation,
+  UserActivityDto,
+} from '@/modules/activity';
 import {
+  getAuditTrail,
   getUserActivity,
   registerActivity,
   type ActivityModule,
@@ -11,7 +18,7 @@ import {
 } from '@/modules/activity/server';
 import { db } from '@/platform/db/client';
 import { logger } from '@/platform/observability/logger';
-import type { UserId } from '@/shared/kernel/ids';
+import { toUserId, type UserId } from '@/shared/kernel/ids';
 
 /**
  * The application's facade over the activity trail.
@@ -129,4 +136,54 @@ export function toEventLocation(
     latitude: location.latitude,
     longitude: location.longitude,
   };
+}
+
+/**
+ * The platform's audit trail, with the accounts behind it.
+ *
+ * ── The join is here, as always ────────────────────────────────────────────────
+ * The activity module holds an opaque `UserId` and has never heard of an email
+ * address. An audit screen showing thirty-six-character ids is technically
+ * complete and operationally useless, so identity is asked separately and the two
+ * are zipped above both.
+ */
+export interface AuditTrailView extends AuditTrailDto {
+  /** Keyed by `UserId`. Missing where the directory could not answer. */
+  readonly actors: Readonly<Record<string, { email: string; name: string }>>;
+}
+
+export async function getAuditTrailFor(options: AuditTrailOptions = {}): Promise<AuditTrailView> {
+  const context = activity();
+  if (context === null) {
+    return { entries: [], total: 0, limit: 50, offset: 0, degraded: true, actors: {} };
+  }
+
+  const trail = await getAuditTrail(context.dependencies.events, options);
+  if (trail.entries.length === 0) return { ...trail, actors: {} };
+
+  const ids = [...new Set(trail.entries.map((entry) => entry.userId))].flatMap((id) => {
+    try {
+      return [toUserId(id)];
+    } catch {
+      return [];
+    }
+  });
+
+  try {
+    // Never fails the trail. An entry whose actor cannot be looked up still has to
+    // render — the id is on the row either way, and an audit read while the
+    // directory is down is exactly when somebody needs it most.
+    const { identity } = await import('./auth');
+    const found = await identity().describeUsers(ids);
+
+    return {
+      ...trail,
+      actors: Object.fromEntries(
+        [...found.values()].map((user) => [user.id, { email: user.email, name: user.name }]),
+      ),
+    };
+  } catch (error) {
+    logger.warn({ event: 'audit_actor_lookup_failed', module: 'identity' }, error);
+    return { ...trail, actors: {} };
+  }
 }

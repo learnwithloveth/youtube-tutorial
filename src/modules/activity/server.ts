@@ -17,4 +17,5 @@ export { registerActivity } from './module';
 
 export { getUserActivity } from './application/queries/user-activity';
 export { getPlatformActivity } from './application/queries/platform-activity';
+export { getAuditTrail } from './application/queries/audit-trail';
 export type { RecordActivityCommand } from './application/use-cases/record-activity';

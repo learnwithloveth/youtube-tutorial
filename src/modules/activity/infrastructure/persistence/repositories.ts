@@ -95,6 +95,30 @@ export class DrizzleActivityRepository implements ActivityRepository {
     }));
   }
 
+  async listRecent(query: {
+    kinds?: readonly ActivityKind[] | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<ActivityEvent[]> {
+    const rows = await this.db
+      .select()
+      .from(events)
+      .where(kindScope(query.kinds))
+      // `id` as the tie-break, because a burst written in the same millisecond
+      // would otherwise page in an arbitrary order and a row could appear twice or
+      // not at all across two pages.
+      .orderBy(desc(events.occurredAt), desc(events.id))
+      .limit(query.limit)
+      .offset(query.offset);
+
+    return rows.map(toDomain);
+  }
+
+  async countRecent(kinds?: readonly ActivityKind[] | undefined): Promise<number> {
+    const rows = await this.db.select({ total: count() }).from(events).where(kindScope(kinds));
+    return rows[0]?.total ?? 0;
+  }
+
   async tallyByDay(query: {
     since: Date;
     kinds?: readonly ActivityKind[] | undefined;
@@ -212,4 +236,9 @@ function toDomain(row: ActivityEventRow): ActivityEvent {
     ipDigest: row.ipDigest,
     visitorId: row.visitorId,
   });
+}
+
+/** Narrows to a set of kinds, or to everything when none is given. */
+function kindScope(kinds?: readonly ActivityKind[] | undefined) {
+  return kinds !== undefined && kinds.length > 0 ? inArray(events.kind, [...kinds]) : undefined;
 }

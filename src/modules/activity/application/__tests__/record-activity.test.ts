@@ -57,6 +57,27 @@ class FakeEvents implements ActivityRepository {
     }
     return [...byKind.entries()].map(([kind, entry]) => ({ kind, ...entry }));
   }
+  async listRecent(query: {
+    kinds?: readonly ActivityKind[] | undefined;
+    limit: number;
+    offset: number;
+  }) {
+    return this.store
+      .filter(
+        (event) =>
+          query.kinds === undefined ||
+          query.kinds.length === 0 ||
+          query.kinds.includes(event.kind),
+      )
+      .slice()
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+      .slice(query.offset, query.offset + query.limit);
+  }
+  async countRecent(kinds?: readonly ActivityKind[] | undefined) {
+    return this.store.filter(
+      (event) => kinds === undefined || kinds.length === 0 || kinds.includes(event.kind),
+    ).length;
+  }
   async tallyByDay(query: { since: Date; kinds?: readonly ActivityKind[] | undefined }) {
     const counted = new Map<string, number>();
     for (const event of this.store) {
@@ -215,6 +236,8 @@ describe('getUserActivity', () => {
       countForUser: refuse,
       summariseUser: refuse,
       topPathsForUser: refuse,
+      listRecent: refuse,
+      countRecent: refuse,
       tallyByDay: refuse,
       deleteExpired: refuse,
     };

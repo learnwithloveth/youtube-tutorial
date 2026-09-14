@@ -1,123 +1,215 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { MapPin, TriangleAlert } from 'lucide-react';
 
-import { useDeferredValue, useMemo, useState } from 'react';
-import { Download, Search, ShieldCheck } from 'lucide-react';
-import { AdminPageHeader, QuietButton } from '../../_components/admin-ui';
-import { Panel } from '../../../_console/components/page-header';
-import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
-import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { useAdmin } from '../../_data/store';
-import { dateTimeLabel } from '../../../_console/data/format';
+import type { ActivityEventDto } from '@/modules/activity';
+import { requireAdmin } from '@/server/auth';
+import { getAuditTrailFor } from '@/server/activity';
+import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
+import { Badge } from '@/shared/ui/primitives/badge';
+import { StatTile } from '@/shared/ui/charts/stat-tile';
 
-const SEVERITIES = ['all', 'critical', 'notice', 'info'] as const;
+import { AdminPageHeader } from '../../_components/admin-ui';
+import { Panel, PanelHeader } from '../../../_console/components/page-header';
 
-export default function AuditPage() {
+/**
+ * The audit trail.
+ *
+ * ── It reads the trail the application actually writes ─────────────────────────
+ * Every entry here is an `activity.events` row: sign-ins, password resets, email
+ * verifications, withdrawal decisions, deposits credited, and console access
+ * withdrawn or restored. Page views are excluded by default — a trail that
+ * includes every navigation is one nobody reads, because the thing an audit is
+ * opened for is a rounding error next to it.
+ *
+ * It replaced six invented entries in an in-memory array, with invented operators
+ * and a severity field that existed only to colour a dot.
+ *
+ * ── The page says what this trail is worth ─────────────────────────────────────
+ * Activity writes are best-effort by design — `src/server/activity.ts` explains
+ * why: a sign-in that succeeded must not become an error page because an audit
+ * insert timed out. The consequence is that this trail can have holes, and a
+ * screen headed "Audit log" has an obligation to say so rather than let somebody
+ * treat it as evidence. The ledger is the record of truth for money.
+ */
 
-  const { state } = useAdmin();
-  const [query, setQuery] = useState('');
-  const [severity, setSeverity] = useState<(typeof SEVERITIES)[number]>('all');
-  const deferred = useDeferredValue(query);
+export const dynamic = 'force-dynamic';
 
-  const rows = useMemo(() => {
-    const needle = deferred.trim().toLowerCase();
-    return state.audit.filter((entry) => {
-      const matchesSeverity = severity === 'all' || entry.severity === severity;
-      const matchesQuery =
-        !needle ||
-        entry.action.toLowerCase().includes(needle) ||
-        entry.actor.toLowerCase().includes(needle) ||
-        entry.target.toLowerCase().includes(needle) ||
-        entry.detail.toLowerCase().includes(needle);
-      return matchesSeverity && matchesQuery;
-    });
-  }, [state.audit, deferred, severity]);
+export const metadata: Metadata = {
+  title: 'Audit log',
+  robots: { index: false, follow: false },
+};
+
+/** Which entries deserve the eye. Derived from the kind, never stored as a field. */
+function severityOf(kind: ActivityEventDto['kind']): 'critical' | 'notice' | 'info' {
+  switch (kind) {
+    case 'admin-suspended':
+    case 'withdrawal-approved':
+      return 'critical';
+    case 'admin-reinstated':
+    case 'withdrawal-requested':
+    case 'withdrawal-rejected':
+    case 'deposit-recorded':
+    case 'password-reset':
+      return 'notice';
+    default:
+      return 'info';
+  }
+}
+
+const LABELS: Record<ActivityEventDto['kind'], string> = {
+  'page-view': 'Viewed a page',
+  'sign-up': 'Created an account',
+  'sign-in': 'Signed in',
+  'sign-out': 'Signed out',
+  'password-reset': 'Reset a password',
+  'verification-sent': 'Verification email sent',
+  'email-verified': 'Confirmed their email',
+  'withdrawal-requested': 'Requested a withdrawal',
+  'withdrawal-approved': 'Withdrawal approved',
+  'withdrawal-rejected': 'Withdrawal rejected',
+  'deposit-recorded': 'Deposit credited',
+  'admin-suspended': 'Console access suspended',
+  'admin-reinstated': 'Console access restored',
+};
+
+export default async function AuditPage() {
+  await requireAdmin('/admin/audit');
+  const trail = await getAuditTrailFor({ limit: 100 });
+
+  const critical = trail.entries.filter((entry) => severityOf(entry.kind) === 'critical').length;
+  const actors = new Set(trail.entries.map((entry) => entry.userId)).size;
 
   return (
     <>
       <AdminPageHeader
         title="Audit log"
-        description="Every privileged action, written by the same transition that changed the record. There is no path through this console that mutates something without appearing here."
-        actions={<QuietButton><Download className="size-3.5" />Export</QuietButton>}
+        description="Security and money events across the platform, newest first. Page views are excluded."
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Entries" value={String(state.audit.length)} delta={{ value: 'This session', direction: 'flat', period: '' }} />
-        <StatTile label="Critical" value={String(state.audit.filter((e) => e.severity === 'critical').length)} delta={{ value: 'Account and fund movements', direction: 'flat', period: '' }} upIsGood={false} />
-        <StatTile label="Distinct actors" value={String(new Set(state.audit.map((e) => e.actor)).size)} delta={{ value: 'Including system', direction: 'flat', period: '' }} />
-        <StatTile label="Retention" value="7 years" delta={{ value: 'Append-only', direction: 'flat', period: 'storage' }} />
+      {trail.degraded ? (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-down/35 bg-down/8 px-4 py-3">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
+          <p className="text-xs leading-relaxed text-fg-muted">
+            The trail could not be read. This is an empty page, not an empty log.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatTile
+          label="Entries"
+          value={trail.total.toLocaleString('en-US')}
+          delta={{
+            value: `Showing the newest ${trail.entries.length}`,
+            direction: 'flat',
+            period: '',
+          }}
+        />
+        <StatTile
+          label="Needing a second look"
+          value={String(critical)}
+          delta={{ value: 'Approvals and access changes', direction: 'flat', period: '' }}
+          upIsGood={false}
+        />
+        <StatTile
+          label="Distinct accounts"
+          value={String(actors)}
+          delta={{ value: 'On this page', direction: 'flat', period: '' }}
+        />
       </div>
 
-      <Panel>
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <label className="relative w-full max-w-xs">
-            <span className="sr-only">Search the audit log</span>
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Action, actor, target or detail"
-              className="h-9 w-full rounded-full border border-line bg-surface pl-10 pr-4 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-soft"
-            />
-          </label>
-          <div className="flex gap-1.5">
-            {SEVERITIES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSeverity(s)}
-                aria-pressed={severity === s}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-2xs capitalize transition-colors',
-                  severity === s
-                    ? 'border-brand-soft/60 bg-brand/15 text-fg'
-                    : 'border-line text-fg-muted hover:border-line-strong hover:text-fg',
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+      <Panel padded={false} className="overflow-hidden">
+        <div className="px-5 pt-5">
+          <PanelHeader
+            title="Events"
+            subtitle="Written by the same request that performed the action"
+          />
         </div>
 
-        <TableShell caption="Privileged action audit log" minWidth="54rem">
-          <thead>
-            <tr>
-              <Th>When</Th><Th>Actor</Th><Th>Action</Th><Th>Target</Th><Th>Detail</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <EmptyRow colSpan={5}>Nothing matches those filters.</EmptyRow>
-            ) : (
-              rows.map((entry) => (
-                <Tr key={entry.id}>
-                  <Td className="whitespace-nowrap">{dateTimeLabel(entry.at)}</Td>
-                  <Td className="text-fg">{entry.actor}</Td>
-                  <Td>
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        aria-hidden
-                        className={cn(
-                          'size-1.5 rounded-full',
-                          entry.severity === 'critical' ? 'bg-down' : entry.severity === 'notice' ? 'bg-warn' : 'bg-fg-subtle',
-                        )}
-                      />
-                      <span className="font-mono text-xs text-brand-soft">{entry.action}</span>
-                    </span>
-                  </Td>
-                  <Td className="font-mono text-xs">{entry.target}</Td>
-                  <Td className="max-w-md text-2xs leading-relaxed">{entry.detail}</Td>
-                </Tr>
-              ))
-            )}
-          </tbody>
-        </TableShell>
+        {trail.entries.length === 0 ? (
+          <p className="px-5 py-10 text-center text-xs text-fg-subtle">
+            Nothing recorded yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line/60">
+            {trail.entries.map((entry) => {
+              const severity = severityOf(entry.kind);
+              const actor = trail.actors[entry.userId];
 
-        <p className="mt-4 flex items-center gap-2 border-t border-line pt-4 text-2xs text-fg-subtle">
-          <ShieldCheck className="size-3 text-up" />
-          Entries are append-only and hash-chained. An operator cannot edit or delete their own trail.
+              return (
+                <li key={entry.id} className="flex items-start gap-3 px-5 py-3">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'mt-1.5 size-1.5 shrink-0 rounded-full',
+                      severity === 'critical'
+                        ? 'bg-down'
+                        : severity === 'notice'
+                          ? 'bg-warn'
+                          : 'bg-fg-subtle',
+                    )}
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-x-2 text-sm text-fg">
+                      <span className="font-mono text-xs text-brand-soft">{entry.kind}</span>
+                      <span className="text-fg-muted">{LABELS[entry.kind]}</span>
+                      {entry.reference !== null ? (
+                        <span className="font-mono text-2xs text-fg-subtle">
+                          {entry.reference}
+                        </span>
+                      ) : null}
+                    </p>
+
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 truncate text-xs text-fg-subtle">
+                      {/* The id, never a placeholder, when the directory could not
+                          answer: an operator can act on an id. */}
+                      <Link
+                        href={`/admin/users/${entry.userId}`}
+                        className="truncate hover:text-fg hover:underline"
+                      >
+                        {actor?.email ?? entry.userId}
+                      </Link>
+                      <span aria-hidden>·</span>
+                      <span>{formatDate(entry.occurredAt)}</span>
+                      {entry.detail !== null ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="truncate">{entry.detail}</span>
+                        </>
+                      ) : null}
+                      {entry.location?.city || entry.location?.country ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="size-3" />
+                            {[entry.location.city, entry.location.country]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </span>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+
+                  {severity !== 'info' ? (
+                    <Badge tone={severity === 'critical' ? 'down' : 'warn'}>{severity}</Badge>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <p className="border-t border-line px-5 py-4 text-2xs leading-relaxed text-fg-subtle">
+          {/* Said here rather than assumed. A screen headed "Audit log" is one
+              somebody will eventually treat as evidence, and this one is not. */}
+          Activity is recorded on a best-effort path, so a sign-in never fails
+          because a log write did. This trail can therefore have gaps: it is an
+          operations aid, not an evidential record. The ledger remains the record of
+          truth for every movement of money.
         </p>
       </Panel>
     </>

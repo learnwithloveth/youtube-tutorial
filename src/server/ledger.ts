@@ -5,6 +5,7 @@ import { cache } from 'react';
 import type { ApprovalQueueDto, StatementDto, StatementOptions, WalletDto } from '@/modules/ledger';
 import {
   getStatement,
+  getTreasury,
   getWallet,
   LEDGER_ASSETS,
   listPendingApprovals,
@@ -262,3 +263,25 @@ export async function getDepositProof(
 
   return { bytes: proof.bytes, contentType: proof.contentType, ownerId: claim.userId };
 }
+
+/**
+ * What the platform itself holds: customer liability, fee revenue, and approved
+ * payouts not yet sent.
+ *
+ * Deduplicated per request so the tiles and the table cost one read between them.
+ */
+export const getPlatformTreasury = cache(async () => {
+  const context = ledger();
+  if (context === null) {
+    return {
+      lines: [],
+      liabilityUsd: null,
+      feesUsd: null,
+      payableUsd: null,
+      valuationIncomplete: true,
+      degraded: true,
+    };
+  }
+
+  return getTreasury(context.dependencies);
+});
