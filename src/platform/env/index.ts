@@ -36,6 +36,22 @@ const schema = z.object({
   NEXT_PUBLIC_SITE_URL: z.url().default('https://novex.io'),
 
   /**
+   * IP geolocation service, used when nothing in front of the app supplies geo
+   * headers of its own.
+   *
+   * Optional, and the default is *off*. Turning it on sends visitor IP addresses
+   * to a third party, which is a decision an operator should make deliberately
+   * rather than inherit from a default — behind a geo-aware CDN it buys nothing,
+   * and without one it is the difference between knowing where visitors are and
+   * not. With it unset, locations resolve from CDN headers alone and honestly
+   * report `unavailable` when there are none.
+   *
+   * The response shape parsed is ipapi.co's; see `IpLookupLocator`.
+   */
+  GEOIP_LOOKUP_URL: z.url().optional(),
+  GEOIP_LOOKUP_KEY: z.string().min(1).optional(),
+
+  /**
    * Root secret for session sealing and keyed digests, both HKDF-derived from it.
    *
    * Required in production and validated at 32 characters, because the sealer
@@ -106,6 +122,20 @@ export function sessionSecret(): string {
     );
   }
   return DEV_SESSION_SECRET;
+}
+
+/**
+ * IP lookup settings, or null when the service is not configured.
+ *
+ * Null is a supported configuration, not a degraded one: the presence module
+ * composes its resolver chain without the HTTP adapter and reports `unavailable`
+ * for any visitor whose location the network did not already reveal.
+ */
+export function geoLookupConfig(): { baseUrl: string; apiKey?: string | undefined } | null {
+  const config = env();
+  if (!config.GEOIP_LOOKUP_URL) return null;
+
+  return { baseUrl: config.GEOIP_LOOKUP_URL, apiKey: config.GEOIP_LOOKUP_KEY };
 }
 
 /** SMTP settings, or null when no host is configured. */

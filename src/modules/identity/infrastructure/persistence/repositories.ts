@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -84,6 +84,17 @@ export class DrizzleUserRepository implements UserRepository {
       .limit(1);
     const row = rows[0];
     return row === undefined ? null : userToDomain(row);
+  }
+
+  async findManyByIds(ids: readonly UserId[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db
+      .select()
+      .from(users)
+      .where(inArray(users.id, [...ids]));
+
+    return rows.map(userToDomain);
   }
 
   /**

@@ -4,6 +4,7 @@ import { BRAND } from '@/modules/content';
 import { fontVariables } from '@/shared/ui/fonts';
 import { LogoGradients } from '@/shared/ui/visuals/logo';
 
+import { PresenceReporter } from './_providers/presence-reporter';
 import { ThemeProvider } from './_providers/theme-provider';
 import { ThemeScript } from './_providers/theme-script';
 import './globals.css';
@@ -72,6 +73,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <LogoGradients />
         <ThemeProvider>{children}</ThemeProvider>
+        {/* Mounted at the root so every route reports, including the marketing
+            pages — most visitors to an exchange are signed out, and a live board
+            that only counted logged-in ones would answer the wrong question. It
+            renders nothing and reads nothing from the tree, so it stays a leaf. */}
+        <PresenceReporter />
       </body>
     </html>
   );

@@ -10,6 +10,7 @@ import { Meter } from '@/shared/ui/charts/stat-tile';
 import { Button } from '@/shared/ui/primitives/button';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { SelectField, TextField } from '@/shared/ui/primitives/field';
+import { PreciseLocationControl } from './_components/precise-location-control';
 import { ACCOUNT, API_KEYS, SESSIONS } from '../../_data/data';
 import { money } from '../../../_console/data/format';
 import { formatDate } from '@/shared/lib/format';
@@ -225,6 +226,10 @@ export default function SettingsPage() {
                     description="A code only you and Novex know, shown in the header of each message."
                     defaultOn
                   />
+                  {/* The only place this application asks for geolocation. Every
+                      other surface uses the coarse, connection-derived location,
+                      which needs nothing from the account holder. */}
+                  <PreciseLocationControl />
                 </div>
                 <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-5">
                   <Button variant="outline" size="sm">Add another passkey</Button>

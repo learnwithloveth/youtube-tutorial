@@ -4,6 +4,10 @@ import type { Database } from '@/platform/db/client';
 import { systemClock, type Clock } from '@/shared/kernel/clock';
 
 import type { AppUrls, EmailSender, IdentityDependencies } from './application/ports';
+import {
+  createDescribeUsers,
+  type DescribeUsers,
+} from './application/queries/describe-users';
 import { createAuthenticate, type Authenticate } from './application/use-cases/authenticate';
 import { createRegisterUser, type RegisterUser } from './application/use-cases/register-user';
 import {
@@ -62,6 +66,14 @@ export interface IdentityModule {
   readonly resendVerification: ResendVerification;
   readonly requestPasswordReset: RequestPasswordReset;
   readonly resetPassword: ResetPassword;
+  /**
+   * Resolves ids to summaries, for a caller that holds a `UserId` and needs a name.
+   *
+   * The identity half of a cross-context join. Other modules hold an opaque id and
+   * never read `id_users`; this is how they turn one back into an email without
+   * that rule being broken.
+   */
+  readonly describeUsers: DescribeUsers;
   /** Name of the session cookie. Owned here so the delivery layer cannot drift. */
   readonly cookieName: string;
 }
@@ -115,6 +127,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     resendVerification: createResendVerification(dependencies),
     requestPasswordReset: createRequestPasswordReset(dependencies),
     resetPassword: createResetPassword(dependencies),
+    describeUsers: createDescribeUsers(dependencies),
     cookieName: SESSION_COOKIE_NAME,
   };
 }

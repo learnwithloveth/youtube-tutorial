@@ -40,6 +40,10 @@ src/
 │   │   ├── domain/            User, Session, VerificationToken, policy
 │   │   ├── application/       Ports, use cases, error catalogue, mail copy
 │   │   └── infrastructure/    scrypt, AES-GCM sealing, Drizzle, SMTP
+│   ├── presence/              Who is on the site, where, and on which page
+│   │   ├── domain/            Presence, LocationFix, Coordinates, path rules
+│   │   ├── application/       Ports, heartbeat, retention sweep, live query
+│   │   └── infrastructure/    Drizzle, CDN geo headers, IP lookup, UA parsing
 │   └── content/               Supporting context: editorial copy
 │
 ├── platform/              ══ SHARED INFRASTRUCTURE ══
@@ -49,6 +53,7 @@ src/
 │
 ├── server/                Facades the pages actually call
 │   ├── market-data.ts         Read paths for quotes
+│   ├── presence.ts            Live activity; joins presence to identity
 │   └── auth.ts                The one place a session is interpreted
 │
 └── shared/
@@ -315,3 +320,92 @@ and prints the link.
 Message *content* lives in the application layer, not the adapter, because the
 wording of a security email tells someone whether to be alarmed and belongs next
 to the rule that sends it.
+
+---
+
+## 11. Presence
+
+The `presence` context answers one question: **who is on the site right now, where
+in the world are they, and which page are they on.** It exists to feed the live
+board in the operations console.
+
+### The aggregate is a tab, not a user
+
+"Which page is this person on" only has an answer per browsing context. Someone
+with the markets page open in one window and the trade screen in another is on
+both, and a record keyed by user id would have to pick one and be wrong. So the
+identity of a presence row is a UUID the client mints per tab and forgets when the
+tab closes; the user id is an attribute attached when there happens to be a
+session.
+
+Anonymous visitors are first-class. Most traffic to a public exchange is signed
+out, and a board that counted only logged-in users would answer a different
+question from the one an operator is asking.
+
+### A location is an observation, not an attribute
+
+The rule `Market.quoteStateAt` enforces for prices, `Presence.locationStateAt`
+enforces for locations, for the same reason. Every fix carries three things it
+cannot be constructed without — **source**, **precision** and **observedAt** — and
+the absence of a location is `null`, which renders as `unavailable`. There is no
+default country and no "unknown" placeholder row. We never fill the gap.
+
+Two independent sources feed it, and this is what makes the feature work
+regardless of what the visitor grants:
+
+| Source | Needs permission | Precision | Trust |
+| --- | --- | --- | --- |
+| `edge` | No | City, or only a country | First-hand: the CDN derived it from the connection |
+| `network` | No | City, usually | Second-hand, and wrong behind a VPN |
+| `device` | **Yes** | Exact | Precise, and **self-reported** — it arrives in a body the client composes |
+
+`LocationFix.supersedes` decides which survives, and the order of its tests is the
+whole design: a stale incumbent always loses, then **precision**, then source, then
+recency. Ranking source above precision is the tempting mistake — it reads as
+"trust the CDN over a lookup service" and produces, on a Cloudflare tier that
+reports only a country, a board where nobody is ever in a city.
+
+The one rule that makes precise location usable at all lives in `Presence.locate`:
+an address fix arrives on *every* heartbeat and a device fix does not, so
+last-writer-wins would discard a consented GPS position twenty seconds after it
+arrived.
+
+### Permission is asked for once, deliberately
+
+`PresenceReporter` never raises a geolocation prompt. It calls `watchPosition` only
+after the Permissions API confirms the grant already exists. A prompt fired on page
+load is denied almost every time, and a denial is permanent — so the ask lives
+behind a control on the settings page, next to a sentence explaining it. Refusing
+costs nothing: the connection-derived location is already there.
+
+### What is deliberately not collected
+
+| Not stored | Stored instead | Why |
+| --- | --- | --- |
+| The IP address | An HMAC digest, truncated | The IPv4 space is enumerable in minutes, so a plain hash of an address *is* the address |
+| The user-agent string | `desktop · Safari` | A modern UA is a fingerprint; the console needs two words |
+| The query string | The route only | `/reset-password?token=…` would put account-takeover material on an operator's screen |
+| Any page history | One row, overwritten | Presence is a question about *now*; the cheapest way not to leak a browsing history is not to keep one |
+
+Rows are swept six hours after a visitor goes quiet. That is a retention limit on
+personal data, not a cache policy, which is why the sweep is triggered
+opportunistically from the heartbeat rather than left to a cron entry someone has
+to remember to configure.
+
+### The console reads across two modules
+
+Presence holds a `UserId` and never reads `id_users`; identity owns those rows and
+has never heard of presence. Neither can produce "who is on the pricing page" with
+an email attached — so the join happens in `src/server/presence.ts`, above both,
+using `describeUsers`. That costs a second query where a SQL join would have done,
+and buys a module that can be lifted into its own service without a schema change
+in two places.
+
+### Why this is the module most likely to move
+
+Presence is the only write path here that scales with *traffic* rather than with
+activity: every open tab writes a row every twenty seconds whether or not anyone
+does anything. A relational table is the right first implementation — no new
+infrastructure, survives a deploy — and the wrong shape at volume, where this
+belongs in a store with native key expiry. `PresenceRepository` is the seam that
+makes that swap an adapter and a line in `module.ts`.

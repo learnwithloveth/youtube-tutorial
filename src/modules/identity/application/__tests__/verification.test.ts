@@ -75,6 +75,11 @@ class FakeUsers implements UserRepository {
   async findByEmail(email: EmailAddress) {
     return [...this.store.values()].find((user) => user.email.equals(email)) ?? null;
   }
+  async findManyByIds(ids: readonly UserId[]) {
+    // Absent ids are simply missing from the result, as the port specifies — a
+    // deleted account is an ordinary outcome for a caller holding a stale list.
+    return ids.map((id) => this.store.get(id)).filter((user): user is User => user !== undefined);
+  }
   async save(user: User) {
     this.store.set(user.id, user);
   }

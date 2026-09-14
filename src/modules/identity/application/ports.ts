@@ -19,6 +19,14 @@ export interface UserRepository {
   nextId(): UserId;
   findById(id: UserId): Promise<User | null>;
   findByEmail(email: EmailAddress): Promise<User | null>;
+  /**
+   * Bulk lookup for a caller that holds ids and needs names.
+   *
+   * Order is not guaranteed and missing ids are simply absent from the result: a
+   * deleted account is an ordinary outcome for a console reading a list of ids
+   * assembled a moment earlier, not an error.
+   */
+  findManyByIds(ids: readonly UserId[]): Promise<User[]>;
   /** @throws ConcurrencyError when the stored version has moved on. */
   save(user: User): Promise<void>;
   /** Relies on a unique index, so two concurrent registrations cannot both win. */

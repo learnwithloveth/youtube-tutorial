@@ -121,6 +121,26 @@ export function formatDate(iso: string): string {
 }
 
 /**
+ * "14:32:08" for an operations timestamp.
+ *
+ * Pinned to UTC for the reason above, and labelled as UTC wherever it is shown.
+ * A console that displayed each operator's local time would be worse than one
+ * that displays a single zone: two people comparing the same incident over a call
+ * would be reading different clocks, and neither would know it.
+ */
+const clockFormatter = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'UTC',
+});
+
+export function formatClock(iso: string): string {
+  return clockFormatter.format(new Date(iso));
+}
+
+/**
  * "3 minutes ago" for a staleness label.
  *
  * Rendered from a duration the server computed, never from `Date.now()` in a
@@ -134,4 +154,27 @@ export function formatAge(seconds: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
+ * "4m 12s" for an elapsed duration.
+ *
+ * Distinct from `formatAge`, which says how long *ago* an instant was. This one
+ * measures a span — how long someone has been on a page — and keeps the second
+ * unit, because the difference between eight seconds and fifty on a page is the
+ * difference between a bounce and a read, and "0m" would hide it.
+ *
+ * Same rule as `formatAge`: the duration is computed by the server and passed in.
+ * A component that read the clock during render would produce different HTML on
+ * each side of hydration.
+ */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }

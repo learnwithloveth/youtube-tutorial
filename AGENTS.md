@@ -25,6 +25,7 @@ short version: the rules that are easy to break by accident.
 | Touch **any** numeric amount | `docs/adr/0002-money-as-integer-minor-units.md` |
 | Touch a price, quote or feed | `docs/adr/0003-real-market-data-never-simulated.md` |
 | Touch a session, password, or token | `docs/adr/0004-identity-sessions-and-email-verification.md` |
+| Touch a visitor location or the live board | `docs/architecture.md` §11 — presence |
 | Decide server vs client | `docs/architecture.md` §5 |
 | Set caching on a page | `docs/architecture.md` §6 |
 
@@ -45,9 +46,12 @@ is the default bundler, and `middleware` is now `proxy`.
 3. **The domain layer imports nothing from `next`, `react`, the database or the
    network.** A framework import in a domain file means the design is wrong.
 
-4. **Never invent a price.** No recent observation is a state to render, not a
-   gap to fill. `Market.quoteStateAt()` returns `live | stale | unavailable`;
-   handle all three.
+4. **Never invent a price, and never invent a location.** No recent observation
+   is a state to render, not a gap to fill. `Market.quoteStateAt()` and
+   `Presence.locationStateAt()` both return `live | stale | unavailable`; handle
+   all three. A location also carries *how* it was obtained, and the console says
+   so — a consented device fix and a country guessed from an IP address are not
+   the same claim.
 
 5. **Expected failures are values; unexpected failures are exceptions.** Use
    cases return `Result<T, DomainError>`. Reserve `throw` for bugs and
