@@ -147,6 +147,32 @@ export class Money {
   }
 
   /**
+   * The same value with its trailing zeros dropped: `0.5` rather than
+   * `0.500000000000000000`.
+   *
+   * ── Still exact ───────────────────────────────────────────────────────────
+   * This only ever *removes characters* from `toDecimalString()`. The tempting
+   * one-liner — `String(Number(this.toDecimalString()))` — is a rounding
+   * function wearing a formatter's clothes: `Number('1.000000000000000001')` is
+   * `1.0000000000000002`, and an 18-decimal asset produces values past a
+   * double's precision every day.
+   *
+   * ── When to reach for it ──────────────────────────────────────────────────
+   * Headlines only. `toDecimalString()` stays the canonical serialisation and
+   * is what gets stored, compared or itemised, because `0.5 ETH` and
+   * `0.500000000000000000 ETH` are the same number but not the same evidence —
+   * a receipt's detail rows print the scale the ledger actually holds.
+   */
+  toTrimmedString(): string {
+    const decimal = this.toDecimalString();
+    // A scale of zero has no point to trim behind, and "1200" must survive intact.
+    if (!decimal.includes('.')) return decimal;
+
+    const trimmed = decimal.replace(/0+$/, '').replace(/\.$/, '');
+    return trimmed === '' || trimmed === '-' ? '0' : trimmed;
+  }
+
+  /**
    * The value as a `number`, for presentation only.
    *
    * `Intl.NumberFormat` takes a number, so the boundary has to exist. It lives

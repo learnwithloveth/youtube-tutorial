@@ -52,22 +52,6 @@ export interface AdminUser {
   notes: { id: string; author: string; body: string; at: string }[];
 }
 
-export type CaseState = 'unassigned' | 'in_review' | 'approved' | 'rejected';
-
-export interface KycCase {
-  readonly id: string;
-  readonly userId: string;
-  readonly document: 'Passport' | 'National ID' | "Driver's licence";
-  readonly submittedAt: string;
-  readonly country: string;
-  readonly checks: { label: string; status: 'pass' | 'warn' | 'fail'; detail: string }[];
-  readonly sanctionsHits: number;
-  readonly pepMatch: boolean;
-  state: CaseState;
-  assignee?: string;
-  decidedAt?: string;
-}
-
 export type TicketPriority = 'urgent' | 'high' | 'normal' | 'low';
 export type TicketState = 'open' | 'pending' | 'resolved';
 
@@ -106,18 +90,6 @@ export interface Listing {
   readonly makerBps: number;
   readonly takerBps: number;
   status: 'live' | 'paused' | 'delisted' | 'review';
-}
-
-export interface SurveillanceAlert {
-  readonly id: string;
-  readonly pattern: 'Wash trading' | 'Spoofing' | 'Layering' | 'Ramping' | 'Cross-account';
-  readonly market: string;
-  readonly userId: string;
-  readonly detectedAt: string;
-  readonly confidence: number;
-  readonly notional: number;
-  readonly severity: Risk;
-  state: 'open' | 'cleared' | 'escalated';
 }
 
 export interface TreasuryWallet {

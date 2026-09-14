@@ -17,6 +17,7 @@ import {
   Wifi,
   ShieldCheck,
   ShieldOff,
+  IdCard,
 } from 'lucide-react';
 
 import type { ActivityEventDto, ActivityKind, EventLocation } from '@/modules/activity';
@@ -54,6 +55,9 @@ const KIND_META: Record<
   'admin-suspended': { label: 'Console access suspended', icon: ShieldOff, tone: 'warn' },
   'admin-reinstated': { label: 'Console access restored', icon: ShieldCheck, tone: 'up' },
   'receipt-sent': { label: 'Receipt emailed', icon: Receipt, tone: 'neutral' },
+  'verification-submitted': { label: 'Submitted identity documents', icon: IdCard, tone: 'neutral' },
+  'verification-approved': { label: 'Identity verified', icon: IdCard, tone: 'up' },
+  'verification-rejected': { label: 'Identity verification refused', icon: IdCard, tone: 'warn' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {

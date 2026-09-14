@@ -6,6 +6,11 @@ import type { Session, SessionId } from '../domain/session';
 import type { Profile } from '../domain/profile';
 import type { User, UserRole, UserStatus } from '../domain/user';
 import type { VerificationPurpose, VerificationToken } from '../domain/verification-token';
+import type {
+  DocumentContentType,
+  IdentityVerification,
+  VerificationStatus,
+} from '../domain/identity-verification';
 
 /**
  * Ports for the identity module.
@@ -214,11 +219,54 @@ export interface AppUrls {
   resetPassword(token: string): string;
 }
 
+/**
+ * Identity verification submissions and the documents behind them.
+ *
+ * Two ports rather than one, because they move at different speeds and to
+ * different places: the rows are small, queried and indexed, while the documents
+ * are multi-megabyte blobs that will end up in object storage behind presigned
+ * URLs. Keeping the blob behind its own port means that migration is an adapter
+ * swap in `module.ts` and nothing in the use cases learns of it.
+ */
+export interface VerificationRepository {
+  nextId(): string;
+  save(verification: IdentityVerification): Promise<void>;
+  find(id: string): Promise<IdentityVerification | null>;
+  /**
+   * Whether this account already has a submission awaiting a decision.
+   *
+   * A person who submits three times while waiting produces three rows an
+   * operator has to work through to reach the same answer, and the second and
+   * third are a denial of somebody else's place in the queue.
+   */
+  hasPending(userId: UserId): Promise<boolean>;
+  /** The account's own history, newest first. */
+  listForUser(userId: UserId, limit: number): Promise<IdentityVerification[]>;
+  /** The operator queue: awaiting a decision, oldest first. */
+  listPending(limit: number): Promise<IdentityVerification[]>;
+  /** Most recently decided, newest first — what the queue page shows underneath. */
+  listRecentlyDecided(limit: number): Promise<IdentityVerification[]>;
+  countByStatus(): Promise<{ status: VerificationStatus; total: number }[]>;
+}
+
+export interface DocumentStorage {
+  /**
+   * Stores validated bytes and returns their key.
+   *
+   * Takes a content type the *caller has already sniffed*, not one the client
+   * declared. An adapter must not re-derive it from a filename.
+   */
+  put(bytes: Uint8Array, contentType: DocumentContentType): Promise<string>;
+  get(documentId: string): Promise<{ bytes: Uint8Array; contentType: DocumentContentType } | null>;
+}
+
 export interface IdentityDependencies {
   users: UserRepository;
   profiles: ProfileRepository;
   sessions: SessionRepository;
   tokens: VerificationTokenRepository;
+  verifications: VerificationRepository;
+  documents: DocumentStorage;
   hasher: PasswordHasher;
   tokenHasher: VerificationTokenHasher;
   sealer: SessionSealer;

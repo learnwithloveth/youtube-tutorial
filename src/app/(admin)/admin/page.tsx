@@ -4,13 +4,18 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   ArrowUpRight,
+  IdCard,
   Receipt,
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
 
 import type { DecisionDto } from '@/modules/ledger';
-import { getConsoleOverview, type ServiceCheckDto } from '@/server/console';
+import {
+  getConsoleOverview,
+  getPendingQueueCounts,
+  type ServiceCheckDto,
+} from '@/server/console';
 import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { ChartFrame } from '@/shared/ui/charts/chart-frame';
@@ -61,7 +66,12 @@ export const metadata: Metadata = {
 };
 
 export default async function CommandCentrePage() {
-  const overview = await getConsoleOverview();
+  // Both deduplicated per request by `cache`, so the layout's rail badge and
+  // these cards cost one set of reads between them and cannot disagree.
+  const [overview, queues] = await Promise.all([
+    getConsoleOverview(),
+    getPendingQueueCounts(),
+  ]);
   const { operations, activity, customers, live, services, decisionActors } = overview;
 
   const waiting = operations.pending.withdrawals + operations.pending.deposits;
@@ -139,10 +149,11 @@ export default async function CommandCentrePage() {
         />
       </div>
 
-      {/* Two queues, because two are what exist. KYC, support, surveillance and
-          referral payouts had cards here and no modules behind them; their counts
-          were fixtures, and a card reading "9 waiting" that nobody can clear is an
-          operator's time spent looking for work that is not there. */}
+      {/* Four queues, because four are what exist. Referral payouts, listings and
+          incidents still have no module behind them and so have no card: a count
+          that nobody can clear is an operator's time spent looking for work that is
+          not there. KYC and surveillance earned theirs back — both now read the
+          database rather than a fixture. */}
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <QueueCard
           href="/admin/approvals"
@@ -157,6 +168,20 @@ export default async function CommandCentrePage() {
           count={operations.pending.deposits}
           label="Deposits to confirm"
           blurb="Customers have filed evidence that funds arrived"
+        />
+        <QueueCard
+          href="/admin/kyc"
+          icon={IdCard}
+          count={queues.kyc}
+          label="Identity documents"
+          blurb="Customers waiting on a verification decision"
+        />
+        <QueueCard
+          href="/admin/surveillance"
+          icon={ShieldAlert}
+          count={queues.surveillance}
+          label="Risk findings"
+          blurb="Rules matched movements nobody has reviewed yet"
         />
         <Link
           href="/admin/transactions"

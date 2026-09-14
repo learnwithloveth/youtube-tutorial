@@ -4,11 +4,11 @@ import { createContext, useCallback, useContext, useMemo, useReducer } from 'rea
 import type { ReactNode } from 'react';
 import {
   ACTING_ADMIN, ADMIN_TEAM, ADMIN_USERS, ANNOUNCEMENTS, APPROVALS, FEATURE_FLAGS, INCIDENTS,
-  KYC_CASES, LISTINGS, PAYOUTS, SEED_AUDIT, SURVEILLANCE, TICKETS,
+  LISTINGS, PAYOUTS, SEED_AUDIT, TICKETS,
 } from './data';
 import type {
-  AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident, KycCase,
-  Listing, Payout, SupportMessage, SurveillanceAlert, Ticket,
+  AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident,
+  Listing, Payout, SupportMessage, Ticket,
 } from './types';
 
 /**
@@ -29,10 +29,8 @@ import type {
 export interface AdminState {
   approvals: Approval[];
   users: AdminUser[];
-  kycCases: KycCase[];
   tickets: Ticket[];
   listings: Listing[];
-  surveillance: SurveillanceAlert[];
   payouts: Payout[];
   incidents: Incident[];
   flags: FeatureFlag[];
@@ -45,8 +43,6 @@ export type AdminAction =
   | { type: 'approval/sign'; id: string; actor: string; note?: string }
   | { type: 'approval/reject'; id: string; actor: string; reason: string }
   | { type: 'approval/escalate'; id: string; actor: string }
-  | { type: 'kyc/assign'; id: string; actor: string }
-  | { type: 'kyc/decide'; id: string; actor: string; approve: boolean; reason?: string }
   | { type: 'user/setState'; id: string; actor: string; state: AdminUser['state']; reason: string }
   | { type: 'user/note'; id: string; actor: string; body: string }
   | { type: 'ticket/assign'; id: string; actor: string }
@@ -54,7 +50,6 @@ export type AdminAction =
   | { type: 'ticket/resolve'; id: string; actor: string }
   | { type: 'listing/setStatus'; id: string; actor: string; status: Listing['status'] }
   | { type: 'listing/setFees'; id: string; actor: string; makerBps: number; takerBps: number }
-  | { type: 'surveillance/decide'; id: string; actor: string; escalate: boolean }
   | { type: 'payout/decide'; id: string; actor: string; approve: boolean }
   | { type: 'incident/update'; id: string; actor: string; body: string; state: Incident['state'] }
   | { type: 'flag/toggle'; id: string; actor: string }
@@ -153,36 +148,6 @@ function reducer(state: AdminState, action: AdminAction): AdminState {
         }),
       };
 
-    case 'kyc/assign':
-      return {
-        ...state,
-        kycCases: patch(state.kycCases, action.id, (c) => ({ ...c, state: 'in_review', assignee: action.actor })),
-        audit: audit(state, {
-          actor: action.actor, action: 'kyc.assigned', target: action.id,
-          detail: 'Case taken for review.', severity: 'info',
-        }),
-      };
-
-    case 'kyc/decide': {
-      const target = state.kycCases.find((c) => c.id === action.id);
-      return {
-        ...state,
-        kycCases: patch(state.kycCases, action.id, (c) => ({
-          ...c, state: action.approve ? 'approved' : 'rejected', decidedAt: new Date().toISOString(),
-        })),
-        // A KYC decision is only real if it moves the customer record with it.
-        users: target
-          ? patch(state.users, target.userId, (u) => ({ ...u, kyc: action.approve ? 'verified' : 'rejected' }))
-          : state.users,
-        audit: audit(state, {
-          actor: action.actor,
-          action: action.approve ? 'kyc.approved' : 'kyc.rejected',
-          target: action.id,
-          detail: action.reason ?? (action.approve ? 'All checks passed.' : 'Adjudicated as failed.'),
-          severity: action.approve ? 'info' : 'critical',
-        }),
-      };
-    }
 
     case 'user/setState': {
       const target = state.users.find((u) => u.id === action.id);
@@ -278,21 +243,6 @@ function reducer(state: AdminState, action: AdminAction): AdminState {
       };
     }
 
-    case 'surveillance/decide':
-      return {
-        ...state,
-        surveillance: patch(state.surveillance, action.id, (s) => ({
-          ...s, state: action.escalate ? 'escalated' : 'cleared',
-        })),
-        audit: audit(state, {
-          actor: action.actor,
-          action: action.escalate ? 'surveillance.escalated' : 'surveillance.cleared',
-          target: action.id,
-          detail: action.escalate ? 'Referred for a formal market-abuse review.' : 'Reviewed and closed as benign.',
-          severity: action.escalate ? 'critical' : 'info',
-        }),
-      };
-
     case 'payout/decide':
       return {
         ...state,
@@ -379,10 +329,8 @@ function initialState(): AdminState {
   return {
     approvals: APPROVALS.map((a) => ({ ...a })),
     users: ADMIN_USERS.map((u) => ({ ...u, notes: [...u.notes] })),
-    kycCases: KYC_CASES.map((c) => ({ ...c })),
     tickets: TICKETS.map((t) => ({ ...t, messages: [...t.messages] })),
     listings: LISTINGS.map((l) => ({ ...l })),
-    surveillance: SURVEILLANCE.map((s) => ({ ...s })),
     payouts: PAYOUTS.map((p) => ({ ...p })),
     incidents: INCIDENTS.map((i) => ({ ...i, updates: [...i.updates] })),
     flags: FEATURE_FLAGS.map((f) => ({ ...f })),
@@ -427,7 +375,9 @@ interface AdminContextValue {
  * fixture stops being consulted. The ones absent from it are still fixtures on
  * both sides, which is at least self-consistent.
  */
-export type QueueCounts = Partial<Record<'approvals' | 'tickets', number>>;
+export type QueueCounts = Partial<
+  Record<'approvals' | 'tickets' | 'kyc' | 'surveillance', number>
+>;
 
 const AdminContext = createContext<AdminContextValue | null>(null);
 
@@ -451,14 +401,21 @@ export function AdminProvider({
   // itself would rebuild the context each time and defeat the memo entirely.
   const countedApprovals = counted.approvals;
   const countedTickets = counted.tickets;
+  const countedKyc = counted.kyc;
+  const countedSurveillance = counted.surveillance;
   const value = useMemo(
     () => ({
       state,
       run,
       actor,
-      counted: { approvals: countedApprovals, tickets: countedTickets },
+      counted: {
+        approvals: countedApprovals,
+        tickets: countedTickets,
+        kyc: countedKyc,
+        surveillance: countedSurveillance,
+      },
     }),
-    [state, run, actor, countedApprovals, countedTickets],
+    [state, run, actor, countedApprovals, countedTickets, countedKyc, countedSurveillance],
   );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
@@ -482,12 +439,15 @@ export function useQueues() {
           ? counted.approvals
           : state.approvals.filter((a) => a.state === 'pending' || a.state === 'escalated').length,
       awaitingSecond: state.approvals.filter((a) => a.state === 'pending' && a.firstApprover).length,
-      kyc: state.kycCases.filter((c) => c.state === 'unassigned' || c.state === 'in_review').length,
+      // Real now, both of them. Zero is a legitimate answer and must beat the
+      // fixture, so this tests for `undefined` rather than falling back with
+      // `??` on a falsy number.
+      kyc: counted.kyc !== undefined ? counted.kyc : 0,
       tickets:
         counted.tickets !== undefined
           ? counted.tickets
           : state.tickets.filter((t) => t.state !== 'resolved').length,
-      surveillance: state.surveillance.filter((s) => s.state === 'open').length,
+      surveillance: counted.surveillance !== undefined ? counted.surveillance : 0,
       payouts: state.payouts.filter((p) => p.state !== 'approved').length,
       listings: state.listings.filter((l) => l.status === 'review').length,
       incidents: state.incidents.filter((i) => i.state !== 'resolved').length,

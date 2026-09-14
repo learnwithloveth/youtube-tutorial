@@ -56,3 +56,10 @@ export type {
   TransactionStatus,
 } from './application/queries/transactions';
 export type { TransferKind } from './domain/transfer';
+
+/* Risk signals — the rules and their wording, which the console renders. The
+   *query* logs, so it lives in `./server` like every other read here. */
+export type { RiskRule, RiskSeverity } from './domain/risk-signal';
+export { RISK_RULES } from './domain/risk-signal';
+export type { RiskDisposition } from './application/ports';
+export type { RiskBoardDto, RiskSignalDto } from './application/queries/risk-signals';

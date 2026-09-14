@@ -32,9 +32,40 @@ export type IdentityError =
   | { _tag: 'HandleTaken' }
   | { _tag: 'AdministratorNotFound' }
   | { _tag: 'CannotSuspendSelf' }
-  | { _tag: 'LastAdministrator' };
+  | { _tag: 'LastAdministrator' }
+  | { _tag: 'VerificationNameRequired' }
+  | { _tag: 'VerificationCountryRequired' }
+  | { _tag: 'VerificationDocumentNumberRequired' }
+  | { _tag: 'VerificationDateOfBirthInvalid'; minimumAge: number }
+  | { _tag: 'VerificationDocumentRejected'; why: string }
+  | { _tag: 'VerificationAlreadyPending' }
+  | { _tag: 'VerificationAlreadyApproved' }
+  | { _tag: 'VerificationNotFound' }
+  | { _tag: 'VerificationAlreadyDecided'; status: string }
+  | { _tag: 'VerificationReasonRequired' };
 
 export const IdentityErrors = {
+  verificationNameRequired: (): IdentityError => ({ _tag: 'VerificationNameRequired' }),
+  verificationCountryRequired: (): IdentityError => ({ _tag: 'VerificationCountryRequired' }),
+  verificationDocumentNumberRequired: (): IdentityError => ({
+    _tag: 'VerificationDocumentNumberRequired',
+  }),
+  verificationDateOfBirthInvalid: (minimumAge: number): IdentityError => ({
+    _tag: 'VerificationDateOfBirthInvalid',
+    minimumAge,
+  }),
+  verificationDocumentRejected: (why: string): IdentityError => ({
+    _tag: 'VerificationDocumentRejected',
+    why,
+  }),
+  verificationAlreadyPending: (): IdentityError => ({ _tag: 'VerificationAlreadyPending' }),
+  verificationAlreadyApproved: (): IdentityError => ({ _tag: 'VerificationAlreadyApproved' }),
+  verificationNotFound: (): IdentityError => ({ _tag: 'VerificationNotFound' }),
+  verificationAlreadyDecided: (status: string): IdentityError => ({
+    _tag: 'VerificationAlreadyDecided',
+    status,
+  }),
+  verificationReasonRequired: (): IdentityError => ({ _tag: 'VerificationReasonRequired' }),
   emailMalformed: (): IdentityError => ({ _tag: 'EmailMalformed' }),
   emailAlreadyRegistered: (): IdentityError => ({ _tag: 'EmailAlreadyRegistered' }),
   passwordTooShort: (minimum: number): IdentityError => ({ _tag: 'PasswordTooShort', minimum }),
@@ -132,5 +163,27 @@ export function presentIdentityError(error: IdentityError): string {
       return 'You cannot suspend your own account. Ask another administrator.';
     case 'LastAdministrator':
       return 'This is the only active administrator. Suspending it would lock everyone out of the console.';
+    case 'VerificationNameRequired':
+      return 'Enter your name exactly as it appears on the document.';
+    case 'VerificationCountryRequired':
+      return 'Choose the country that issued the document.';
+    case 'VerificationDocumentNumberRequired':
+      return 'Enter the document number.';
+    case 'VerificationDateOfBirthInvalid':
+      // The rule, not "invalid": somebody refused for being a day under the
+      // threshold needs to know a threshold exists.
+      return `Enter your date of birth. Account holders must be at least ${error.minimumAge}.`;
+    case 'VerificationDocumentRejected':
+      return error.why;
+    case 'VerificationAlreadyPending':
+      return 'You already have a submission waiting. We will email you when it is reviewed.';
+    case 'VerificationAlreadyApproved':
+      return 'Your identity is already verified.';
+    case 'VerificationNotFound':
+      return 'That submission no longer exists.';
+    case 'VerificationAlreadyDecided':
+      return `This submission was already ${error.status}.`;
+    case 'VerificationReasonRequired':
+      return 'A rejection needs a reason. The customer is shown it.';
   }
 }

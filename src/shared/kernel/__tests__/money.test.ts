@@ -137,6 +137,43 @@ describe('Money', () => {
     });
   });
 
+  describe('toTrimmedString', () => {
+    it('drops trailing zeros without changing the value', () => {
+      expect(Money.fromDecimalString('1', 'ETH', 18).toTrimmedString()).toBe('1');
+      expect(Money.fromDecimalString('0.01147491', 'BTC', 8).toTrimmedString()).toBe('0.01147491');
+      expect(Money.fromDecimalString('0.50', 'USD', 2).toTrimmedString()).toBe('0.5');
+    });
+
+    it('keeps every digit of a value a double could not hold', () => {
+      // The one-line implementation everybody reaches for first is
+      // `String(Number(decimal))`, and it returns 1.0000000000000002 here.
+      // 18-decimal assets produce values past a double every day, so this is a
+      // rounding bug waiting in a formatter, not a theoretical one.
+      const dust = Money.fromDecimalString('1.000000000000000001', 'ETH', 18);
+      expect(dust.toTrimmedString()).toBe('1.000000000000000001');
+    });
+
+    it('never touches the integer part', () => {
+      // A naive trailing-zero strip run on a scale-0 amount turns 1200 into 12.
+      expect(Money.fromDecimalString('1200', 'JPY', 0).toTrimmedString()).toBe('1200');
+      expect(Money.fromDecimalString('100.00', 'USD', 2).toTrimmedString()).toBe('100');
+    });
+
+    it('leaves a lone zero rather than an empty string or a bare minus', () => {
+      expect(Money.zero('USD', 2).toTrimmedString()).toBe('0');
+      expect(Money.fromDecimalString('-0.00', 'USD', 2).toTrimmedString()).toBe('0');
+    });
+
+    it('is a headline, and toDecimalString stays the record', () => {
+      // Both are needed on a receipt: one is what a person reads, the other is
+      // what the ledger holds. Collapsing them would print a summary where the
+      // evidence should be.
+      const amount = Money.fromDecimalString('0.5', 'ETH', 18);
+      expect(amount.toTrimmedString()).toBe('0.5');
+      expect(amount.toDecimalString()).toBe('0.500000000000000000');
+    });
+  });
+
   describe('the unsafe number boundary', () => {
     it('accepts hand-authored figures at the declared scale', () => {
       expect(Money.fromUnsafeNumber(94820.44, 'USD', 2).toDecimalString()).toBe('94820.44');

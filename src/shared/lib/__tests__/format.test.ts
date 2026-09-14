@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCompact, formatDate, formatPercent, formatPrice } from '../format';
+import {
+  formatCompact,
+  formatDate,
+  formatPercent,
+  formatPrice,
+  formatTimestamp,
+} from '../format';
 
 /**
  * These guard two bugs that were shipped and fixed, both of which produce React
@@ -84,5 +90,25 @@ describe('formatPercent', () => {
     expect(formatPercent(2.41)).toBe('+2.41%');
     expect(formatPercent(-1.24)).toBe('-1.24%');
     expect(formatPercent(0)).toBe('0.00%');
+  });
+});
+
+describe('formatTimestamp', () => {
+  it('names the zone it pinned', () => {
+    // A bare time on a receipt is a time in an unstated zone, and that is the
+    // one thing a dispute turns on.
+    expect(formatTimestamp('2026-09-14T23:16:04Z')).toBe('Sep 14, 2026 at 23:16 UTC');
+  });
+
+  it('does not roll the date over on a host east of Greenwich', () => {
+    // Same class of bug as formatDate's: unpinned, this reads "Sep 10" in Lagos
+    // and "Sep 9" on the UTC box that prerendered it, and React throws away the
+    // subtree.
+    expect(formatTimestamp('2026-09-09T23:30:00Z')).toBe('Sep 9, 2026 at 23:30 UTC');
+  });
+
+  it('keeps a 24-hour clock rather than an am/pm the locale would prefer', () => {
+    expect(formatTimestamp('2026-01-15T00:05:00Z')).toBe('Jan 15, 2026 at 00:05 UTC');
+    expect(formatTimestamp('2026-01-15T13:45:00Z')).toBe('Jan 15, 2026 at 13:45 UTC');
   });
 });

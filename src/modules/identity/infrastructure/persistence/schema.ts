@@ -1,4 +1,13 @@
-import { index, integer, pgSchema, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  customType,
+  date,
+  index,
+  integer,
+  pgSchema,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 /**
  * Tables owned by the identity module.
@@ -182,3 +191,96 @@ export const verificationTokens = identitySchema.table(
     index('verification_tokens_expires_idx').on(table.expiresAt),
   ],
 );
+
+/**
+ * Identity documents, as bytes.
+ *
+ * ── Its own table, and the same trade-off the ledger made for deposit proofs ──
+ * Bytes in Postgres need no credentials and are transactional with the submission,
+ * so a verification and the document it rests on cannot diverge. They are also the
+ * wrong home at volume — this project's tier is 512 MB in total — which is why the
+ * application reaches them through a port and not through this table directly.
+ *
+ * Split from `verifications` so the queue can be listed without dragging four
+ * megabytes per row across the wire. A list query never joins this.
+ */
+export const verificationDocuments = identitySchema.table('verification_documents', {
+  id: text('id').primaryKey(),
+  /** Sniffed from the bytes, never taken from the upload's declared type. */
+  contentType: text('content_type', {
+    enum: ['image/png', 'image/jpeg', 'image/webp'],
+  }).notNull(),
+  bytes: customType<{ data: Uint8Array; driverData: Buffer }>({
+    dataType: () => 'bytea',
+    toDriver: (value) => Buffer.from(value),
+    fromDriver: (value) => new Uint8Array(value),
+  })('bytes').notNull(),
+  byteLength: integer('byte_length').notNull(),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Identity verification submissions.
+ *
+ * One row per attempt, never updated in place after a decision: a rejected customer
+ * submits again and that is a new row, so the table reads as the history of what was
+ * claimed and what was decided rather than only the latest state.
+ */
+export const verifications = identitySchema.table(
+  'verifications',
+  {
+    id: text('id').primaryKey(),
+
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+
+    /** As written on the document, which is not the display name on the account. */
+    fullName: text('full_name').notNull(),
+    /**
+     * `date`, not `timestamp`. A birthday has no time of day, and storing one
+     * invites a timezone conversion to move somebody's birthday by a day — which,
+     * on the field an age check reads, is the difference between accepted and
+     * refused for anybody born within a day of the threshold.
+     */
+    dateOfBirth: date('date_of_birth').notNull(),
+    /** ISO 3166-1 alpha-2, upper case. */
+    country: text('country').notNull(),
+
+    documentType: text('document_type', {
+      enum: ['passport', 'national-id', 'drivers-licence'],
+    }).notNull(),
+    documentNumber: text('document_number').notNull(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => verificationDocuments.id),
+
+    status: text('status', { enum: ['pending', 'approved', 'rejected'] })
+      .notNull()
+      .default('pending'),
+
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedBy: text('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Required on a rejection. The customer is shown it. */
+    reason: text('reason'),
+
+    /** Optimistic-concurrency token, matching every other table in this schema. */
+    version: integer('version').notNull().default(0),
+  },
+  (table) => [
+    /*
+     * The queue's own index: pending first, oldest first within it.
+     *
+     * A review queue is worked oldest-first so nobody waits forever, which is the
+     * opposite order to every other feed in this codebase and the reason this is
+     * not the same index as a history would want.
+     */
+    index('verifications_queue_idx').on(table.status, table.submittedAt),
+    /* "What has this account submitted before" — the first question on any repeat. */
+    index('verifications_user_idx').on(table.userId, table.submittedAt),
+  ],
+);
+
+export type VerificationRow = typeof verifications.$inferSelect;
+export type VerificationDocumentRow = typeof verificationDocuments.$inferSelect;

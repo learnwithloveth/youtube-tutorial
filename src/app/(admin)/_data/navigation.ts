@@ -1,11 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BadgeCheck, Building2, FileClock, Gauge,
-  Headset, Megaphone, Radar, Receipt, ScrollText, ShieldAlert, Users, Wallet,
-  // Needed again by the entries commented out below — Markets, Referral payouts
-  // and Health & flags. Kept here rather than deleted so re-enabling one of those
-  // is uncommenting two lines instead of hunting for the icon it wanted.
-  // Activity, CandlestickChart, Coins, Gift, Percent,
+  Headset, Megaphone, Radar, Receipt, ScrollText, ShieldAlert, Users,
+  // Needed again by the entries commented out below — Markets, Treasury,
+  // Referral payouts and Health & flags. Kept here rather than deleted so
+  // re-enabling one of those is uncommenting two lines instead of hunting for the
+  // icon it wanted.
+  // Activity, CandlestickChart, Coins, Gift, Percent, Wallet,
 } from 'lucide-react';
 
 /** Queue keys map onto `useQueues()` so a badge can never drift from the data. */
@@ -61,7 +62,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   {
     heading: 'Platform',
     items: [
-      { label: 'Treasury', href: '/admin/treasury', icon: Wallet },
+      // { label: 'Treasury', href: '/admin/treasury', icon: Wallet },
       // { label: 'Referral payouts', href: '/admin/payouts', icon: Gift, queue: 'payouts' },
       { label: 'Announcements', href: '/admin/announcements', icon: Megaphone },
     ],

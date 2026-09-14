@@ -42,7 +42,10 @@ export type LedgerError =
   | { readonly kind: 'receipts-unavailable' }
   | { readonly kind: 'receipt-not-yet-available' }
   | { readonly kind: 'receipt-no-address' }
-  | { readonly kind: 'receipt-send-failed'; readonly reason: string };
+  | { readonly kind: 'receipt-send-failed'; readonly reason: string }
+  | { readonly kind: 'risk-unavailable' }
+  | { readonly kind: 'risk-signal-not-found' }
+  | { readonly kind: 'risk-note-required' };
 
 export const LedgerErrors = {
   assetNotSupported: (asset: string): LedgerError => ({ kind: 'asset-not-supported', asset }),
@@ -87,6 +90,9 @@ export const LedgerErrors = {
   receiptNotYetAvailable: (): LedgerError => ({ kind: 'receipt-not-yet-available' }),
   receiptNoAddress: (): LedgerError => ({ kind: 'receipt-no-address' }),
   receiptSendFailed: (reason: string): LedgerError => ({ kind: 'receipt-send-failed', reason }),
+  riskUnavailable: (): LedgerError => ({ kind: 'risk-unavailable' }),
+  riskSignalNotFound: (): LedgerError => ({ kind: 'risk-signal-not-found' }),
+  riskNoteRequired: (): LedgerError => ({ kind: 'risk-note-required' }),
 } as const;
 
 /**
@@ -134,5 +140,11 @@ export function presentLedgerError(error: LedgerError): string {
       return 'That account has no address on file to send to.';
     case 'receipt-send-failed':
       return `The receipt could not be sent. ${error.reason}`;
+    case 'risk-unavailable':
+      return 'Risk signals are not available on this deployment.';
+    case 'risk-signal-not-found':
+      return 'That signal no longer exists. The facts behind it may have changed.';
+    case 'risk-note-required':
+      return 'Escalating needs a note saying why this one is not ordinary.';
   }
 }

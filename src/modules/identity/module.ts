@@ -25,6 +25,14 @@ import {
   createListSessions,
   type ListSessions,
 } from './application/queries/list-sessions';
+import {
+  createSubmitVerification,
+  type SubmitVerification,
+} from './application/use-cases/submit-verification';
+import {
+  createDecideVerification,
+  type DecideVerification,
+} from './application/use-cases/decide-verification';
 import { createAuthenticate, type Authenticate } from './application/use-cases/authenticate';
 import { createRegisterUser, type RegisterUser } from './application/use-cases/register-user';
 import {
@@ -61,6 +69,10 @@ import {
   DrizzleUserRepository,
   DrizzleVerificationTokenRepository,
 } from './infrastructure/persistence/repositories';
+import {
+  DrizzleVerificationRepository,
+  PostgresDocumentStorage,
+} from './infrastructure/persistence/verification-repository';
 
 /**
  * Identity module registration.
@@ -102,8 +114,19 @@ export interface IdentityModule {
   readonly listAdministrators: ListAdministrators;
   /** A user's live sessions, for the security page. */
   readonly listSessions: ListSessions;
+  /** A customer submits an identity document for review. */
+  readonly submitVerification: SubmitVerification;
+  /** An operator approves or rejects one submission. Decided once. */
+  readonly decideVerification: DecideVerification;
   /** Name of the session cookie. Owned here so the delivery layer cannot drift. */
   readonly cookieName: string;
+  /**
+   * The wiring, for queries that take the bag rather than being closed over it.
+   *
+   * Same arrangement the ledger uses: a read has no command and no invariant to
+   * protect, so it is a function of the ports rather than a method on the module.
+   */
+  readonly dependencies: IdentityDependencies;
 }
 
 export interface RegisterIdentityOptions {
@@ -137,6 +160,8 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     profiles: new DrizzleProfileRepository(options.db),
     sessions: new DrizzleSessionRepository(options.db),
     tokens: new DrizzleVerificationTokenRepository(options.db),
+    verifications: new DrizzleVerificationRepository(options.db),
+    documents: new PostgresDocumentStorage(options.db),
     hasher: new ScryptPasswordHasher(),
     tokenHasher: new Sha256TokenHasher(),
     sealer: new AeadSessionSealer(options.sessionSecret),
@@ -162,6 +187,9 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     listUsers: createListUsers(dependencies),
     listAdministrators: createListAdministrators(dependencies),
     listSessions: createListSessions(dependencies),
+    submitVerification: createSubmitVerification(dependencies),
+    decideVerification: createDecideVerification(dependencies),
     cookieName: SESSION_COOKIE_NAME,
+    dependencies,
   };
 }

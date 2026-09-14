@@ -7,6 +7,7 @@ import { getPlatformActivity } from '@/modules/activity/server';
 import type { UserStatus } from '@/modules/identity';
 import type { DecisionDto, OperationsSummaryDto } from '@/modules/ledger';
 import { getOperationsSummary } from '@/modules/ledger/server';
+import { getVerificationQueue } from '@/modules/identity/server';
 import { logger } from '@/platform/observability/logger';
 import { toUserId, type UserId } from '@/shared/kernel/ids';
 
@@ -16,6 +17,7 @@ import { ledger } from './ledger';
 import { getMarkets } from './market-data';
 import { getOpenSupportCount } from './support';
 import { getLiveActivity } from './presence';
+import { getRiskConsole } from './risk';
 
 /**
  * Everything the command centre shows, assembled from four contexts.
@@ -88,13 +90,19 @@ const ACTIVITY_DAYS = 30;
  * operator who sees no badge will open the queue anyway.
  */
 export const getPendingQueueCounts = cache(
-  async (): Promise<{ approvals: number; tickets: number }> => {
+  async (): Promise<{
+    approvals: number;
+    tickets: number;
+    kyc: number;
+    surveillance: number;
+  }> => {
     const context = ledger();
 
-    // `allSettled` across two contexts: support being unconfigured, or the ledger
-    // unreachable, should cost that badge rather than the other one — and rejecting
-    // in parallel with `all` leaves the loser unattached, which Node terminates for.
-    const [ledgerCounts, tickets] = await Promise.allSettled([
+    // `allSettled` across three contexts: support being unconfigured, the ledger
+    // unreachable, or the risk scan failing should cost that badge rather than the
+    // others — and rejecting in parallel with `all` leaves the losers unattached,
+    // which Node terminates for.
+    const [ledgerCounts, tickets, kyc, risk] = await Promise.allSettled([
       context === null
         ? Promise.resolve(null)
         : Promise.all([
@@ -102,6 +110,8 @@ export const getPendingQueueCounts = cache(
             context.dependencies.claims.countByStatus(),
           ]),
       getOpenSupportCount(),
+      getVerificationQueue(identity().dependencies, { pendingLimit: 1, decidedLimit: 1 }),
+      getRiskConsole(),
     ]);
 
     if (ledgerCounts.status === 'rejected') {
@@ -118,6 +128,10 @@ export const getPendingQueueCounts = cache(
       // deposits, so an operator reading "4" should find four things to act on.
       approvals: rows === null ? 0 : pending(rows[0]) + pending(rows[1]),
       tickets: tickets.status === 'fulfilled' ? tickets.value : 0,
+      // The tally, not the page — `pendingLimit: 1` because the badge needs the
+      // count and not the fifty rows behind it.
+      kyc: kyc.status === 'fulfilled' ? kyc.value.counts.pending : 0,
+      surveillance: risk.status === 'fulfilled' ? risk.value.open.length : 0,
     };
   },
 );

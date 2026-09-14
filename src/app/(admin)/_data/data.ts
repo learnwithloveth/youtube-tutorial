@@ -2,8 +2,8 @@ import { ASSETS } from '../../_console/data/assets';
 import { cycle, hashSeed, pick, seededRandom } from '../../_console/data/simulation';
 import { NOW } from '../../_console/data/series';
 import type {
-  AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident, KycCase,
-  Listing, Payout, Risk, SupportMessage, SurveillanceAlert, Ticket, TreasuryWallet, Validator,
+  AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident,
+  Listing, Payout, Risk, SupportMessage, Ticket, TreasuryWallet, Validator,
 } from './types';
 
 const DAY = 86_400_000;
@@ -108,33 +108,6 @@ export const APPROVALS: Approval[] = (() => {
   });
 })();
 
-export const KYC_CASES: KycCase[] = (() => {
-  const rand = seededRandom(hashSeed('kyc'));
-  const docs = ['Passport', 'National ID', "Driver's licence"] as const;
-  return Array.from({ length: 9 }, (_, i) => {
-    const user = cycle(ADMIN_USERS, i * 2 + 1);
-    const sanctions = rand() > 0.86 ? 1 : 0;
-    return {
-      id: `kyc_${(700_000 + i * 419).toString(36)}`,
-      userId: user.id,
-      document: cycle(docs, i),
-      submittedAt: new Date(NOW - i * 5 * HOUR - rand() * HOUR).toISOString(),
-      country: user.country,
-      checks: [
-        { label: 'Document authenticity', status: rand() > 0.9 ? 'warn' : 'pass', detail: 'MRZ checksum and security features verified.' },
-        { label: 'Face match', status: rand() > 0.93 ? 'warn' : 'pass', detail: `${(88 + rand() * 11).toFixed(1)}% similarity to the liveness capture.` },
-        { label: 'Liveness', status: 'pass', detail: 'Passive challenge completed in 6.2 seconds.' },
-        { label: 'Address', status: rand() > 0.8 ? 'warn' : 'pass', detail: 'Utility bill dated within 90 days.' },
-        { label: 'Sanctions & PEP', status: sanctions ? 'fail' : 'pass', detail: sanctions ? 'Possible match on the EU consolidated list — manual adjudication required.' : 'No match on any screened list.' },
-      ],
-      sanctionsHits: sanctions,
-      pepMatch: rand() > 0.92,
-      state: i < 2 ? 'in_review' : 'unassigned',
-      assignee: i < 2 ? 'Priya Raman' : undefined,
-    } satisfies KycCase;
-  });
-})();
-
 const CUSTOMER_OPENERS = [
   'My SEPA deposit has not landed after two hours — reference NVX-8841. Can you check?',
   'I cannot enable a passkey on my new phone. The QR step just spins.',
@@ -218,25 +191,6 @@ export const LISTINGS: Listing[] = ASSETS.slice(0, 16).map((asset, i) => ({
   takerBps: 10,
   status: i === 11 ? 'paused' : i === 14 ? 'review' : 'live',
 }));
-
-export const SURVEILLANCE: SurveillanceAlert[] = (() => {
-  const rand = seededRandom(hashSeed('surveillance'));
-  const patterns = ['Wash trading', 'Spoofing', 'Layering', 'Ramping', 'Cross-account'] as const;
-  return Array.from({ length: 8 }, (_, i) => {
-    const confidence = Math.round(52 + rand() * 47);
-    return {
-      id: `srv_${(300_000 + i * 271).toString(36)}`,
-      pattern: cycle(patterns, i),
-      market: `${cycle(ASSETS.slice(0, 8), i).symbol}-USD`,
-      userId: cycle(ADMIN_USERS, i * 3).id,
-      detectedAt: new Date(NOW - i * 3 * HOUR - rand() * HOUR).toISOString(),
-      confidence,
-      notional: Math.round(rand() * 1_800_000),
-      severity: cycle(RISK_ORDER, confidence > 90 ? 3 : confidence > 75 ? 2 : confidence > 62 ? 1 : 0),
-      state: i === 1 ? 'escalated' : 'open',
-    } satisfies SurveillanceAlert;
-  });
-})();
 
 export const TREASURY: TreasuryWallet[] = ASSETS.slice(0, 8).flatMap((asset, i) => {
   const rand = seededRandom(hashSeed(`treasury-${asset.id}`));

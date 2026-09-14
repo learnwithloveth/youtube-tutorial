@@ -113,6 +113,9 @@ describe('retention', () => {
       'admin-suspended',
       'admin-reinstated',
       'receipt-sent',
+      'verification-submitted',
+      'verification-approved',
+      'verification-rejected',
     ];
     expect(new Set([...SECURITY_KINDS, 'page-view'])).toEqual(new Set(all));
   });

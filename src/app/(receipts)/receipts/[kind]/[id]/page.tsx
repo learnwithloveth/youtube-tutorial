@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { Check, Clock, X } from 'lucide-react';
 
+import type { ReceiptDto } from '@/modules/ledger';
 import { requireUser } from '@/server/auth';
 import { getReceiptFor } from '@/server/ledger';
-import { formatDate } from '@/shared/lib/format';
+import { cn } from '@/shared/lib/cn';
+import { formatDate, formatTimestamp } from '@/shared/lib/format';
 
 import { PrintButton } from './_components/print-button';
+import './receipt.css';
 
 /**
  * A printable receipt for one transaction.
@@ -15,6 +19,13 @@ import { PrintButton } from './_components/print-button';
  * no top bar and no support widget. A receipt is a document: what surrounds it on
  * screen is what comes out of the printer, and a navigation rail across the top of
  * somebody's tax paperwork is not it.
+ *
+ * ── The shape is a wallet's transaction detail, not a letterhead ──────────────
+ * Title, counterparty, one enormous figure, the moment, the outcome — then the
+ * itemisation underneath. Everything a person opens this for is above the fold and
+ * legible at arm's length; everything they need only in a dispute is below it. The
+ * earlier layout led with a reference code, which is the one line nobody reads
+ * first.
  *
  * ── Who may read one ──────────────────────────────────────────────────────────
  * The customer it belongs to, and operators. Enforced here rather than by the link
@@ -34,6 +45,41 @@ export const metadata: Metadata = {
   title: 'Receipt',
   robots: { index: false, follow: false },
 };
+
+/**
+ * How each outcome reads on the document.
+ *
+ * ── Why the colours are semantic and not the reference's one accent ───────────
+ * A wallet app can paint every confirmed transaction in its brand colour because
+ * it only ever shows one outcome. This page renders three, and a refusal in the
+ * same hue as a success is a document somebody skims and misfiles. So: the
+ * platform's own up/down/warn set, which a reader already knows how to decode, in
+ * the shape the reference uses — a filled disc, a mark, one word beneath it.
+ */
+const OUTCOMES = {
+  approved: {
+    document: 'Transaction receipt',
+    label: 'Completed',
+    Icon: Check,
+    disc: 'bg-up',
+  },
+  rejected: {
+    document: 'Transaction not accepted',
+    label: 'Not accepted',
+    Icon: X,
+    disc: 'bg-down',
+  },
+  // A pending record still renders — a customer clicking through to a withdrawal
+  // they are waiting on should see it — but it is never dressed as a receipt. The
+  // strapline, the word under the mark and the footnote all say it has not been
+  // decided, and `sendReceipt` refuses to email one at all.
+  pending: {
+    document: 'Transaction pending',
+    label: 'Awaiting a decision',
+    Icon: Clock,
+    disc: 'bg-warn',
+  },
+} as const satisfies Record<ReceiptDto['status'], unknown>;
 
 export default async function ReceiptPage({
   params,
@@ -55,10 +101,11 @@ export default async function ReceiptPage({
   );
   if (receipt === null) notFound();
 
-  const refused = receipt.status === 'rejected';
+  const outcome = OUTCOMES[receipt.status];
+  const verb = receipt.kind === 'deposit' ? 'Deposit' : 'Withdrawal';
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10 print:px-0 print:py-0">
+    <main className="mx-auto max-w-lg px-5 py-10 print:max-w-none print:px-0 print:py-0">
       <div className="mb-6 flex items-start justify-between gap-4 print:hidden">
         <p className="text-xs leading-relaxed text-fg-subtle">
           Printed from your Novex account. This is a record of a movement, not a tax
@@ -67,68 +114,108 @@ export default async function ReceiptPage({
         <PrintButton />
       </div>
 
-      <article className="rounded-lg border border-line bg-bg-elev p-8 print:rounded-none print:border-0 print:bg-transparent print:p-0">
-        <header className="flex items-start justify-between gap-6 border-b border-line pb-6">
-          <div>
-            <p className="font-display text-lg font-semibold text-fg">Novex</p>
-            <p className="mt-0.5 text-2xs text-fg-subtle">
-              {refused ? 'Transaction not accepted' : 'Transaction receipt'}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-2xs uppercase tracking-[0.12em] text-fg-subtle">Reference</p>
-            <p className="mt-0.5 break-all font-mono text-xs text-fg">{receipt.reference}</p>
-          </div>
-        </header>
+      <article
+        // The hook the print stylesheet hangs its paper colours on. Scoped to the
+        // document rather than declared at `:root`, so nothing else in the app
+        // inherits a print theme it was not designed for.
+        data-receipt
+        className="overflow-hidden rounded-xl border border-line bg-bg-elev print:rounded-none print:border-0"
+      >
+        {/* ── The hero ─────────────────────────────────────────────────────── */}
+        <div className="px-6 pb-8 pt-8 text-center sm:px-10">
+          {/* Issuer and document type on one line. Both belong on a printed
+              document and neither earns a line of its own above a title. */}
+          <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-fg-subtle">
+            Novex <span aria-hidden>·</span> {outcome.document}
+          </p>
 
-        <div className="border-b border-line py-6">
-          <p className="text-2xs uppercase tracking-[0.12em] text-fg-subtle">
-            {receipt.kind === 'deposit' ? 'Deposited' : 'Withdrawn'}
+          <h1 className="mt-5 text-xl font-semibold text-fg">
+            {receipt.assetName} {verb}
+          </h1>
+
+          {receipt.counterparty !== null ? (
+            <p className="mx-auto mt-1.5 max-w-xs break-all font-mono text-xs leading-relaxed text-fg-subtle">
+              {receipt.counterparty}
+            </p>
+          ) : null}
+
+          <p
+            // `data-numeric` for tabular figures and a slashed zero — the house
+            // rule for any number on a surface, and on a document the slash is
+            // what separates a zero from an O at arm's length. `font-sans` wins
+            // back the display face from it: the figure is a headline, not code.
+            data-numeric
+            className="mt-9 font-sans text-4xl font-semibold leading-tight tracking-tight text-fg sm:text-5xl"
+          >
+            <span className="break-words">{receipt.amount}</span>{' '}
+            <span className="whitespace-nowrap">{receipt.asset}</span>
           </p>
-          <p data-numeric className="mt-1 font-sans text-3xl font-semibold text-fg">
-            {receipt.amount}
-          </p>
-          {refused && receipt.reason !== null ? (
-            <p className="mt-3 rounded-md border border-down/35 bg-down/8 px-3 py-2 text-xs leading-relaxed text-fg">
+
+          <p className="mt-3 text-sm text-fg-subtle">{formatTimestamp(receipt.occurredAt)}</p>
+
+          <div className="mt-9 flex flex-col items-center gap-2.5">
+            <span
+              className={cn(
+                'flex size-6 items-center justify-center rounded-full text-bg',
+                outcome.disc,
+              )}
+            >
+              <outcome.Icon className="size-3.5" strokeWidth={3} aria-hidden />
+            </span>
+            <p className="text-base font-semibold text-fg">{outcome.label}</p>
+          </div>
+
+          {receipt.reason !== null ? (
+            <p
+              className={cn(
+                'mx-auto mt-5 max-w-sm rounded-md border px-3 py-2 text-left text-xs leading-relaxed text-fg-muted',
+                // Tinted only on a refusal, where the reason is the single thing
+                // the reader opened the document for. On anything else it is a
+                // note, and a note in alarm colours trains people to ignore them.
+                receipt.status === 'rejected'
+                  ? 'border-down/35 bg-down/8'
+                  : 'border-line bg-bg-sunken',
+              )}
+            >
               {receipt.reason}
             </p>
           ) : null}
         </div>
 
-        <dl className="divide-y divide-line/60">
+        {/* The reference's grey gutter: a band, not a rule. It separates the part
+            of the document a person reads from the part they consult. */}
+        <div aria-hidden className="h-2 bg-bg-sunken print:h-0 print:border-t print:border-line" />
+
+        {/* ── The itemisation ──────────────────────────────────────────────── */}
+        {/* The counterparty is deliberately not repeated here: it already has a
+            line of its own in `lines` — "Destination" or "Your reference" — and
+            the hero shows it in full. Three copies of one address is a document
+            a reader starts checking against itself. */}
+        <dl className="divide-y divide-line/60 px-6 sm:px-10">
           {receipt.lines.map((line) => (
-            <div key={line.label} className="flex justify-between gap-6 py-3 text-xs">
-              <dt className="text-fg-subtle">{line.label}</dt>
-              <dd className="min-w-0 text-right">
-                <span data-numeric className="block break-all font-mono text-fg">
-                  {line.value}
-                </span>
-                {line.note ? (
-                  <span className="mt-0.5 block text-2xs leading-relaxed text-fg-subtle">
-                    {line.note}
-                  </span>
-                ) : null}
-              </dd>
-            </div>
+            <Row
+              key={line.label}
+              label={line.label}
+              value={line.value}
+              note={line.note}
+              mono={line.mono ?? false}
+            />
           ))}
 
-          <div className="flex justify-between gap-6 py-3 text-xs">
-            <dt className="text-fg-subtle">Requested</dt>
-            <dd className="text-right text-fg">{formatDate(receipt.occurredAt)}</dd>
-          </div>
+          {/* No "Requested" row: the hero already carries that instant, to the
+              minute and with its zone named, and a document that prints the same
+              date twice eight rows apart is one a careful reader starts
+              double-checking. "Decided" is the one this cannot show up there —
+              it is a different event, and on a rejection it is the one that
+              matters. */}
           {receipt.decidedAt !== null ? (
-            <div className="flex justify-between gap-6 py-3 text-xs">
-              <dt className="text-fg-subtle">Decided</dt>
-              <dd className="text-right text-fg">{formatDate(receipt.decidedAt)}</dd>
-            </div>
+            <Row label="Decided" value={formatTimestamp(receipt.decidedAt)} mono={false} />
           ) : null}
-          <div className="flex justify-between gap-6 py-3 text-xs">
-            <dt className="text-fg-subtle">Account</dt>
-            <dd className="break-all text-right font-mono text-2xs text-fg">{receipt.userId}</dd>
-          </div>
+          <Row label="Reference" value={receipt.reference} mono />
+          <Row label="Account" value={receipt.userId} mono />
         </dl>
 
-        <footer className="mt-6 border-t border-line pt-6 text-2xs leading-relaxed text-fg-subtle">
+        <footer className="border-t border-line px-6 py-6 text-2xs leading-relaxed text-fg-subtle sm:px-10">
           <p>
             Issued {formatDate(receipt.issuedAt)}. Every figure here is the value
             recorded at the time of the transaction and is never recalculated —
@@ -144,5 +231,43 @@ export default async function ReceiptPage({
         </footer>
       </article>
     </main>
+  );
+}
+
+/**
+ * One line of the itemisation.
+ *
+ * Label and value on one row down to the narrowest phone, because the pair only
+ * means anything read together — an `0.00008276` stacked under `Network fee` with
+ * a full line between them is two facts, not one.
+ */
+function Row({
+  label,
+  value,
+  note,
+  mono,
+}: {
+  label: string;
+  value: string;
+  note?: string | undefined;
+  mono: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-5 py-3.5">
+      <dt className="shrink-0 text-sm text-fg-subtle">{label}</dt>
+      <dd className="min-w-0 text-right">
+        <span
+          // `data-numeric` carries the mono face along with tabular figures and a
+          // slashed zero, which is the whole reason an address is set in it.
+          {...(mono ? { 'data-numeric': '' } : {})}
+          className={cn('block break-all text-fg', mono ? 'text-xs' : 'text-sm')}
+        >
+          {value}
+        </span>
+        {note ? (
+          <span className="mt-1 block text-2xs leading-relaxed text-fg-subtle">{note}</span>
+        ) : null}
+      </dd>
+    </div>
   );
 }

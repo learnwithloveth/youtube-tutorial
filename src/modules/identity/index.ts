@@ -28,3 +28,26 @@ export { presentIdentityError } from './application/errors';
 export { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from './domain/password';
 export type { VerificationPurpose } from './domain/verification-token';
 export { TOKEN_LIFETIME_MS } from './domain/verification-token';
+
+/*
+ * Identity verification — the types and the policy the customer-facing form needs.
+ *
+ * The *queries* are not here: they log, and the logger is `server-only`. Same trap
+ * `ledger`, `presence` and `activity` all document. They live in `./server`.
+ */
+export type {
+  IdentityDocumentType,
+  VerificationStatus,
+} from './domain/identity-verification';
+export {
+  DOCUMENT_TYPES,
+  isDocumentType,
+  MAX_DOCUMENT_BYTES,
+  MAX_DOCUMENT_NUMBER,
+  MAX_FULL_NAME,
+  MINIMUM_AGE_YEARS,
+} from './domain/identity-verification';
+export type {
+  VerificationQueueDto,
+  VerificationSummaryDto,
+} from './application/queries/verification-queue';

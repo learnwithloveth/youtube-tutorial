@@ -48,6 +48,8 @@ function severityOf(kind: ActivityEventDto['kind']): 'critical' | 'notice' | 'in
     case 'withdrawal-approved':
       return 'critical';
     case 'admin-reinstated':
+    case 'verification-approved':
+    case 'verification-rejected':
     case 'withdrawal-requested':
     case 'withdrawal-rejected':
     case 'deposit-recorded':
@@ -73,6 +75,9 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'admin-suspended': 'Console access suspended',
   'admin-reinstated': 'Console access restored',
   'receipt-sent': 'Receipt emailed',
+  'verification-submitted': 'Submitted identity documents',
+  'verification-approved': 'Identity verified',
+  'verification-rejected': 'Identity verification refused',
 };
 
 export default async function AuditPage() {

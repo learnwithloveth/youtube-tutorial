@@ -1,0 +1,71 @@
+/* =============================================================================
+ * Print rules for the receipt document.
+ *
+ * ── Why this file has to exist ───────────────────────────────────────────────
+ * Novex is a dark product. Browsers do not print background colours by default,
+ * so a dark page sent to a printer arrives as near-white text on white paper —
+ * a blank sheet with a faint shadow of a receipt on it. Tailwind's `print:`
+ * variants cannot fix that on their own, because the tokens themselves resolve
+ * to a dark palette and every utility on the page reads from them.
+ *
+ * So printing re-points the tokens at paper. One block, at the one place the
+ * value is decided, instead of a `print:text-black` on every element.
+ *
+ * ── Scoped to the document, not to `:root` ───────────────────────────────────
+ * Next keeps a stylesheet loaded after you navigate away from the route that
+ * imported it (its own CSS guide says so), so a `:root` override here would
+ * quietly become the print theme for every page visited afterwards in the same
+ * session. Custom properties inherit, so redefining them on `[data-receipt]`
+ * reaches every descendant and nothing else.
+ * ========================================================================== */
+
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  [data-receipt] {
+    /* Paper, ink, and a rule you can actually see on a laser printer. The greys
+       are darker than the screen's: a #7d85a3 subtitle is legible backlit and
+       almost gone at 600dpi on white. */
+    --bg: #fff;
+    --bg-elev: #fff;
+    --bg-sunken: #fff;
+    --fg: #000;
+    --fg-muted: #303030;
+    --fg-subtle: #4a4a4a;
+    --line: rgb(0 0 0 / 0.2);
+    --line-strong: rgb(0 0 0 / 0.45);
+
+    /* The outcome disc is the one piece of colour that has to survive, because
+       it is the difference between a completed transaction and a refused one at
+       a glance. Darkened for white paper — the screen tints are mixed for a
+       #05060b ground and wash out on it. */
+    --up: #047857;
+    --down: #b91c1c;
+    --warn: #b45309;
+
+    color: #000;
+  }
+
+  /* Without this the disc prints as an empty outline: browsers drop background
+     colour even inside an element the user asked to print. Named for both the
+     standard property and WebKit's older one, which Safari still requires. */
+  [data-receipt] [class*='bg-up'],
+  [data-receipt] [class*='bg-down'],
+  [data-receipt] [class*='bg-warn'] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* A receipt that breaks across two sheets mid-figure is a receipt somebody
+     has to reprint. It is short enough to keep whole. */
+  [data-receipt] {
+    break-inside: avoid;
+  }
+}

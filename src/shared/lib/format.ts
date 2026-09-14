@@ -178,3 +178,37 @@ export function formatDuration(seconds: number): string {
   if (hours < 24) return `${hours}h ${minutes % 60}m`;
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
+
+/**
+ * "Sep 14, 2026 at 23:16 UTC" — a date and a time on one line.
+ *
+ * ── Not "Today at 23:16" ──────────────────────────────────────────────────────
+ * Relative wording needs the reader's clock, and a Server Component that reads
+ * one renders a different string than the browser does and fails hydration — the
+ * bug `formatDate` and `formatAge` already exist to avoid. It is also wrong on a
+ * document: "Today" printed onto paper is false the following morning, and this
+ * string ends up in an inbox and a filing cabinet.
+ *
+ * The zone is pinned and *named*, because a bare time on a receipt is a time in
+ * an unstated zone, and that is the one thing a dispute turns on.
+ */
+const stampFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'UTC',
+});
+
+export function formatTimestamp(iso: string): string {
+  // Rebuilt from `formatToParts` rather than sliced out of the formatted string:
+  // en-US joins the date and the time with ", " and this wants " at ", and the
+  // separator a locale chose is not something to find by index.
+  const parts = stampFormatter.formatToParts(new Date(iso));
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((candidate) => candidate.type === type)?.value ?? '';
+
+  return `${part('month')} ${part('day')}, ${part('year')} at ${part('hour')}:${part('minute')} UTC`;
+}

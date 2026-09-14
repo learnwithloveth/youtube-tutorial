@@ -66,7 +66,14 @@ export type ActivityKind =
   /* A customer was emailed the record of a movement. Filed against their account
      because "what happened to this account" includes being written to about it,
      and a dispute starts with whether anything was ever sent. */
-  | 'receipt-sent';
+  | 'receipt-sent'
+  /* Identity verification: submitted by the customer, decided by an operator.
+     All three are filed against the customer's account, including the decisions,
+     for the reason the admin-status pair are — the question being asked is "what
+     happened to this account", and the operator is in the detail. */
+  | 'verification-submitted'
+  | 'verification-approved'
+  | 'verification-rejected';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -83,6 +90,9 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'admin-suspended',
   'admin-reinstated',
   'receipt-sent',
+  'verification-submitted',
+  'verification-approved',
+  'verification-rejected',
 ];
 
 export function isSecurityKind(kind: ActivityKind): boolean {

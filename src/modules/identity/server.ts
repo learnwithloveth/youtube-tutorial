@@ -16,3 +16,6 @@ import 'server-only';
 export type { IdentityModule, RegisterIdentityOptions } from './module';
 export { registerIdentity, SESSION_COOKIE_NAME } from './module';
 export type { ResolvedSession } from './application/use-cases/resolve-session';
+export { getVerification, getVerificationQueue } from './application/queries/verification-queue';
+export type { SubmitVerificationCommand } from './application/use-cases/submit-verification';
+export type { DecideVerificationCommand } from './application/use-cases/decide-verification';

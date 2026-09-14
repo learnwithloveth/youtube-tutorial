@@ -31,7 +31,15 @@ import {
   type RequestWithdrawal,
 } from './application/use-cases/request-withdrawal';
 import { createSendReceipt, type SendReceipt } from './application/use-cases/send-receipt';
+import {
+  createDecideRiskSignal,
+  type DecideRiskSignal,
+} from './application/use-cases/decide-risk-signal';
 import { CatalogueAssetRegistry } from './infrastructure/catalogue/assets';
+import {
+  DrizzleRiskDispositionStore,
+  SqlRiskScanner,
+} from './infrastructure/persistence/risk';
 import {
   DrizzleDepositClaimRepository,
   DrizzleLedgerRepository,
@@ -63,6 +71,8 @@ export interface LedgerModule {
   readonly decideDepositClaim: DecideDepositClaim;
   /** Emails a customer the record of a decided movement. */
   readonly sendReceipt: SendReceipt;
+  /** An operator clears or escalates one risk finding. Records, never acts. */
+  readonly decideRiskSignal: DecideRiskSignal;
   /** Passed to the module's queries, which are free functions over these ports. */
   readonly dependencies: LedgerDependencies;
 }
@@ -90,6 +100,8 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     receipts: options.receipts,
     directory: options.directory,
     assets: new CatalogueAssetRegistry(),
+    risk: new SqlRiskScanner(options.db),
+    dispositions: new DrizzleRiskDispositionStore(options.db),
     ids: options.ids ?? systemIdGenerator,
     clock: options.clock ?? systemClock,
   };
@@ -101,6 +113,7 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     submitDepositClaim: createSubmitDepositClaim(dependencies),
     decideDepositClaim: createDecideDepositClaim(dependencies),
     sendReceipt: createSendReceipt(dependencies),
+    decideRiskSignal: createDecideRiskSignal(dependencies),
     dependencies,
   };
 }

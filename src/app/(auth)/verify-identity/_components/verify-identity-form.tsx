@@ -1,169 +1,179 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowRight, Camera, Check, FileText, IdCard, Loader2, UserRound } from 'lucide-react';
+import { useActionState, useRef, useState } from 'react';
+import { ArrowRight, Check, IdCard, Upload } from 'lucide-react';
+
+import { MAX_DOCUMENT_BYTES } from '@/modules/identity';
+import { cn } from '@/shared/lib/cn';
+import { COUNTRIES } from '@/shared/lib/countries';
 import { Button } from '@/shared/ui/primitives/button';
 import { SelectField, TextField } from '@/shared/ui/primitives/field';
-import { AuthHeading } from '../../_components/auth-shared';
-import { cn } from '@/shared/lib/cn';
 
-const STEPS = [
-  { id: 0, label: 'Your details', icon: UserRound },
-  { id: 1, label: 'Identity document', icon: IdCard },
-  { id: 2, label: 'Liveness check', icon: Camera },
-  { id: 3, label: 'Review', icon: FileText },
+import { AuthHeading } from '../../_components/auth-shared';
+import { submitVerificationAction } from '../_lib/actions';
+import { IDLE_VERIFY_IDENTITY } from '../_lib/form-state';
+
+/**
+ * Identity verification, as a form that actually submits.
+ *
+ * ── What this replaced ────────────────────────────────────────────────────────
+ * A four-step wizard that stored nothing. "Choose file" was a button with no
+ * input behind it; the liveness step was a pulsing circle and no camera; the
+ * final step showed "Sanctions screening — In progress" against no screening
+ * list, then pushed the customer to `/app` having submitted precisely nothing.
+ * Somebody who completed it believed they had applied.
+ *
+ * ── Why the steps went with it ────────────────────────────────────────────────
+ * A stepper earns its complexity when a form is long enough that showing all of it
+ * would put somebody off. What is left here is five fields and a file, which is
+ * shorter than the sign-up form — and a stepper over five fields hides how short
+ * it is, which is the opposite of the reason to use one.
+ *
+ * The liveness step is not hidden or disabled, it is absent: there is no capture
+ * to run, and a greyed-out control implies a switch that exists.
+ */
+
+const DOCUMENT_OPTIONS = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'national-id', label: 'National ID card' },
+  { value: 'drivers-licence', label: "Driver's licence" },
 ];
 
+const MAX_MB = Math.floor(MAX_DOCUMENT_BYTES / (1024 * 1024));
+
 export function VerifyIdentityForm() {
+  const [state, submit, pending] = useActionState(
+    submitVerificationAction,
+    IDLE_VERIFY_IDENTITY,
+  );
+  const [fileName, setFileName] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const router = useRouter();
-  const [step, setStep] = useState(0);
-
-  // Finishing onboarding lands in the application, not back on the marketing
-  // site — there is now somewhere signed-in to land.
-  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : router.push('/app'));
+  if (state.status === 'submitted') {
+    return (
+      <div>
+        <AuthHeading
+          title="Submitted"
+          body="Your document is with a reviewer."
+        />
+        <div className="rounded-lg border border-up/35 bg-up/8 p-6">
+          <div className="flex items-center gap-3">
+            <Check className="size-5 shrink-0 text-up" />
+            <p className="text-sm font-medium text-fg">{state.message}</p>
+          </div>
+          <p className="mt-4 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
+            {/* No "most checks complete within two minutes". A person looks at
+                this, and telling somebody to wait two minutes for a decision that
+                takes a working day is how a support queue fills up. */}
+            A person reviews every submission, so this is not instant. You can close
+            this page — the decision arrives by email.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <AuthHeading
         title="Verify your identity"
-        body="Regulation requires it and it takes about two minutes. Ninety-four percent of applications clear automatically."
+        body="Regulation requires it. Five fields and a photo of one document."
       />
 
-      <ol className="mb-9 flex items-center gap-2" aria-label="Verification progress">
-        {STEPS.map((s, i) => {
-          const done = i < step;
-          const active = i === step;
-          return (
-            <li key={s.id} className="flex flex-1 items-center gap-2">
-              <span
-                className={cn(
-                  'grid size-9 shrink-0 place-items-center rounded-full border transition-all duration-500',
-                  done && 'border-up bg-up/15 text-up',
-                  active && 'border-brand-soft bg-brand/15 text-brand-soft',
-                  !done && !active && 'border-line text-fg-subtle',
-                )}
-                aria-current={active ? 'step' : undefined}
-              >
-                {done ? <Check className="size-4" /> : <s.icon className="size-4" />}
-              </span>
-              {i < STEPS.length - 1 ? (
-                <span
-                  aria-hidden
-                  className={cn('h-px flex-1 transition-colors duration-500', done ? 'bg-up' : 'bg-line')}
-                />
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
+      <form action={submit} className="space-y-5">
+        <TextField
+          label="Full name, as written on the document"
+          name="fullName"
+          required
+          autoComplete="name"
+          placeholder="Ada Lovelace"
+        />
 
-      <p className="mb-6 font-mono text-2xs uppercase tracking-[0.18em] text-fg-subtle">
-        Step {step + 1} of {STEPS.length} · {STEPS[step]?.label}
-      </p>
-
-      <form
-        className="space-y-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          next();
-        }}
-      >
-        {step === 0 ? (
-          <>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <TextField label="Legal first name" name="first" required placeholder="Ada" />
-              <TextField label="Legal last name" name="last" required placeholder="Lovelace" />
-            </div>
-            <TextField label="Date of birth" name="dob" type="date" required />
-            <TextField label="Residential address" name="address" required placeholder="17 Kingsway Road, Ikoyi" />
-          </>
-        ) : null}
-
-        {step === 1 ? (
-          <>
-            <SelectField
-              label="Document type"
-              name="doc"
-              options={[
-                { value: 'passport', label: 'Passport' },
-                { value: 'id', label: 'National ID card' },
-                { value: 'licence', label: "Driver's licence" },
-              ]}
-            />
-            <div className="grid place-items-center rounded-lg border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
-              <IdCard className="size-8 text-fg-subtle" />
-              <p className="mt-4 text-sm font-medium text-fg">Upload or photograph your document</p>
-              <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-fg-subtle">
-                All four corners visible, no glare, and the machine-readable zone unobstructed.
-              </p>
-              <Button type="button" variant="outline" size="sm" className="mt-5">
-                Choose file
-              </Button>
-            </div>
-          </>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="grid place-items-center rounded-lg border border-line bg-surface px-6 py-14 text-center">
-            <span className="relative grid size-24 place-items-center rounded-full border border-brand-soft/50">
-              <span
-                aria-hidden
-                className="absolute inset-0 animate-[pulse-ring_2.6s_var(--ease-out-expo)_infinite] rounded-full border border-brand-soft"
-              />
-              <Camera className="size-9 text-brand-soft" />
-            </span>
-            <p className="mt-6 text-sm font-medium text-fg">Centre your face in the frame</p>
-            <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-fg-subtle">
-              Look straight ahead, then follow the on-screen prompt. This confirms a real person is
-              present and takes about eight seconds.
-            </p>
-          </div>
-        ) : null}
-
-        {step === 3 ? (
-          <div className="rounded-lg border border-line bg-surface p-6">
-            <div className="flex items-center gap-3">
-              <Loader2 className="size-5 animate-spin text-brand-soft" />
-              <p className="text-sm font-medium text-fg">Reviewing your submission</p>
-            </div>
-            <dl className="mt-6 space-y-3 text-sm">
-              {[
-                ['Details', 'Received'],
-                ['Document', 'Received'],
-                ['Liveness', 'Received'],
-                ['Sanctions screening', 'In progress'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <dt className="text-fg-subtle">{k}</dt>
-                  <dd className={v === 'In progress' ? 'text-warn' : 'text-up'}>{v}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-6 border-t border-line pt-5 text-xs leading-relaxed text-fg-subtle">
-              Most checks complete within two minutes. We will email you either way, and you can
-              close this page.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="flex gap-3">
-          {step > 0 ? (
-            <Button type="button" variant="outline" size="lg" onClick={() => setStep(step - 1)}>
-              Back
-            </Button>
-          ) : null}
-          <Button type="submit" size="lg" sheen className="flex-1">
-            {step === STEPS.length - 1 ? 'Finish' : 'Continue'}
-            <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
-          </Button>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField
+            label="Date of birth"
+            name="dateOfBirth"
+            type="date"
+            required
+            autoComplete="bday"
+          />
+          <SelectField
+            label="Issuing country"
+            name="country"
+            required
+            options={COUNTRIES.map(([code, name]) => ({ value: code, label: name }))}
+          />
         </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <SelectField label="Document type" name="documentType" options={DOCUMENT_OPTIONS} />
+          <TextField
+            label="Document number"
+            name="documentNumber"
+            required
+            placeholder="As printed on the document"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="verification-document"
+            className="grid cursor-pointer place-items-center rounded-lg border border-dashed border-line-strong bg-surface px-6 py-10 text-center transition-colors hover:border-brand-soft/60"
+          >
+            {fileName === null ? (
+              <IdCard className="size-8 text-fg-subtle" />
+            ) : (
+              <Upload className="size-8 text-brand-soft" />
+            )}
+            <span className="mt-4 text-sm font-medium text-fg">
+              {fileName ?? 'Upload or photograph your document'}
+            </span>
+            <span className="mt-1.5 max-w-xs text-xs leading-relaxed text-fg-subtle">
+              All four corners visible and no glare. PNG, JPEG or WebP, up to{' '}
+              {MAX_MB} MB.
+            </span>
+          </label>
+
+          {/* A real input, visually hidden rather than `display: none`, so it stays
+              focusable and reachable by keyboard and by a screen reader. */}
+          <input
+            ref={fileInput}
+            id="verification-document"
+            name="document"
+            type="file"
+            required
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => setFileName(event.target.files?.[0]?.name ?? null)}
+            className="sr-only"
+          />
+        </div>
+
+        {state.message === null ? null : (
+          <p
+            className={cn(
+              'text-sm',
+              state.status === 'error' ? 'text-down' : 'text-fg-muted',
+            )}
+            role={state.status === 'error' ? 'alert' : undefined}
+          >
+            {state.message}
+          </p>
+        )}
+
+        <Button type="submit" size="lg" sheen className="w-full" disabled={pending}>
+          {pending ? 'Uploading…' : 'Submit for review'}
+          <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
+        </Button>
       </form>
 
       <p className="mt-8 text-center text-xs leading-relaxed text-fg-subtle">
-        Documents are encrypted at rest, processed by our own systems, and deleted 90 days after a
-        decision unless we are required to retain them.
+        {/* The previous copy promised encryption at rest and deletion after 90
+            days. Neither is implemented: the bytes sit in Postgres and nothing
+            deletes them. Saying so is the only honest option until a retention job
+            exists — a privacy promise a system does not keep is the one kind of
+            copy that is worse than none. */}
+        Your document is stored on our own systems and shown only to the reviewer
+        handling your case.
       </p>
     </div>
   );

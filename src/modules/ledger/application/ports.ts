@@ -7,6 +7,7 @@ import type { DepositClaim, DepositClaimStatus } from '../domain/deposit-claim';
 import type { ProofContentType } from '../domain/proof-image';
 import type { Transfer, TransferKind } from '../domain/transfer';
 import type { Withdrawal, WithdrawalStatus } from '../domain/withdrawal';
+import type { RiskRule } from '../domain/risk-signal';
 
 /**
  * Ports for the ledger module.
@@ -259,6 +260,68 @@ export interface CustomerDirectory {
   emailFor(userId: UserId): Promise<string | null>;
 }
 
+/**
+ * Raw findings from the risk rules, straight out of the database.
+ *
+ * ── Why a port and not a query over the repositories ──────────────────────────
+ * Every rule here is set-based: "the same address used by two accounts", "three
+ * requests in a day". Answering those by loading rows into the application and
+ * counting them is not a design — it reads the whole table to find five rows. So
+ * the evaluation happens in SQL, behind this port, and the *thresholds* that define
+ * each rule stay in `domain/risk-signal.ts` where they can be reviewed without
+ * reading a query.
+ *
+ * `subjects` is every account the finding concerns. Usually one; for a shared
+ * destination it is the whole set, which is the point of that rule.
+ */
+export interface RawRiskSignal {
+  readonly rule: RiskRule;
+  /** Stable across scans while the underlying facts are unchanged. */
+  readonly key: string;
+  readonly subjects: readonly string[];
+  /** Label/value pairs an operator can check against the rows themselves. */
+  readonly evidence: readonly { readonly label: string; readonly value: string }[];
+  /** The most recent moment the finding rests on. */
+  readonly observedAt: Date;
+}
+
+export interface RiskScanner {
+  scan(options: {
+    now: Date;
+    velocityThreshold: number;
+    velocityWindowHours: number;
+    retryWindowHours: number;
+    refusalThreshold: number;
+    limitPerRule: number;
+  }): Promise<RawRiskSignal[]>;
+}
+
+/** What an operator decided about one finding. */
+export type RiskDisposition = 'cleared' | 'escalated';
+
+export interface RiskDispositionRecord {
+  readonly key: string;
+  readonly disposition: RiskDisposition;
+  readonly decidedBy: string;
+  readonly decidedAt: Date;
+  readonly note: string | null;
+}
+
+/**
+ * Dispositions, keyed by the finding's own key.
+ *
+ * ── Why the key encodes the evidence ──────────────────────────────────────────
+ * Findings are derived on every read, not stored, so "cleared" has to attach to
+ * something. It attaches to the facts: the key is built from the rule and the rows
+ * it matched, so clearing a shared-destination finding keeps it cleared — until a
+ * *third* account uses that address, at which point the key changes and it comes
+ * back. A disposition on the rule alone would silence the rule forever.
+ */
+export interface RiskDispositionStore {
+  findMany(keys: readonly string[]): Promise<Map<string, RiskDispositionRecord>>;
+  record(entry: RiskDispositionRecord): Promise<void>;
+}
+
 export interface LedgerDependencies {
   accounts: LedgerRepository;
   withdrawals: WithdrawalRepository;
@@ -266,6 +329,9 @@ export interface LedgerDependencies {
   proofs: ProofStorage;
   prices: PriceOracle;
   assets: AssetRegistry;
+  /** Optional: a deployment without them shows the console an explanation. */
+  risk?: RiskScanner | undefined;
+  dispositions?: RiskDispositionStore | undefined;
   /** Optional: a deployment with no mail transport still runs, and says so. */
   receipts?: ReceiptSender | undefined;
   directory?: CustomerDirectory | undefined;

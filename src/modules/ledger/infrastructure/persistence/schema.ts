@@ -314,6 +314,25 @@ export const depositProofs = ledgerSchema.table('deposit_proofs', {
   uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * What an operator decided about one risk finding.
+ *
+ * ── Only the decision is stored, never the finding ────────────────────────────
+ * Findings are derived from the ledger on every read, so they cannot drift from the
+ * rows they describe. This table answers the one question deriving cannot: did
+ * somebody look, and what did they conclude. The key is built from the rule and the
+ * evidence it matched — see `RiskDispositionStore` — so a cleared finding comes
+ * back when the facts behind it change.
+ */
+export const riskDispositions = ledgerSchema.table('risk_dispositions', {
+  key: text('key').primaryKey(),
+  disposition: text('disposition', { enum: ['cleared', 'escalated'] }).notNull(),
+  /** The operator's id. Not a foreign key: identity's tables are identity's. */
+  decidedBy: text('decided_by').notNull(),
+  decidedAt: timestamp('decided_at', { withTimezone: true }).notNull(),
+  note: text('note'),
+});
+
 export type AccountRow = typeof accounts.$inferSelect;
 export type DepositClaimRow = typeof depositClaims.$inferSelect;
 export type DepositProofRow = typeof depositProofs.$inferSelect;
@@ -321,3 +340,4 @@ export type TransferRow = typeof transfers.$inferSelect;
 export type EntryRow = typeof entries.$inferSelect;
 export type WithdrawalRow = typeof withdrawals.$inferSelect;
 export type WithdrawalApprovalRow = typeof withdrawalApprovals.$inferSelect;
+export type RiskDispositionRow = typeof riskDispositions.$inferSelect;

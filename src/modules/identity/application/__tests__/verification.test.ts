@@ -30,6 +30,7 @@ import {
   createConfirmEmail,
   createRequestPasswordReset,
 } from '../use-cases/verify-email';
+import { FakeDocuments, FakeVerifications } from './fake-verifications';
 
 /**
  * The verification and reset flows, against in-memory adapters.
@@ -247,6 +248,8 @@ function makeDeps(now = NOW) {
     profiles: new FakeProfiles(),
     sessions,
     tokens,
+    verifications: new FakeVerifications(),
+    documents: new FakeDocuments(),
     hasher: new FakeHasher(),
     tokenHasher,
     sealer,
