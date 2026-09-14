@@ -26,6 +26,7 @@ short version: the rules that are easy to break by accident.
 | Touch a price, quote or feed | `docs/adr/0003-real-market-data-never-simulated.md` |
 | Touch a session, password, or token | `docs/adr/0004-identity-sessions-and-email-verification.md` |
 | Touch a visitor location or the live board | `docs/architecture.md` §11 — presence |
+| Log or read what a user did | `docs/architecture.md` §12 — activity |
 | Decide server vs client | `docs/architecture.md` §5 |
 | Set caching on a page | `docs/architecture.md` §6 |
 

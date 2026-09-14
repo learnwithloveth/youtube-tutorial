@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { err, ok, type Result } from '@/shared/kernel/result';
+import type { UserId } from '@/shared/kernel/ids';
 
 import { validatePasswordPolicy } from '../../domain/password';
 import { IdentityErrors, type IdentityError } from '../errors';
@@ -9,6 +10,18 @@ import type { IdentityDependencies } from '../ports';
 export interface ResetPasswordCommand {
   token: string;
   newPassword: string;
+}
+
+/**
+ * Whose password was reset.
+ *
+ * Returned rather than `void` so the caller can attribute the event without
+ * having to redeem the token a second time to find out who it belonged to. It
+ * carries the id and nothing else: the caller already proved possession of a
+ * single-use link, which is not the same as being entitled to read the account.
+ */
+export interface ResetPasswordResult {
+  userId: UserId;
 }
 
 /**
@@ -33,7 +46,7 @@ export interface ResetPasswordCommand {
 export function createResetPassword(deps: IdentityDependencies) {
   return async function resetPassword(
     command: ResetPasswordCommand,
-  ): Promise<Result<void, IdentityError>> {
+  ): Promise<Result<ResetPasswordResult, IdentityError>> {
     if (!command.token) return err(IdentityErrors.verificationTokenInvalid());
 
     const now = deps.clock.now();
@@ -81,7 +94,7 @@ export function createResetPassword(deps: IdentityDependencies) {
 
     await deps.sessions.revokeAllForUser(user.id, now);
 
-    return ok(undefined);
+    return ok({ userId: user.id });
   };
 }
 

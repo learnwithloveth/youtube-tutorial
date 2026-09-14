@@ -29,6 +29,13 @@
       "when": 1789372431965,
       "tag": "0003_spooky_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789379328661,
+      "tag": "0004_typical_kabuki",
+      "breakpoints": true
     }
   ]
 }

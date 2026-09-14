@@ -3,9 +3,13 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import type { ActivityKind } from '@/modules/activity';
 import { presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
+import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, SESSION_COOKIE } from '@/server/auth';
+import { describeRequest } from '@/server/request-context';
+import type { UserId } from '@/shared/kernel/ids';
 
 import type { AuthFormState } from './_lib/form-state';
 
@@ -54,6 +58,32 @@ async function requestContext(): Promise<{ userAgent: string | null; ipAddress: 
   };
 }
 
+/**
+ * Writes an auth event into the account's history.
+ *
+ * ── Why these are recorded here and not inside the identity module ────────────
+ * Identity owns credentials and nothing else. Making it write to the activity
+ * trail would give it a dependency on another context and undo the property that
+ * lets it be lifted into its own service. The action is the layer allowed to know
+ * both exist, so the composition happens here.
+ *
+ * Resolving the location costs a lookup, which is why it is only done for events
+ * that are worth a round trip. Signing in from an unfamiliar country is the single
+ * most useful line in an audit trail; a page view already has a location because
+ * the heartbeat resolved one anyway.
+ */
+async function recordAuthEvent(kind: ActivityKind, userId: string): Promise<void> {
+  const context = await describeRequest();
+
+  await recordActivity({
+    userId: userId as UserId,
+    kind,
+    location: context.location,
+    agent: context.agent,
+    ipDigest: context.ipDigest,
+  });
+}
+
 /** Where a signed-in user goes when nothing else asked for a destination. */
 const DEFAULT_SIGNED_IN_PATH = '/app';
 
@@ -89,6 +119,8 @@ export async function signUpAction(
     cookieOptions(new Date(result.value.expiresAt)),
   );
 
+  await recordAuthEvent('sign-up', result.value.userId);
+
   // The design's onboarding continues into identity verification; that screen
   // ends at the dashboard. Outside the try/return flow on purpose: `redirect`
   // works by throwing, so it must not sit inside anything that catches.
@@ -118,6 +150,8 @@ export async function signInAction(
     cookieOptions(new Date(result.value.expiresAt)),
   );
 
+  await recordAuthEvent('sign-in', result.value.userId);
+
   redirect(safeRedirectTarget(formData.get('next')));
 }
 
@@ -125,10 +159,16 @@ export async function signOutAction(): Promise<void> {
   const store = await cookies();
   const sealed = store.get(SESSION_COOKIE)?.value;
 
+  // Read before the session is revoked. A moment later there is no session to
+  // resolve, and the event would have nobody to attribute the sign-out to.
+  const user = await getCurrentUser();
+
   // Revoked server-side, not merely cleared: a cookie an attacker already copied
   // would otherwise keep working until it expired.
   await identity().signOut(sealed);
   store.delete(SESSION_COOKIE);
+
+  if (user) await recordAuthEvent('sign-out', user.id);
 
   redirect('/');
 }
@@ -171,6 +211,8 @@ export async function resetPasswordAction(
     return { error: presentIdentityError(result.error), message: null };
   }
 
+  await recordAuthEvent('password-reset', result.value.userId);
+
   // Every session was revoked, including any the attacker held. The user signs in
   // again with the new password.
   redirect('/login?reset=1');
@@ -186,6 +228,8 @@ export async function resendVerificationAction(): Promise<AuthFormState> {
   if (!result.ok) {
     return { error: presentIdentityError(result.error), message: null };
   }
+
+  await recordAuthEvent('verification-sent', user.id);
 
   return { error: null, message: 'Confirmation link sent. Check your inbox.' };
 }

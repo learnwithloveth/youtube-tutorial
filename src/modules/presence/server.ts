@@ -23,6 +23,14 @@ export { registerPresence } from './module';
 
 export { listLiveActivity } from './application/queries/live-activity';
 
+/*
+ * The row-to-DTO mapper, for a caller composing its own presence read rather than
+ * the whole board — the console's account page asks about one person. It is here
+ * and not in `index.ts` because it takes a `Presence`, which is a domain object
+ * and therefore only reachable from a caller that already holds the module.
+ */
+export { toActiveVisitorDto } from './application/dto';
+
 export type { NetworkContext } from './application/ports';
 export { networkContextFrom } from './infrastructure/http/request-network';
 

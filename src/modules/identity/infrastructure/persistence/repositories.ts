@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -8,7 +8,7 @@ import type { UserId } from '@/shared/kernel/ids';
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
 import { Session, type SessionId } from '../../domain/session';
-import { User } from '../../domain/user';
+import { User, type UserStatus } from '../../domain/user';
 import {
   VerificationToken,
   type VerificationPurpose,
@@ -124,6 +124,40 @@ export class DrizzleUserRepository implements UserRepository {
       .returning({ id: users.id });
 
     return inserted.length > 0;
+  }
+
+  async search(query: {
+    term?: string | undefined;
+    status?: UserStatus | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<User[]> {
+    const rows = await this.db
+      .select()
+      .from(users)
+      .where(userFilter(query))
+      .orderBy(desc(users.createdAt))
+      .limit(query.limit)
+      .offset(query.offset);
+
+    return rows.map(userToDomain);
+  }
+
+  async countMatching(query: {
+    term?: string | undefined;
+    status?: UserStatus | undefined;
+  }): Promise<number> {
+    const rows = await this.db.select({ total: count() }).from(users).where(userFilter(query));
+    return rows[0]?.total ?? 0;
+  }
+
+  async tallyByStatus(): Promise<{ status: UserStatus; total: number }[]> {
+    const rows = await this.db
+      .select({ status: users.status, total: count() })
+      .from(users)
+      .groupBy(users.status);
+
+    return rows.map((row) => ({ status: row.status, total: row.total }));
   }
 
   async save(user: User): Promise<void> {
@@ -302,4 +336,28 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
 
     return deleted.length;
   }
+}
+
+/**
+ * The console's account filter.
+ *
+ * `ilike` on the email, and an exact match on the id. Not `ilike` on the id: it is
+ * a UUID, so a substring match would scan every row to find something an operator
+ * only ever pastes whole.
+ *
+ * The email pattern escapes `%` and `_` before interpolation. Without it a search
+ * for "a_b" matches "axb", which is a confusing result rather than a dangerous one
+ * — but the same habit applied to a column that mattered would not be.
+ */
+function userFilter(query: { term?: string | undefined; status?: UserStatus | undefined }) {
+  const clauses = [];
+
+  const term = query.term?.trim();
+  if (term) {
+    const pattern = `%${term.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+    clauses.push(or(ilike(users.email, pattern), eq(users.id, term)));
+  }
+  if (query.status) clauses.push(eq(users.status, query.status));
+
+  return clauses.length === 0 ? undefined : and(...clauses);
 }

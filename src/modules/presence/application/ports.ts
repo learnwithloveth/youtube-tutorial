@@ -1,4 +1,5 @@
 import type { Clock } from '@/shared/kernel';
+import type { UserId } from '@/shared/kernel/ids';
 
 import type { LocationFix } from '../domain/location';
 import type { AgentSummary, Presence, VisitorId } from '../domain/presence';
@@ -38,6 +39,14 @@ export interface PresenceRepository {
    * every visitor on a busy day would be a denial of service we wrote ourselves.
    */
   listSince(since: Date, limit: number): Promise<Presence[]>;
+  /**
+   * One account's open tabs. Backed by the same index as "is this user online".
+   *
+   * Separate from `listSince` rather than a filter on it, because the console's
+   * account page asks about one person and would otherwise have to read the whole
+   * board and discard it.
+   */
+  listForUser(userId: UserId, since: Date, limit: number): Promise<Presence[]>;
   /** Rows past their retention window. Returns how many were removed. */
   deleteExpired(before: Date, limit: number): Promise<number>;
 }

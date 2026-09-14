@@ -2,6 +2,7 @@ import { after } from 'next/server';
 
 import { networkContextFrom, type PresenceReport } from '@/modules/presence/server';
 import { logger } from '@/platform/observability/logger';
+import { sweepActivity } from '@/server/activity';
 import { recordVisitorPresence, sweepPresence } from '@/server/presence';
 
 /**
@@ -89,12 +90,24 @@ export async function POST(request: Request): Promise<Response> {
     // After the response, so retention never costs a visitor latency.
     after(async () => {
       try {
-        const removed = await sweepPresence();
-        if (removed > 0) {
-          logger.info({ event: 'presence_swept', module: 'presence', removed });
+        // Both retention sweeps ride the same trigger. They delete on different
+        // clocks — hours for presence, thirty days and a year for activity — but
+        // neither needs a scheduler, and an un-run sweep is personal data kept
+        // past its justification.
+        const [presenceRows, activityRows] = await Promise.all([
+          sweepPresence(),
+          sweepActivity(),
+        ]);
+        if (presenceRows > 0 || activityRows > 0) {
+          logger.info({
+            event: 'retention_swept',
+            module: 'presence',
+            presenceRows,
+            activityRows,
+          });
         }
       } catch (error) {
-        logger.warn({ event: 'presence_sweep_failed', module: 'presence' }, error);
+        logger.warn({ event: 'retention_sweep_failed', module: 'presence' }, error);
       }
     });
   }

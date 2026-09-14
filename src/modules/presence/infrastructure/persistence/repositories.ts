@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { desc, gte, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -99,6 +99,17 @@ export class DrizzlePresenceRepository implements PresenceRepository {
       .select()
       .from(presences)
       .where(gte(presences.lastSeenAt, since))
+      .orderBy(desc(presences.lastSeenAt))
+      .limit(limit);
+
+    return rows.map(toDomain);
+  }
+
+  async listForUser(userId: UserId, since: Date, limit: number): Promise<Presence[]> {
+    const rows = await this.db
+      .select()
+      .from(presences)
+      .where(and(eq(presences.userId, userId), gte(presences.lastSeenAt, since)))
       .orderBy(desc(presences.lastSeenAt))
       .limit(limit);
 

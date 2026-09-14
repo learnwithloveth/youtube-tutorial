@@ -10,6 +10,7 @@ import {
   type Engagement,
   type VisitorId,
 } from '../../domain/presence';
+import { toLocationDto, type LocationDto } from '../dto';
 import type { NetworkContext, PresenceDependencies } from '../ports';
 
 /**
@@ -55,6 +56,37 @@ export interface RecordPresenceResult {
   readonly visitorId: string;
   /** How long the client should wait before reporting again, in milliseconds. */
   readonly nextBeatMs: number;
+  /**
+   * The page the visitor just left, on the beat that moved them off it.
+   *
+   * ── Why presence reports this at all ───────────────────────────────────────
+   * Presence keeps no history — one row per tab, overwritten — and that is not
+   * going to change. But it is the only thing that *knows* a navigation happened,
+   * and it knows the dwell time, which is unknowable at the moment a page opens
+   * and lost the instant the row is overwritten.
+   *
+   * So it reports what it observed and takes no view on what should be done with
+   * it. The caller decides whether that becomes a durable record. That keeps the
+   * dependency pointing the right way: presence does not know the activity module
+   * exists, and could not write to it if it wanted to.
+   */
+  readonly departedPage: {
+    readonly path: string;
+    readonly arrivedAt: string;
+    readonly seconds: number;
+  } | null;
+  /**
+   * What was observed alongside the beat.
+   *
+   * Handed back rather than re-read, because a caller writing this into a history
+   * would otherwise have to resolve the same location a second time.
+   */
+  readonly observed: {
+    readonly location: LocationDto | null;
+    readonly device: 'desktop' | 'mobile' | 'tablet' | 'bot' | 'unknown' | null;
+    readonly browser: string | null;
+    readonly ipDigest: string | null;
+  };
 }
 
 /**
@@ -112,6 +144,12 @@ export function createRecordPresence(deps: PresenceDependencies) {
         now,
       });
 
+    // Captured before `record` overwrites them: a dwell time is only knowable at
+    // the moment it ends, and one line later the row no longer remembers where the
+    // visitor was or when they got there.
+    const leftPath = existing !== null && existing.path !== path ? existing.path : null;
+    const leftSince = existing?.pathSince ?? null;
+
     if (existing !== null) {
       presence.identify(input.userId);
       presence.describeAgent(deps.agents.parse(input.network.userAgent));
@@ -122,7 +160,14 @@ export function createRecordPresence(deps: PresenceDependencies) {
     if (event === 'leave') {
       presence.depart(now);
       await deps.presences.save(presence);
-      return ok({ visitorId, nextBeatMs: 0 });
+      return ok({
+        visitorId,
+        nextBeatMs: 0,
+        // A closing tab leaves the page it was on, which is the last chance to
+        // record how long it was open.
+        departedPage: departure(presence.path, presence.pathSince, now),
+        observed: observationOf(presence, deps),
+      });
     }
 
     if (addressMoved || needsAddressLookup(presence, deps)) {
@@ -139,7 +184,12 @@ export function createRecordPresence(deps: PresenceDependencies) {
     // Handed back on every beat rather than compiled into the client bundle, so
     // the cadence can be widened under load without waiting for every open tab to
     // reload to pick up the new number.
-    return ok({ visitorId, nextBeatMs: HEARTBEAT_INTERVAL_MS });
+    return ok({
+      visitorId,
+      nextBeatMs: HEARTBEAT_INTERVAL_MS,
+      departedPage: leftPath === null ? null : departure(leftPath, leftSince, now),
+      observed: observationOf(presence, deps),
+    });
   };
 }
 
@@ -248,4 +298,32 @@ function parseDeviceFix(device: PresenceReport['device'], now: Date): LocationFi
       typeof device.accuracyMetres === 'number' ? device.accuracyMetres : null,
     observedAt,
   });
+}
+
+function departure(
+  path: string,
+  arrivedAt: Date | null,
+  now: Date,
+): RecordPresenceResult['departedPage'] {
+  const since = arrivedAt ?? now;
+  return {
+    path,
+    arrivedAt: since.toISOString(),
+    // Clamped at zero: a clock adjustment between two beats can otherwise produce
+    // a negative dwell, which the domain refuses and which would read as a page
+    // visited before it was opened.
+    seconds: Math.max(0, Math.floor((now.getTime() - since.getTime()) / 1000)),
+  };
+}
+
+function observationOf(
+  presence: Presence,
+  deps: PresenceDependencies,
+): RecordPresenceResult['observed'] {
+  return {
+    location: toLocationDto(presence, deps.clock),
+    device: presence.agent?.device ?? null,
+    browser: presence.agent?.browser ?? null,
+    ipDigest: presence.ipDigest,
+  };
 }

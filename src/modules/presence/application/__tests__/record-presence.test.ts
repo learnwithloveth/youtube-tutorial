@@ -51,6 +51,10 @@ class FakePresences implements PresenceRepository {
       .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
       .slice(0, limit);
   }
+  async listForUser(userId: UserId, since: Date, limit: number) {
+    const all = await this.listSince(since, Number.MAX_SAFE_INTEGER);
+    return all.filter((presence) => presence.userId === userId).slice(0, limit);
+  }
   async deleteExpired(before: Date, limit: number) {
     const doomed = [...this.store.values()]
       .filter((presence) => presence.lastSeenAt < before)

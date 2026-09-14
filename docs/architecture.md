@@ -44,6 +44,10 @@ src/
 │   │   ├── domain/            Presence, LocationFix, Coordinates, path rules
 │   │   ├── application/       Ports, heartbeat, retention sweep, live query
 │   │   └── infrastructure/    Drizzle, CDN geo headers, IP lookup, UA parsing
+│   ├── activity/              Append-only history: what an account did, kept
+│   │   ├── domain/            ActivityEvent, retention windows per kind
+│   │   ├── application/       Ports, append, sweep, per-account timeline
+│   │   └── infrastructure/    Drizzle, append-only with aggregate reads
 │   └── content/               Supporting context: editorial copy
 │
 ├── platform/              ══ SHARED INFRASTRUCTURE ══
@@ -54,6 +58,9 @@ src/
 ├── server/                Facades the pages actually call
 │   ├── market-data.ts         Read paths for quotes
 │   ├── presence.ts            Live activity; joins presence to identity
+│   ├── activity.ts            Append and read the account history trail
+│   ├── users.ts               The console account view; joins all three
+│   ├── request-context.ts     Location and device for the current request
 │   └── auth.ts                The one place a session is interpreted
 │
 └── shared/
@@ -442,3 +449,91 @@ does anything. A relational table is the right first implementation — no new
 infrastructure, survives a deploy — and the wrong shape at volume, where this
 belongs in a store with native key expiry. `PresenceRepository` is the seam that
 makes that swap an adapter and a line in `module.ts`.
+
+---
+
+## 12. Activity
+
+The `activity` context is the account history: what someone did, kept. It feeds
+the console's user pages.
+
+### Why it is not part of `presence`
+
+They are opposite shapes. Presence is one row per open tab, overwritten in place,
+swept within hours — it answers "who is here *now*" and is explicitly not history.
+Activity is append-only, never updated, and retained long enough to be worth
+consulting.
+
+One table would force one retention policy onto both, and the choice is
+unresolvable: a live board needs rows to vanish the moment they stop being true,
+and an audit trail is worthless if it does the same.
+
+### An event is immutable, which changes the location model
+
+`presence` carries a `LocationFix` that goes stale, because "where are they" has an
+answer that expires. An event's location does not — where someone signed in from on
+Tuesday is still where they signed in from on Tuesday. So `EventLocation` is a
+plain snapshot with no freshness rules. Same data, genuinely different concept,
+which is why it is a separate type rather than a shared one.
+
+The aggregate has **no setters**. A correction to an audit trail is a new event,
+never a rewrite of an old one, and the absence of a mutator is the cheapest way to
+guarantee that.
+
+### Page views are written on departure
+
+The event records the page someone *left*, stamped with when they arrived and how
+long they stayed. Writing on arrival would leave every row with a null duration
+until something went back and filled it in — and a table that gets updated after
+the fact is one whose rows can be changed, which is the one property it must not
+have.
+
+The consequence: the page someone is on right now has no event yet. That is
+correct — it is not history until it is over. `presence` answers where they are
+this second, and the console shows both.
+
+`presence` is the only thing that knows a navigation happened and the only thing
+that knows the dwell time, so `recordPresence` *reports* both and takes no view on
+what should be done with them. The facade decides whether that becomes durable.
+Presence does not know the activity module exists and could not write to it.
+
+### Two retention windows
+
+| Kind | Kept | Why |
+| --- | --- | --- |
+| Sign-ins, resets, verifications | 365 days | A sign-in from an unfamiliar country matters when a dispute surfaces months later |
+| Page views | 30 days | Stops being useful almost immediately, and is the more intrusive of the two to hold — it is a browsing history |
+
+Both are swept, and the sweep rides the presence heartbeat rather than a cron
+entry, because an un-run sweep is personal data kept past its justification.
+
+### The trail is best-effort, and that is a stated trade
+
+`recordActivity` never fails its caller. A sign-in that succeeded must not become
+an error page because an audit insert timed out. So the facade catches everything,
+logs, and returns — which means **this trail can have holes**.
+
+It is an operations aid, not a ledger, and nothing in the system makes a decision
+by reading it. If it ever needs to be evidential rather than informational, it has
+to move into the same transaction as the event it records. That is a different and
+much more expensive design, and pretending otherwise would be the dangerous version
+of this feature.
+
+### Parallel reads use `allSettled`, not `all`
+
+Not a style preference. The console's account page issues five independent reads
+together, and the realistic failure is an unreachable database — in which case all
+five reject. `Promise.all` surfaces the first and leaves the other four
+unattached, and Node terminates the process on an unhandled rejection by default.
+The obvious version turns a degraded panel into a crashed server. `allSettled`
+attaches a handler to every one, and degrades better besides: a failure in the
+route ranking costs the route ranking rather than the page.
+
+### What is deliberately absent
+
+Failed sign-ins are not recorded. Attributing one requires the identity module to
+reveal whether the account exists, which is exactly the enumeration oracle
+`requestPasswordReset` is written to avoid. The signal an operator actually needs —
+`failedAttempts` and `lockedUntil` — already lives on the user record. Recording
+failures properly means an audit port inside identity that the composition root
+wires up; that is a deliberate follow-up, not an oversight.

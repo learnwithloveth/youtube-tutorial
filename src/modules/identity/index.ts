@@ -15,6 +15,7 @@
 
 export type { CurrentUserDto, SessionDto, UserSummaryDto } from './application/dto';
 export type { UserRole, UserStatus } from './domain/user';
+export type { ListUsersOptions, UserListDto } from './application/queries/list-users';
 export type { IdentityError } from './application/errors';
 export { presentIdentityError } from './application/errors';
 

@@ -3,7 +3,7 @@ import type { UserId } from '@/shared/kernel/ids';
 import type { EmailAddress } from '../domain/email-address';
 import type { PasswordHash } from '../domain/password';
 import type { Session, SessionId } from '../domain/session';
-import type { User } from '../domain/user';
+import type { User, UserStatus } from '../domain/user';
 import type { VerificationPurpose, VerificationToken } from '../domain/verification-token';
 
 /**
@@ -31,6 +31,29 @@ export interface UserRepository {
   save(user: User): Promise<void>;
   /** Relies on a unique index, so two concurrent registrations cannot both win. */
   insertIfEmailFree(user: User): Promise<boolean>;
+
+  /**
+   * The console's account list: filtered, paged, newest first.
+   *
+   * `term` matches an email or an id. Not a name, because this module does not
+   * hold one — a display name belongs to a profile context, and letting it in
+   * here is how a forty-field user object forms.
+   */
+  search(query: {
+    term?: string | undefined;
+    status?: UserStatus | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<User[]>;
+
+  /** Total matching `search`, for the pager. */
+  countMatching(query: {
+    term?: string | undefined;
+    status?: UserStatus | undefined;
+  }): Promise<number>;
+
+  /** One row per status, for the header tiles. One query, not one per tile. */
+  tallyByStatus(): Promise<{ status: UserStatus; total: number }[]>;
 }
 
 export interface SessionRepository {

@@ -6,7 +6,7 @@ import { toUserId, type UserId } from '@/shared/kernel/ids';
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
 import { Session, type SessionId } from '../../domain/session';
-import { User } from '../../domain/user';
+import { User, type UserStatus } from '../../domain/user';
 import {
   VerificationToken,
   type VerificationPurpose,
@@ -79,6 +79,34 @@ class FakeUsers implements UserRepository {
     // Absent ids are simply missing from the result, as the port specifies — a
     // deleted account is an ordinary outcome for a caller holding a stale list.
     return ids.map((id) => this.store.get(id)).filter((user): user is User => user !== undefined);
+  }
+  private matching(query: { term?: string | undefined; status?: string | undefined }) {
+    const term = query.term?.trim().toLowerCase();
+    return [...this.store.values()].filter(
+      (user) =>
+        (!term || user.email.value.toLowerCase().includes(term) || user.id === query.term) &&
+        (!query.status || user.status === query.status),
+    );
+  }
+  async search(query: {
+    term?: string | undefined;
+    status?: UserStatus | undefined;
+    limit: number;
+    offset: number;
+  }) {
+    return this.matching(query)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(query.offset, query.offset + query.limit);
+  }
+  async countMatching(query: { term?: string | undefined; status?: UserStatus | undefined }) {
+    return this.matching(query).length;
+  }
+  async tallyByStatus() {
+    const counts = new Map<UserStatus, number>();
+    for (const user of this.store.values()) {
+      counts.set(user.status, (counts.get(user.status) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([status, total]) => ({ status, total }));
   }
   async save(user: User) {
     this.store.set(user.id, user);

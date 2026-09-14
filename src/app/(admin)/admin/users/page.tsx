@@ -1,285 +1,255 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { ArrowUpRight, MailCheck, MailX, ShieldCheck, UserRound } from 'lucide-react';
 
-import { useDeferredValue, useMemo, useState } from 'react';
-import { Ban, Search, ShieldCheck, Snowflake, StickyNote, X } from 'lucide-react';
-import { AdminPageHeader, ConfirmButton, DangerButton, QuietButton } from '../../_components/admin-ui';
+import type { UserStatus } from '@/modules/identity';
+import { getUsers } from '@/server/users';
+import { formatDate } from '@/shared/lib/format';
+import { Badge } from '@/shared/ui/primitives/badge';
+import { StatTile } from '@/shared/ui/charts/stat-tile';
+
+import { AdminPageHeader } from '../../_components/admin-ui';
 import { Panel } from '../../../_console/components/page-header';
 import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
-import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { Badge } from '@/shared/ui/primitives/badge';
-import { useAdmin } from '../../_data/store';
-import { dateTimeLabel, money } from '../../../_console/data/format';
-import { formatCompact, formatDate } from '@/shared/lib/format';
-import { useEscape } from '@/shared/lib/hooks';
-import { cn } from '@/shared/lib/cn';
-import type { AdminUser, KycState, UserState } from '../../_data/types';
+import { UserFilters } from './_components/user-filters';
 
-const STATE_TONE: Record<UserState, 'up' | 'warn' | 'down' | 'neutral'> = {
-  active: 'up', restricted: 'warn', frozen: 'down', closed: 'neutral',
+/**
+ * Every account on the platform.
+ *
+ * ── This page used to be a fixture array ───────────────────────────────────────
+ * Fifteen invented people with invented balances, risk scores and countries. The
+ * columns that disappeared with them are worth naming, because they did not move
+ * — they were never real and the contexts that would own them do not exist yet:
+ *
+ *   balance, 30d volume      a ledger context
+ *   risk score, KYC state    a compliance context
+ *   name, handle, country    a profile context
+ *
+ * Identity owns credentials and access state and nothing else, which is what keeps
+ * it liftable into its own service. Adding a balance column here would mean adding
+ * a balance field there, and that is how the forty-field user object forms that
+ * every team edits and nobody understands.
+ *
+ * So this list is narrower than the mock it replaces, and every column on it is a
+ * fact. What it gains is the link at the end of each row: real history, which no
+ * fixture could have had.
+ */
+
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Users',
+  robots: { index: false, follow: false },
 };
-const KYC_TONE: Record<KycState, 'up' | 'warn' | 'down' | 'neutral' | 'accent'> = {
-  verified: 'up', pending: 'accent', review: 'warn', rejected: 'down', unverified: 'neutral',
+
+const STATUS_TONE: Record<UserStatus, 'up' | 'warn' | 'down'> = {
+  active: 'up',
+  locked: 'warn',
+  disabled: 'down',
 };
 
-const FILTERS = ['all', 'active', 'restricted', 'frozen'] as const;
+const PAGE_SIZE = 50;
 
-export default function UsersPage() {
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
+}) {
+  // Next 16: `searchParams` is a Promise, and reading it is what makes the route
+  // dynamic — which this one has to be, since it reflects a live table.
+  const params = await searchParams;
 
-  const { state, run } = useAdmin();
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all');
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-  const [reason, setReason] = useState('');
-  const deferred = useDeferredValue(query);
+  const status = isStatus(params.status) ? params.status : undefined;
+  const page = Math.max(Number(params.page ?? '1') || 1, 1);
 
-  useEscape(() => setOpenId(null), openId !== null);
+  const list = await getUsers({
+    term: params.q,
+    status,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
 
-  const rows = useMemo(() => {
-    const needle = deferred.trim().toLowerCase();
-    return state.users.filter((user) => {
-      const matchesFilter = filter === 'all' || user.state === filter;
-      const matchesQuery =
-        !needle ||
-        user.name.toLowerCase().includes(needle) ||
-        user.handle.toLowerCase().includes(needle) ||
-        user.email.toLowerCase().includes(needle) ||
-        user.id.toLowerCase().includes(needle);
-      return matchesFilter && matchesQuery;
-    });
-  }, [state.users, deferred, filter]);
+  const tally = (of: UserStatus) =>
+    list.tallies.find((entry) => entry.status === of)?.total ?? 0;
+  const allAccounts = list.tallies.reduce((sum, entry) => sum + entry.total, 0);
 
-  const open: AdminUser | undefined = state.users.find((u) => u.id === openId);
-
-  const setUserState = (next: UserState) => {
-    if (!open || reason.trim().length === 0) return;
-    run({ type: 'user/setState', id: open.id, state: next, reason: reason.trim() });
-    setReason('');
-  };
+  const pages = Math.max(Math.ceil(list.total / PAGE_SIZE), 1);
 
   return (
     <>
       <AdminPageHeader
         title="Users"
-        description="Every account, with the controls that change one. Each action needs a reason and lands in the audit log."
+        description="Every account on the platform. Open one to see its sign-ins, the devices and places it connects from, and every page it has visited."
       />
 
       <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Accounts" value={String(state.users.length)} delta={{ value: `${state.users.filter((u) => u.state === 'active').length} active`, direction: 'flat', period: '' }} />
-        <StatTile label="Restricted" value={String(state.users.filter((u) => u.state === 'restricted').length)} delta={{ value: 'Partial controls', direction: 'flat', period: '' }} upIsGood={false} />
-        <StatTile label="Frozen" value={String(state.users.filter((u) => u.state === 'frozen').length)} delta={{ value: 'No movement permitted', direction: 'flat', period: '' }} upIsGood={false} />
-        <StatTile label="Custody held" value={money(state.users.reduce((s, u) => s + u.balance, 0))} delta={{ value: 'Across these accounts', direction: 'flat', period: '' }} />
+        <StatTile
+          label="Accounts"
+          value={String(allAccounts)}
+          delta={{ value: `${tally('active')} active`, direction: 'flat', period: '' }}
+          icon={<UserRound className="size-4" />}
+        />
+        <StatTile
+          label="Locked"
+          value={String(tally('locked'))}
+          delta={{
+            value: 'too many failed sign-ins',
+            direction: 'flat',
+            period: '',
+          }}
+          upIsGood={false}
+          icon={<ShieldCheck className="size-4" />}
+        />
+        <StatTile
+          label="Disabled"
+          value={String(tally('disabled'))}
+          delta={{ value: 'no access permitted', direction: 'flat', period: '' }}
+          upIsGood={false}
+          icon={<MailX className="size-4" />}
+        />
+        <StatTile
+          label="Unverified email"
+          value={String(list.users.filter((user) => !user.emailVerified).length)}
+          delta={{ value: `of ${list.users.length} shown`, direction: 'flat', period: '' }}
+          upIsGood={false}
+          icon={<MailCheck className="size-4" />}
+        />
       </div>
 
       <Panel>
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <label className="relative w-full max-w-xs">
-            <span className="sr-only">Search users</span>
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Name, handle, email or account id"
-              className="h-9 w-full rounded-full border border-line bg-surface pl-10 pr-4 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-soft"
-            />
-          </label>
-          <div className="flex gap-1.5">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                aria-pressed={filter === f}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-2xs capitalize transition-colors',
-                  filter === f
-                    ? 'border-brand-soft/60 bg-brand/15 text-fg'
-                    : 'border-line text-fg-muted hover:border-line-strong hover:text-fg',
-                )}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
+        <UserFilters term={params.q ?? ''} status={params.status ?? 'all'} total={list.total} />
 
-        <TableShell caption="Customer accounts" minWidth="54rem">
+        <TableShell caption="Platform accounts" minWidth="52rem">
           <thead>
             <tr>
-              <Th>Account</Th><Th>State</Th><Th>KYC</Th>
-              <Th numeric>Balance</Th><Th numeric>30d volume</Th>
-              <Th numeric>Risk</Th><Th>Joined</Th><Th numeric>{''}</Th>
+              <Th>Account</Th>
+              <Th>Status</Th>
+              <Th>Email</Th>
+              <Th>Role</Th>
+              <Th>Joined</Th>
+              <Th>
+                <span className="sr-only">Open</span>
+              </Th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <EmptyRow colSpan={8}>No accounts match that search.</EmptyRow>
+            {list.users.length === 0 ? (
+              <EmptyRow colSpan={6}>
+                {params.q || status
+                  ? 'No account matches that filter.'
+                  : 'No accounts yet. The first person to sign up appears here.'}
+              </EmptyRow>
             ) : (
-              rows.map((user) => (
+              list.users.map((user) => (
                 <Tr key={user.id}>
                   <Td>
-                    <span className="flex items-center gap-2.5">
+                    <Link
+                      href={`/admin/users/${user.id}`}
+                      className="group flex min-w-0 items-center gap-3"
+                    >
                       <span
                         aria-hidden
-                        className="grid size-8 shrink-0 place-items-center rounded-full text-2xs font-semibold text-white"
-                        style={{ background: `linear-gradient(140deg, ${user.hue}, color-mix(in oklab, ${user.hue} 40%, #05060b))` }}
+                        className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-strong font-mono text-2xs uppercase text-fg-muted"
                       >
-                        {user.initials}
+                        {user.email.slice(0, 2)}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-fg">{user.name}</span>
-                        <span className="block truncate text-2xs text-fg-subtle">{user.handle} · {user.country}</span>
+                        <span className="block truncate text-sm text-fg group-hover:underline">
+                          {user.email}
+                        </span>
+                        <span className="block font-mono text-2xs text-fg-subtle">
+                          {user.id.slice(0, 8)}
+                        </span>
                       </span>
-                    </span>
+                    </Link>
                   </Td>
-                  <Td><Badge tone={STATE_TONE[user.state]} className="capitalize">{user.state}</Badge></Td>
-                  <Td><Badge tone={KYC_TONE[user.kyc]} className="capitalize">{user.kyc}</Badge></Td>
-                  <Td numeric className="font-medium text-fg">{money(user.balance)}</Td>
-                  <Td numeric>{formatCompact(user.volume30d, 'USD')}</Td>
-                  <Td numeric>
-                    <span className={cn(user.riskScore > 70 ? 'text-down' : user.riskScore > 40 ? 'text-warn' : 'text-fg-muted')}>
-                      {user.riskScore}
-                    </span>
+                  <Td>
+                    <Badge tone={STATUS_TONE[user.status]}>{user.status}</Badge>
                   </Td>
-                  <Td>{formatDate(user.joined)}</Td>
-                  <Td numeric>
-                    <QuietButton onClick={() => setOpenId(user.id)}>Manage</QuietButton>
+                  <Td>
+                    {user.emailVerified ? (
+                      <Badge tone="up">Verified</Badge>
+                    ) : (
+                      <Badge tone="neutral">Unverified</Badge>
+                    )}
+                  </Td>
+                  <Td>
+                    {user.role === 'admin' ? (
+                      <Badge tone="warn">Operator</Badge>
+                    ) : (
+                      <span className="text-xs text-fg-subtle">Customer</span>
+                    )}
+                  </Td>
+                  <Td>{formatDate(user.createdAt)}</Td>
+                  <Td>
+                    <Link
+                      href={`/admin/users/${user.id}`}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-soft hover:underline"
+                    >
+                      Activity
+                      <ArrowUpRight className="size-3" />
+                    </Link>
                   </Td>
                 </Tr>
               ))
             )}
           </tbody>
         </TableShell>
-      </Panel>
 
-      {/* Detail drawer — the account controls live behind a deliberate step. */}
-      {open ? (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <button
-            type="button"
-            aria-label="Close panel"
-            onClick={() => setOpenId(null)}
-            className="absolute inset-0 bg-bg-sunken/70 backdrop-blur-sm"
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Manage ${open.name}`}
-            className="relative flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-line bg-bg-elev"
+        {pages > 1 ? (
+          <nav
+            aria-label="Account pages"
+            className="mt-4 flex items-center justify-between text-xs text-fg-subtle"
           >
-            <div className="sticky top-0 flex items-center gap-3 border-b border-line bg-bg-elev px-5 py-4">
-              <span
-                aria-hidden
-                className="grid size-9 place-items-center rounded-full text-xs font-semibold text-white"
-                style={{ background: `linear-gradient(140deg, ${open.hue}, color-mix(in oklab, ${open.hue} 40%, #05060b))` }}
-              >
-                {open.initials}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-fg">{open.name}</p>
-                <p className="truncate text-2xs text-fg-subtle">{open.email}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpenId(null)}
-                aria-label="Close"
-                className="grid size-8 place-items-center rounded-sm text-fg-subtle hover:text-fg"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            <div className="space-y-5 p-5">
-              <dl className="grid grid-cols-2 gap-4 text-xs">
-                {[
-                  ['Account id', open.id], ['Tier', open.tier], ['Country', open.country],
-                  ['Balance', money(open.balance)], ['30d volume', formatCompact(open.volume30d, 'USD')],
-                  ['Open orders', String(open.openOrders)], ['Risk score', String(open.riskScore)],
-                  ['Joined', formatDate(open.joined)],
-                ].map(([k, v]) => (
-                  <div key={k}>
-                    <dt className="text-fg-subtle">{k}</dt>
-                    <dd className="mt-0.5 truncate font-mono text-fg">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              <div className="flex gap-2">
-                <Badge tone={STATE_TONE[open.state]} className="capitalize">{open.state}</Badge>
-                <Badge tone={KYC_TONE[open.kyc]} className="capitalize">KYC {open.kyc}</Badge>
-              </div>
-
-              <div className="rounded-md border border-line bg-bg-sunken/60 p-4">
-                <h3 className="text-xs font-semibold text-fg">Change account state</h3>
-                <p className="mt-1 text-2xs leading-relaxed text-fg-subtle">
-                  Freezing halts trading, withdrawals and deposits immediately. The customer sees the
-                  state and the reason.
-                </p>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={2}
-                  placeholder="Reason — required, and recorded against your name"
-                  className="mt-3 w-full rounded-md border border-line bg-bg-elev px-3 py-2 text-xs text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-soft"
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <ConfirmButton disabled={reason.trim().length === 0 || open.state === 'active'} onClick={() => setUserState('active')}>
-                    <ShieldCheck className="size-3.5" />
-                    Reinstate
-                  </ConfirmButton>
-                  <QuietButton disabled={reason.trim().length === 0 || open.state === 'restricted'} onClick={() => setUserState('restricted')}>
-                    <Ban className="size-3.5" />
-                    Restrict
-                  </QuietButton>
-                  <DangerButton disabled={reason.trim().length === 0 || open.state === 'frozen'} onClick={() => setUserState('frozen')}>
-                    <Snowflake className="size-3.5" />
-                    Freeze
-                  </DangerButton>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="flex items-center gap-2 text-xs font-semibold text-fg">
-                  <StickyNote className="size-3.5 text-brand-soft" />
-                  Notes
-                </h3>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Add a note visible to every agent"
-                    className="h-9 min-w-0 flex-1 rounded-md border border-line bg-bg-sunken/60 px-3 text-xs text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-soft"
-                  />
-                  <QuietButton
-                    disabled={note.trim().length === 0}
-                    onClick={() => {
-                      run({ type: 'user/note', id: open.id, body: note.trim() });
-                      setNote('');
-                    }}
-                  >
-                    Add
-                  </QuietButton>
-                </div>
-                <ul className="mt-3 space-y-2">
-                  {open.notes.length === 0 ? (
-                    <li className="text-2xs text-fg-subtle">No notes on this account yet.</li>
-                  ) : (
-                    open.notes.map((entry) => (
-                      <li key={entry.id} className="rounded-md border border-line bg-bg-sunken/60 p-3">
-                        <p className="text-2xs leading-relaxed text-fg-muted">{entry.body}</p>
-                        <p className="mt-1.5 text-2xs text-fg-subtle">
-                          {entry.author} · {dateTimeLabel(entry.at)}
-                        </p>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            <span>
+              Page {page} of {pages}
+            </span>
+            <span className="flex gap-2">
+              <PageLink params={params} page={page - 1} disabled={page <= 1}>
+                Previous
+              </PageLink>
+              <PageLink params={params} page={page + 1} disabled={page >= pages}>
+                Next
+              </PageLink>
+            </span>
+          </nav>
+        ) : null}
+      </Panel>
     </>
+  );
+}
+
+function isStatus(value: string | undefined): value is UserStatus {
+  return value === 'active' || value === 'locked' || value === 'disabled';
+}
+
+/**
+ * A pager link that preserves the current filter.
+ *
+ * An anchor rather than a button: paging is navigation, so it should be
+ * middle-clickable and shareable, and it needs no JavaScript to work.
+ */
+function PageLink({
+  params,
+  page,
+  disabled,
+  children,
+}: {
+  params: { q?: string; status?: string };
+  page: number;
+  disabled: boolean;
+  children: React.ReactNode;
+}) {
+  if (disabled) return <span className="opacity-40">{children}</span>;
+
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.status) query.set('status', params.status);
+  if (page > 1) query.set('page', String(page));
+
+  return (
+    <Link href={`/admin/users?${query.toString()}`} className="hover:text-fg">
+      {children}
+    </Link>
   );
 }

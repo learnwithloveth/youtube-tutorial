@@ -99,14 +99,39 @@ export interface LiveActivityDto {
   readonly degraded: boolean;
 }
 
+/**
+ * The location half of a visitor DTO, or null when there is none to report.
+ *
+ * Extracted because two callers need it: the console's live board, and the caller
+ * that writes a page view into an account's history. The second one would
+ * otherwise rebuild the mapping and get `freshness` subtly wrong.
+ */
+export function toLocationDto(presence: Presence, clock: Clock): LocationDto | null {
+  const state = presence.locationStateAt(clock);
+  if (state.kind === 'unavailable') return null;
+
+  return {
+    source: state.fix.source,
+    precision: state.fix.precision,
+    latitude: state.fix.coordinates?.latitude ?? null,
+    longitude: state.fix.coordinates?.longitude ?? null,
+    accuracyMetres: state.fix.accuracyMetres,
+    city: state.fix.place.city,
+    region: state.fix.place.region,
+    country: state.fix.place.country,
+    timezone: state.fix.place.timezone,
+    observedAt: state.fix.observedAt.toISOString(),
+    ageSeconds: state.fix.ageInSecondsAt(clock),
+    freshness: state.kind,
+  };
+}
+
 export function toActiveVisitorDto(
   presence: Presence,
   clock: Clock,
 ): ActiveVisitorDto | null {
   const activity = presence.activityAt(clock);
   if (activity === 'gone') return null;
-
-  const location = presence.locationStateAt(clock);
 
   return {
     visitorId: presence.id,
@@ -116,23 +141,7 @@ export function toActiveVisitorDto(
     sessionSeconds: presence.sessionSecondsAt(clock),
     pageViews: presence.pageViews,
     activity,
-    location:
-      location.kind === 'unavailable'
-        ? null
-        : {
-            source: location.fix.source,
-            precision: location.fix.precision,
-            latitude: location.fix.coordinates?.latitude ?? null,
-            longitude: location.fix.coordinates?.longitude ?? null,
-            accuracyMetres: location.fix.accuracyMetres,
-            city: location.fix.place.city,
-            region: location.fix.place.region,
-            country: location.fix.place.country,
-            timezone: location.fix.place.timezone,
-            observedAt: location.fix.observedAt.toISOString(),
-            ageSeconds: location.fix.ageInSecondsAt(clock),
-            freshness: location.kind,
-          },
+    location: toLocationDto(presence, clock),
     device: presence.agent?.device ?? 'unknown',
     browser: presence.agent?.browser ?? null,
     ipDigest: presence.ipDigest,

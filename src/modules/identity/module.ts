@@ -8,6 +8,7 @@ import {
   createDescribeUsers,
   type DescribeUsers,
 } from './application/queries/describe-users';
+import { createListUsers, type ListUsers } from './application/queries/list-users';
 import { createAuthenticate, type Authenticate } from './application/use-cases/authenticate';
 import { createRegisterUser, type RegisterUser } from './application/use-cases/register-user';
 import {
@@ -74,6 +75,8 @@ export interface IdentityModule {
    * that rule being broken.
    */
   readonly describeUsers: DescribeUsers;
+  /** The console's account list: filtered, paged, with per-status tallies. */
+  readonly listUsers: ListUsers;
   /** Name of the session cookie. Owned here so the delivery layer cannot drift. */
   readonly cookieName: string;
 }
@@ -128,6 +131,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     requestPasswordReset: createRequestPasswordReset(dependencies),
     resetPassword: createResetPassword(dependencies),
     describeUsers: createDescribeUsers(dependencies),
+    listUsers: createListUsers(dependencies),
     cookieName: SESSION_COOKIE_NAME,
   };
 }

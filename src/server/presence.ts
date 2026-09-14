@@ -17,6 +17,7 @@ import { geoLookupConfig, sessionSecret } from '@/platform/env';
 import { logger } from '@/platform/observability/logger';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { recordActivity, toEventLocation } from './activity';
 import { getCurrentUser, identity } from './auth';
 
 /**
@@ -96,15 +97,19 @@ export async function recordVisitorPresence(input: {
   try {
     const user = await getCurrentUser();
 
+    const userId = user ? (user.id as UserId) : null;
+
     const result = await context.recordPresence({
       report: input.report,
-      userId: user ? (user.id as UserId) : null,
+      userId,
       network: input.network,
     });
 
-    return result.ok
-      ? { kind: 'recorded', result: result.value }
-      : { kind: 'rejected', error: result.error };
+    if (!result.ok) return { kind: 'rejected', error: result.error };
+
+    if (userId !== null) await recordPageView(userId, result.value);
+
+    return { kind: 'recorded', result: result.value };
   } catch (error) {
     logger.warn({ event: 'presence_write_failed', module: 'presence' }, error);
     return { kind: 'unavailable' };
@@ -188,4 +193,43 @@ async function describeAccounts(ids: readonly UserId[]): Promise<Map<UserId, Use
   } catch {
     return new Map();
   }
+}
+
+/**
+ * Turns a navigation into a durable page view.
+ *
+ * ── Written on departure, not on arrival ───────────────────────────────────────
+ * The event is the page the visitor just *left*, stamped with when they arrived
+ * and how long they stayed. Writing it on arrival would mean every row had a null
+ * duration until something went back and filled it in, and an audit table that
+ * gets updated after the fact is one whose rows can be changed — which is the one
+ * property it must not have.
+ *
+ * The consequence is that the page someone is on right now has no event yet. That
+ * is correct: it is not history until it is over, and `presence` is what answers
+ * where they are this second. The console shows both.
+ *
+ * ── Only for signed-in visitors ────────────────────────────────────────────────
+ * Activity is keyed by account. Anonymous traffic has no account to attribute a
+ * history to, so it is counted live by `presence` and never written down — which
+ * also keeps this table from growing with crawler traffic.
+ */
+async function recordPageView(userId: UserId, result: RecordPresenceResult): Promise<void> {
+  const departed = result.departedPage;
+  if (departed === null) return;
+
+  await recordActivity({
+    userId,
+    kind: 'page-view',
+    path: departed.path,
+    occurredAt: new Date(departed.arrivedAt),
+    durationSeconds: departed.seconds,
+    location: toEventLocation(result.observed.location),
+    agent:
+      result.observed.device === null
+        ? null
+        : { device: result.observed.device, browser: result.observed.browser },
+    ipDigest: result.observed.ipDigest,
+    visitorId: result.visitorId,
+  });
 }
