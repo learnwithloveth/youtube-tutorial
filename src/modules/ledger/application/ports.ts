@@ -77,12 +77,52 @@ export interface StatementEntry {
   readonly occurredAt: Date;
 }
 
+/**
+ * A point in a time-ordered feed: everything strictly older than this.
+ *
+ * ── Keyset, not offset ─────────────────────────────────────────────────────────
+ * `OFFSET 5000` makes the database count five thousand rows it will then discard,
+ * so the last page of a long feed is the slowest one to read. Worse for a console
+ * that is scrolled while people are transacting: a row inserted above the window
+ * shifts every later offset by one, and the reader silently skips a transaction.
+ * A cursor describes a *position in the data* rather than a distance from the
+ * start, so neither happens.
+ *
+ * `id` is the tie-break. Timestamps collide — two deposits in the same
+ * millisecond are ordinary — and a cursor on time alone would either repeat the
+ * collided rows or drop them, depending on which side of the comparison they fell.
+ */
+export interface FeedCursor {
+  readonly occurredAt: Date;
+  /** The record id at that instant. Compared only when the timestamps are equal. */
+  readonly id: string;
+}
+
+/** One page of a time-ordered feed, newest first. */
+export interface FeedPageQuery {
+  readonly limit: number;
+  /** Omitted for the first page. */
+  readonly before?: FeedCursor | undefined;
+  /** Restricts the feed to one customer. */
+  readonly userId?: UserId | undefined;
+  readonly status?: 'pending' | 'approved' | 'rejected' | undefined;
+}
+
 export interface WithdrawalRepository {
   save(withdrawal: Withdrawal): Promise<void>;
   find(id: string): Promise<Withdrawal | null>;
   listForUser(userId: UserId, limit: number): Promise<Withdrawal[]>;
   /** The operator queue: everything awaiting a decision, oldest first. */
   listPending(limit: number): Promise<Withdrawal[]>;
+  /**
+   * The console's feed: every request on the platform, newest first.
+   *
+   * Separate from `listPending` rather than a flag on it, because the two have
+   * opposite orders for opposite reasons — a queue is worked oldest-first so
+   * nobody waits forever, and a history is read newest-first because that is where
+   * the answer to "what just happened" is.
+   */
+  listPage(query: FeedPageQuery): Promise<Withdrawal[]>;
   /**
    * Total USD value of a user's withdrawals since an instant.
    *
@@ -147,6 +187,8 @@ export interface DepositClaimRepository {
   listForUser(userId: UserId, limit: number): Promise<DepositClaim[]>;
   /** The operator queue: claims awaiting a decision, oldest first. */
   listPending(limit: number): Promise<DepositClaim[]>;
+  /** The console's feed — see `WithdrawalRepository.listPage`. */
+  listPage(query: FeedPageQuery): Promise<DepositClaim[]>;
 }
 
 export interface LedgerDependencies {

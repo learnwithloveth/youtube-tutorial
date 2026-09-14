@@ -188,6 +188,11 @@ export const withdrawals = ledgerSchema.table(
     index('withdrawals_status_idx').on(table.status, table.requestedAt),
     // The customer's own list, and the daily-limit sum.
     index('withdrawals_user_idx').on(table.userId, table.requestedAt),
+    // The console's platform-wide feed: every request in time order, regardless of
+    // status. The two indexes above both lead with a discriminator, so neither can
+    // serve an unfiltered scan — Postgres would sort the whole table instead. `id`
+    // is the tie-break the keyset cursor pages on.
+    index('withdrawals_requested_idx').on(table.requestedAt, table.id),
   ],
 );
 
@@ -271,6 +276,8 @@ export const depositClaims = ledgerSchema.table(
   (table) => [
     index('deposit_claims_status_idx').on(table.status, table.submittedAt),
     index('deposit_claims_user_idx').on(table.userId, table.submittedAt),
+    // The console's platform-wide feed — see `withdrawals_requested_idx`.
+    index('deposit_claims_submitted_idx').on(table.submittedAt, table.id),
   ],
 );
 

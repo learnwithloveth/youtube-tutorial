@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, BadgeCheck, Building2, CandlestickChart, Coins, FileClock, Gauge, Gift,
-  Headset, Megaphone, Percent, Radar, ScrollText, ShieldAlert, Users, Wallet,
+  Headset, Megaphone, Percent, Radar, Receipt, ScrollText, ShieldAlert, Users, Wallet,
 } from 'lucide-react';
 
 /** Queue keys map onto `useQueues()` so a badge can never drift from the data. */
@@ -31,6 +31,10 @@ export const ADMIN_NAV: AdminNavGroup[] = [
          read as work outstanding and never reach zero. */
       { label: 'Live activity', href: '/admin/live', icon: Radar },
       { label: 'Approvals', href: '/admin/approvals', icon: BadgeCheck, queue: 'approvals' },
+      /* No `queue` key, for the reason 'Live activity' has none: this is a history,
+         not a list of things outstanding, and a badge that counted every
+         transaction ever would never reach zero. */
+      { label: 'Transactions', href: '/admin/transactions', icon: Receipt },
       { label: 'Live support', href: '/admin/support', icon: Headset, queue: 'tickets' },
     ],
   },

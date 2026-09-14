@@ -1,0 +1,2 @@
+CREATE INDEX "deposit_claims_submitted_idx" ON "ledger"."deposit_claims" USING btree ("submitted_at","id");--> statement-breakpoint
+CREATE INDEX "withdrawals_requested_idx" ON "ledger"."withdrawals" USING btree ("requested_at","id");

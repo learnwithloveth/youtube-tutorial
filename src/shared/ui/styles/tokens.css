@@ -64,6 +64,21 @@
   --down: var(--rose-400);
   --warn: var(--amber-400);
 
+  /* Cartography — Google Maps' own night palette, not an impression of it. The
+     three geometry colours are the ones Google publishes in its `night` sample
+     style; the pin is Google red, which stays red in both themes because that is
+     the one colour on a map everybody already knows how to read. Aurora Noir's
+     violets are deliberately absent: a map that matches the chrome reads as
+     decoration, and this one is meant to be read. */
+  --map-water: #17263c;
+  --map-land: #242f3e;
+  --map-land-edge: #3d4c61;
+  --map-pin: #ea4335;
+  --map-pin-edge: #ffffff;
+  --map-point: #8ab4f8;
+  --map-point-edge: #17263c;
+  --map-label: #9ca5b3;
+
   --halo-a: rgb(139 92 246 / 0.78);
   --halo-b: rgb(34 211 238 / 0.62);
   --halo-c: rgb(232 121 249 / 0.52);
@@ -103,6 +118,18 @@
   --up: var(--mint-600);
   --down: var(--rose-600);
   --warn: var(--amber-600);
+
+  /* Cartography — Google Maps' roadmap palette: pale warm land, soft blue water,
+     a warm grey administrative edge. Google blue for a plotted place, Google red
+     for the pin. */
+  --map-water: #aadaff;
+  --map-land: #f4f2ee;
+  --map-land-edge: #c8c3b8;
+  --map-pin: #ea4335;
+  --map-pin-edge: #ffffff;
+  --map-point: #1a73e8;
+  --map-point-edge: #ffffff;
+  --map-label: #5f6368;
 
   --halo-a: rgb(139 92 246 / 0.26);
   --halo-b: rgb(34 211 238 / 0.20);

@@ -23,7 +23,10 @@ import { Badge } from '@/shared/ui/primitives/badge';
 import { AdminPageHeader } from '../../../_components/admin-ui';
 import { Panel, PanelHeader } from '../../../../_console/components/page-header';
 import { countryFlag, countryName } from '../../live/_lib/geography';
+import { WorldMap, type MapMarker } from '@/shared/ui/visuals/world-map';
+
 import { ActivityTimeline } from './_components/activity-timeline';
+import { LiveMapOverlay } from './_components/live-map-overlay';
 
 /**
  * One account, and everything the platform has recorded about it.
@@ -81,6 +84,29 @@ export default async function UserDetailPage({
   const pageViews = activity.tallies.find((t) => t.kind === 'page-view')?.total ?? 0;
   const signIns = activity.tallies.find((t) => t.kind === 'sign-in')?.total ?? 0;
   const lastSignIn = activity.tallies.find((t) => t.kind === 'sign-in')?.lastAt ?? null;
+
+  // Deduplicated by rounded coordinate: a hundred page views from one city are one
+  // place, and plotting each would stack a hundred identical dots and make a busy
+  // account look like it was everywhere.
+  const seen = new Map<string, MapMarker>();
+  for (const event of activity.recent.events) {
+    const location = event.location;
+    if (location?.latitude == null || location.longitude == null) continue;
+
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    const key = `${latitude.toFixed(1)}:${longitude.toFixed(1)}`;
+    if (seen.has(key)) continue;
+
+    seen.set(key, {
+      id: key,
+      latitude,
+      longitude,
+      label: [location.city, countryName(location.country)].filter(Boolean).join(', '),
+      tone: 'history',
+    });
+  }
+  const historyMarkers = [...seen.values()];
 
   return (
     <>
@@ -163,6 +189,26 @@ export default async function UserDetailPage({
             ))}
           </ul>
         )}
+      </Panel>
+
+      {/* ── Where they are, and where they have been ──────────────────────── */}
+      <Panel className="mb-4">
+        <PanelHeader
+          title="Locations"
+          subtitle="Where they are now on the pin, past sign-ins and page views as blue dots"
+        />
+        <WorldMap
+          markers={historyMarkers}
+          overlay={<LiveMapOverlay userId={account.id} initial={liveTabs} />}
+        />
+        <p className="mt-3 text-2xs leading-relaxed text-fg-subtle">
+          Points are plotted where the connection resolved to, which is a city on a
+          good day and a country on a bad one. A world map is the honest rendering
+          of that — a pin on a street map would show a fifty-kilometre guess as a
+          specific building. Positions marked <span className="text-brand-soft">device</span>{' '}
+          in the history below came from the browser with the visitor&rsquo;s
+          permission and are precise.
+        </p>
       </Panel>
 
       <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1.4fr]">

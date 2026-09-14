@@ -40,4 +40,11 @@ export type {
   StatementLineDto,
   StatementOptions,
 } from './application/queries/statement';
+export type {
+  TransactionDto,
+  TransactionFeedOptions,
+  TransactionKind,
+  TransactionPageDto,
+  TransactionStatus,
+} from './application/queries/transactions';
 export type { TransferKind } from './domain/transfer';

@@ -16,8 +16,12 @@ import { getDepositProof } from '@/server/ledger';
  *  - `X-Content-Type-Options: nosniff` stops the browser second-guessing the type
  *    we declare. Without it, a browser that decides a file "looks like" HTML will
  *    render it as HTML, which is the whole polyglot attack.
- *  - `Content-Disposition: attachment` means the response is never rendered as a
- *    document in the operator's origin even if something else goes wrong.
+ *  - `Content-Disposition: inline` with an extension-less filename. Inline,
+ *    because the console renders the proof in an `<img>` and an attachment
+ *    disposition would turn opening a transaction into a download. What stops it
+ *    being treated as a *document* is `nosniff` plus the declared image type: a
+ *    browser told `image/png` and forbidden from second-guessing has no path to
+ *    parsing the bytes as HTML.
  *  - A restrictive `Content-Security-Policy` on the response itself, so that if it
  *    somehow *is* interpreted as a document, it can load and execute nothing.
  *  - `Content-Type` is the sniffed type from storage, never anything the uploader

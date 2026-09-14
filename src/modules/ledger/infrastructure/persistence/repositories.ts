@@ -2,6 +2,8 @@ import 'server-only';
 
 import { and, asc, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 
+import type { PgColumn } from 'drizzle-orm/pg-core';
+
 import type { Database } from '@/platform/db/client';
 import { Money } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
@@ -22,6 +24,7 @@ import { DepositClaim } from '../../domain/deposit-claim';
 import type { ProofContentType } from '../../domain/proof-image';
 import type {
   DepositClaimRepository,
+  FeedPageQuery,
   LedgerRepository,
   ProofStorage,
   StatementEntry,
@@ -240,6 +243,32 @@ export class DrizzleLedgerRepository implements LedgerRepository {
   }
 }
 
+/**
+ * The `WHERE` for one page of a time-ordered feed.
+ *
+ * The cursor clause is a **row-value comparison** — `(occurred_at, id) < (?, ?)`,
+ * not `occurred_at < ? OR (occurred_at = ? AND id < ?)`. They mean the same thing
+ * and only the first is one index-ordered predicate the planner can seek on; the
+ * expanded `OR` form typically degrades into a scan.
+ */
+function feedScope(
+  occurredAt: PgColumn,
+  id: PgColumn,
+  query: FeedPageQuery,
+  statusColumn: PgColumn,
+  userColumn: PgColumn,
+) {
+  const clauses = [];
+  if (query.before !== undefined) {
+    clauses.push(
+      sql`(${occurredAt}, ${id}) < (${query.before.occurredAt.toISOString()}::timestamptz, ${query.before.id})`,
+    );
+  }
+  if (query.status !== undefined) clauses.push(eq(statusColumn, query.status));
+  if (query.userId !== undefined) clauses.push(eq(userColumn, query.userId));
+  return clauses.length === 0 ? undefined : and(...clauses);
+}
+
 function toAccount(row: AccountRow): LedgerAccount {
   const owner: AccountOwner =
     row.ownerKind === 'user'
@@ -343,6 +372,25 @@ export class DrizzleWithdrawalRepository implements WithdrawalRepository {
       // is how long they waited.
       .orderBy(asc(withdrawals.requestedAt))
       .limit(limit);
+
+    return this.hydrate(rows);
+  }
+
+  async listPage(query: FeedPageQuery): Promise<Withdrawal[]> {
+    const rows = await this.db
+      .select()
+      .from(withdrawals)
+      .where(
+        feedScope(
+          withdrawals.requestedAt,
+          withdrawals.id,
+          query,
+          withdrawals.status,
+          withdrawals.userId,
+        ),
+      )
+      .orderBy(desc(withdrawals.requestedAt), desc(withdrawals.id))
+      .limit(query.limit);
 
     return this.hydrate(rows);
   }
@@ -505,6 +553,25 @@ export class DrizzleDepositClaimRepository implements DepositClaimRepository {
       // Oldest first: a customer waiting on funds notices the wait, not the size.
       .orderBy(asc(depositClaims.submittedAt))
       .limit(limit);
+
+    return rows.map(toClaim);
+  }
+
+  async listPage(query: FeedPageQuery): Promise<DepositClaim[]> {
+    const rows = await this.db
+      .select()
+      .from(depositClaims)
+      .where(
+        feedScope(
+          depositClaims.submittedAt,
+          depositClaims.id,
+          query,
+          depositClaims.status,
+          depositClaims.userId,
+        ),
+      )
+      .orderBy(desc(depositClaims.submittedAt), desc(depositClaims.id))
+      .limit(query.limit);
 
     return rows.map(toClaim);
   }

@@ -19,6 +19,7 @@ import type { DepositClaim } from '../../domain/deposit-claim';
 import type { ProofContentType } from '../../domain/proof-image';
 import type {
   DepositClaimRepository,
+  FeedPageQuery,
   LedgerDependencies,
   LedgerRepository,
   PriceOracle,
@@ -116,6 +117,35 @@ class FakeLedger implements LedgerRepository {
   }
 }
 
+/**
+ * The in-memory equivalent of the repositories' keyset `WHERE`.
+ *
+ * Written out here rather than imported from the query it supports: a fake that
+ * borrows the production filter cannot disagree with it, which is exactly the
+ * disagreement a test of paging is meant to catch.
+ */
+function feedPage<T extends { id: string; userId: UserId; status: string }>(
+  rows: readonly T[],
+  at: (row: T) => Date,
+  query: FeedPageQuery,
+): T[] {
+  return rows
+    .filter((row) => {
+      if (query.userId !== undefined && row.userId !== query.userId) return false;
+      if (query.status !== undefined && row.status !== query.status) return false;
+      if (query.before === undefined) return true;
+
+      const time = at(row).getTime();
+      const edge = query.before.occurredAt.getTime();
+      return time < edge || (time === edge && row.id < query.before.id);
+    })
+    .sort((a, b) => {
+      const delta = at(b).getTime() - at(a).getTime();
+      return delta !== 0 ? delta : b.id.localeCompare(a.id);
+    })
+    .slice(0, query.limit);
+}
+
 class FakeWithdrawals implements WithdrawalRepository {
   readonly store = new Map<string, Withdrawal>();
 
@@ -130,6 +160,9 @@ class FakeWithdrawals implements WithdrawalRepository {
   }
   async listPending(limit: number) {
     return [...this.store.values()].filter((w) => w.status === 'pending').slice(0, limit);
+  }
+  async listPage(query: FeedPageQuery) {
+    return feedPage([...this.store.values()], (w) => w.requestedAt, query);
   }
   async usedSince(userId: UserId, since: Date) {
     return [...this.store.values()]
@@ -165,6 +198,9 @@ class FakeClaims implements DepositClaimRepository {
   }
   async listPending(limit: number) {
     return [...this.store.values()].filter((c) => c.status === 'pending').slice(0, limit);
+  }
+  async listPage(query: FeedPageQuery) {
+    return feedPage([...this.store.values()], (c) => c.submittedAt, query);
   }
 }
 
