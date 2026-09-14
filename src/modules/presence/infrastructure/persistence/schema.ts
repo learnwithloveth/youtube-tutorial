@@ -1,16 +1,22 @@
-import { index, integer, numeric, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { index, integer, numeric, pgSchema, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
  * Tables owned by the presence module.
  *
- * Module-local, prefixed `pr_`. One row per browsing context, overwritten in place
- * — there is no history table, because presence is a question about now and the
- * cheapest way to avoid holding everyone's browsing history is to not write one.
+ * Its own Postgres schema rather than a `pr_` name prefix — see
+ * `identity/…/schema.ts` for why a real namespace beats a simulated one. The table
+ * is `visitors` because that is what a row is: one browsing context, keyed by a
+ * `VisitorId`. `presence.presence` would have said nothing.
  *
- * ── There is no foreign key to id_users, and that is deliberate ─────────────────
- * `user_id` holds an opaque `UserId` and nothing else. Identity owns `id_users`,
- * and the rule that makes identity extractable into its own service is that no
- * other context reads its tables — a foreign key is a read, enforced by the
+ * One row per browsing context, overwritten in place — there is no history table,
+ * because presence is a question about now and the cheapest way to avoid holding
+ * everyone's browsing history is to not write one. History is the `activity`
+ * context, which is append-only and has entirely different retention.
+ *
+ * ── There is no foreign key to identity.users, and that is deliberate ──────────
+ * `user_id` holds an opaque `UserId` and nothing else. Identity owns the
+ * `identity` schema, and the rule that makes it extractable into its own service is
+ * that no other context reads inside it — a foreign key is a read, enforced by the
  * database on every write. Presence pays for that with an unenforced reference and
  * a join it has to do in the application layer; it buys a module that can be lifted
  * out without a schema migration in two places.
@@ -21,8 +27,10 @@ import { index, integer, numeric, pgTable, text, timestamp } from 'drizzle-orm/p
  * that are genuinely opaque — nothing here — would be the candidates for jsonb.
  */
 
-export const presences = pgTable(
-  'pr_presence',
+export const presenceSchema = pgSchema('presence');
+
+export const presences = presenceSchema.table(
+  'visitors',
   {
     /**
      * The browsing-context id, minted by the client and validated as a UUID before
@@ -85,7 +93,7 @@ export const presences = pgTable(
     /**
      * Keyed digest of the connecting address, never the address.
      *
-     * The rule `id_sessions.ip_hash` follows: an unkeyed hash of an IPv4 address is
+     * The rule `identity.sessions.ip_hash` follows: an unkeyed hash of an IPv4 is
      * brute-forceable in seconds, so this is an HMAC under a server-held key. It
      * exists to correlate one visitor across tabs and to see one address driving
      * forty of them, neither of which needs the address itself.
@@ -104,9 +112,9 @@ export const presences = pgTable(
   (table) => [
     // Covers the console read and the retention sweep, which are the only two
     // queries that exist and both of which range over this column.
-    index('pr_presence_last_seen_idx').on(table.lastSeenAt),
+    index('visitors_last_seen_idx').on(table.lastSeenAt),
     // "Is this account online, and where?" — from a user's row in the console.
-    index('pr_presence_user_idx').on(table.userId, table.lastSeenAt),
+    index('visitors_user_idx').on(table.userId, table.lastSeenAt),
   ],
 );
 

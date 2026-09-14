@@ -51,7 +51,7 @@ src/
 │   └── content/               Supporting context: editorial copy
 │
 ├── platform/              ══ SHARED INFRASTRUCTURE ══
-│   ├── db/                    Drizzle client + physical schema
+│   ├── db/                    Drizzle client. No tables — see §13
 │   ├── env/                   Zod-validated configuration
 │   └── observability/         Structured logging
 │
@@ -537,3 +537,89 @@ reveal whether the account exists, which is exactly the enumeration oracle
 `failedAttempts` and `lockedUntil` — already lives on the user record. Recording
 failures properly means an audit port inside identity that the composition root
 wires up; that is a deliberate follow-up, not an oversight.
+
+---
+
+## 13. One Postgres schema per bounded context
+
+Each module's tables live in a Postgres schema named after the module:
+
+| Schema | Tables | Module |
+| --- | --- | --- |
+| `identity` | `users`, `sessions`, `verification_tokens` | identity |
+| `presence` | `visitors` | presence |
+| `activity` | `events` | activity |
+| `market_data` | `tickers` | market-data |
+
+`public` holds nothing, and `platform/db` holds no table definitions at all — only
+the client.
+
+### What this replaced, and why it was wrong
+
+Tables were once `public.id_users`, `public.pr_presence`, `public.ac_events`: a
+namespace simulated in a string prefix. Two problems, one cosmetic and one
+structural.
+
+The cosmetic one first, because it is the one a reader trips over: `id_` is a bad
+prefix specifically because `id` means *identifier* everywhere else in a database.
+`id_users` reads as "the id of users", not "the identity module's users table".
+
+The structural problem is that Postgres already has namespaces, and a prefix
+cannot do what one does:
+
+1. **Isolation the database enforces.** `REVOKE ALL ON SCHEMA identity FROM
+   reporting` is a grant. "Do not read tables starting with `id_`" is a code review
+   comment, and the boundary this architecture is built around deserves better than
+   a convention.
+2. **Extraction as a dump.** `pg_dump --schema=identity` is the whole module — its
+   tables, indexes, constraints, and any table added to it later. The seam that
+   lets a context become its own service, made operational rather than aspirational.
+3. **Names that read without a decoder.** `identity.users`, `presence.visitors`,
+   `activity.events`.
+
+The table names got shorter as a result, because the schema now carries what the
+prefix was carrying. `presence.visitors` rather than `presence.presence`: a row is
+one browsing context keyed by a `VisitorId`, and repeating the module name would
+have said nothing.
+
+### `tickers` moved out of `platform`
+
+It lived in `platform/db/schema.ts` under the heading "tables shared across
+contexts". It was never shared — written by one use case in market-data, read by
+one repository in market-data, referenced nowhere else.
+
+Leaving it there inverted the dependency the boundary rules exist to protect.
+`platform` is the shared foundation, and `platform-is-a-leaf` forbids it depending
+on any module. Holding one module's table never tripped the linter, because a table
+definition imports nothing, but it made the foundation the owner of a business
+context's storage — with the extraction seam for market-data running through a file
+three other modules import.
+
+### The client registers no schema
+
+`drizzle(client, { schema })` exists to power the relational query API
+(`db.query.users.findMany`). Registering one would mean `platform/db/client.ts`
+enumerating every module's tables, which is the same inversion in a different file.
+
+Each module imports its own tables and uses `db.select().from(table)`, which needs
+no registration. The cost is that `db.query.*` is unavailable; the gain is that
+`platform` knows nothing about any bounded context.
+
+### The migration is hand-written, and had to be
+
+`0005_schema_per_context.sql` is the only migration in this repository that was not
+generated. A generated diff sees `public.id_users` disappear and `identity.users`
+appear and expresses that as `DROP TABLE` + `CREATE TABLE` — correct as a diff,
+catastrophic as a migration, since the entire point was that every row survives.
+
+`ALTER TABLE … SET SCHEMA` moves a table with its indexes, constraints, defaults
+and foreign keys intact: Postgres updates catalogue entries and copies nothing. The
+index and constraint renames that follow are cosmetic in the database and
+load-bearing in the codebase — Drizzle tracks those names in its snapshot, so
+leaving `id_users_email_uq` in place would make the next generated migration drop
+and recreate every index.
+
+The snapshot (`meta/0005_snapshot.json`) was written to match, and the check that it
+is right is that `drizzle-kit generate` reports **"No schema changes"** against it.
+Anything else means the snapshot and the schema files disagree, and the next
+migration would be generated from a false baseline.

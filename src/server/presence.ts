@@ -24,7 +24,7 @@ import { getCurrentUser, identity } from './auth';
  * The application's facade over live presence.
  *
  * ── This is where the cross-module join happens ────────────────────────────────
- * Presence holds a `UserId` and never reads `id_users`; identity owns those rows
+ * Presence holds a `UserId` and never reads `identity.users`; identity owns those rows
  * and never hears of presence. Neither module can produce "who is on the pricing
  * page" with an email attached — only something allowed to call both can, and this
  * is that something. Doing it here rather than with a database join is what keeps

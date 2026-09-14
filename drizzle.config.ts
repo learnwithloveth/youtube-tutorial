@@ -8,26 +8,25 @@ config({ path: '.env.local' });
 /**
  * Migration tooling.
  *
- * Two schema sources, deliberately.
+ * One source, and it is a glob: every module owns its tables under
+ * `infrastructure/persistence/schema.ts`, and each declares its own Postgres
+ * schema — `identity`, `presence`, `activity`, `market_data`. The namespace is the
+ * module boundary made operational: `pg_dump --schema=identity` is the whole
+ * context, and a grant on it is enforced by the database rather than by review.
  *
- * `platform/db` holds tables shared across contexts. Each module holds its own
- * under `infrastructure/persistence/schema.ts`, and those travel with the module
- * if it is ever extracted into a service.
- *
- * Re-exporting the module schemas from `platform` would be simpler for this tool
- * and wrong for the architecture: it would make the shared foundation depend on a
- * module, which `pnpm lint:boundaries` rejects. Pointing drizzle-kit at both paths
- * costs one line and keeps the dependency arrow pointing the right way.
+ * `platform/db` holds no tables. It once held `tickers`, under the heading "shared
+ * across contexts", which was never true — see that module's schema file for why
+ * the foundation owning a context's storage inverted the dependency the boundary
+ * rules exist to protect.
  *
  * Migrations are generated and committed rather than pushed from a developer's
  * machine, so the schema history is reviewable and the same statements run
- * everywhere.
+ * everywhere. The one hand-written migration is the move to named schemas: a
+ * generated diff would have dropped and recreated every table, and the whole point
+ * of that change was to keep the rows.
  */
 export default defineConfig({
-  schema: [
-    './src/platform/db/schema.ts',
-    './src/modules/*/infrastructure/persistence/schema.ts',
-  ],
+  schema: ['./src/modules/*/infrastructure/persistence/schema.ts'],
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {

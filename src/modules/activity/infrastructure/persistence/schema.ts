@@ -1,16 +1,18 @@
-import { index, integer, numeric, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { index, integer, numeric, pgSchema, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
  * Tables owned by the activity module.
  *
- * Module-local, prefixed `ac_`. Append-only: nothing in this module issues an
- * UPDATE, and the only DELETE is the retention sweep. An audit row that can be
- * edited is not an audit row.
+ * Its own Postgres schema rather than an `ac_` name prefix — see
+ * `identity/…/schema.ts` for why a real namespace beats a simulated one.
  *
- * ── No foreign key to id_users, for the reason presence has none ───────────────
- * `user_id` holds an opaque `UserId`. Identity owns `id_users`, and the rule that
- * keeps identity extractable is that no other context reads its tables — a foreign
- * key is a read the database enforces on every write. The cost is an unenforced
+ * Append-only: nothing in this module issues an UPDATE, and the only DELETE is the
+ * retention sweep. An audit row that can be edited is not an audit row.
+ *
+ * ── No foreign key to identity.users, for the reason presence has none ────────
+ * `user_id` holds an opaque `UserId`. Identity owns the `identity` schema, and the
+ * rule that keeps it extractable is that no other context reads inside it — a
+ * foreign key is a read the database enforces on every write. The cost is an unenforced
  * reference and a join done in the application layer; the gain is a module that
  * can be lifted out without a migration in two places.
  *
@@ -20,8 +22,10 @@ import { index, integer, numeric, pgTable, text, timestamp } from 'drizzle-orm/p
  * backwards for the one table whose job is to remember.
  */
 
-export const events = pgTable(
-  'ac_events',
+export const activitySchema = pgSchema('activity');
+
+export const events = activitySchema.table(
+  'events',
   {
     id: text('id').primaryKey(),
 
@@ -82,13 +86,13 @@ export const events = pgTable(
   },
   (table) => [
     // The console's main read: one account's history, newest first.
-    index('ac_events_user_idx').on(table.userId, table.occurredAt),
+    index('events_user_idx').on(table.userId, table.occurredAt),
     // Narrows that to sign-ins or page views without scanning the account's whole
     // history — the difference between reading a year and reading a filter.
-    index('ac_events_user_kind_idx').on(table.userId, table.kind, table.occurredAt),
+    index('events_user_kind_idx').on(table.userId, table.kind, table.occurredAt),
     // Drives the retention sweep on an index rather than a table scan. Kind first
     // because the two kinds expire on different clocks.
-    index('ac_events_kind_time_idx').on(table.kind, table.occurredAt),
+    index('events_kind_time_idx').on(table.kind, table.occurredAt),
   ],
 );
 

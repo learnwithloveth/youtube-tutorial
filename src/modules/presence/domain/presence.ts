@@ -140,7 +140,7 @@ export interface PresenceSnapshot {
   /**
    * Keyed digest of the connecting address — never the address.
    *
-   * The same rule the identity module applies to `id_sessions.ip_hash`: an unkeyed
+   * The same rule the identity module applies to `identity.sessions.ip_hash`: an unkeyed
    * hash of an IPv4 address is brute-forceable in seconds, so this is an HMAC under
    * a server-held key. It exists to correlate a visitor across tabs and to spot one
    * address driving many, neither of which needs the address itself.

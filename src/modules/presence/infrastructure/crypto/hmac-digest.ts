@@ -12,7 +12,7 @@ import type { Digest } from '../../application/ports';
  * therefore not a one-way function in any useful sense — the whole space can be
  * enumerated on a laptop in minutes, so `sha256(ip)` stored in a table is the
  * address stored in a table with extra steps. An HMAC under a key the database does
- * not contain closes that: a dump of `pr_presence` yields digests nobody can invert
+ * not contain closes that: a dump of `presence.visitors` yields digests nobody can invert
  * without also taking the application's secret.
  *
  * ── Why its own derived key ───────────────────────────────────────────────────
@@ -21,7 +21,7 @@ import type { Digest } from '../../application/ports';
  * one key would let anyone holding both tables join them on the digest and rebuild
  * the mapping the digest exists to break.
  *
- * Truncated to 32 characters for the same reason `id_sessions.ip_hash` is: the
+ * Truncated to 32 characters for the same reason `identity.sessions.ip_hash` is: the
  * value only has to be collision-resistant enough to correlate tabs, and a shorter
  * column is a smaller thing to leak.
  */

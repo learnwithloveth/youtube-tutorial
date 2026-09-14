@@ -27,6 +27,7 @@ short version: the rules that are easy to break by accident.
 | Touch a session, password, or token | `docs/adr/0004-identity-sessions-and-email-verification.md` |
 | Touch a visitor location or the live board | `docs/architecture.md` §11 — presence |
 | Log or read what a user did | `docs/architecture.md` §12 — activity |
+| Add or move a database table | `docs/architecture.md` §13 — schema per context |
 | Decide server vs client | `docs/architecture.md` §5 |
 | Set caching on a page | `docs/architecture.md` §6 |
 
@@ -65,7 +66,9 @@ is the default bundler, and `middleware` is now `proxy`.
    leaf that needs it, never to a page that merely contains one widget.
 
 8. **Cross a module boundary only through its barrel.** `@/modules/x` or
-   `@/modules/x/server` — never a path inside it.
+   `@/modules/x/server` — never a path inside it. The same rule holds in the
+   database: a module's tables live in a Postgres schema of its own, and no other
+   context reads inside it — not even with a foreign key.
 
 9. **A page's `revalidate` must be a literal.** Next reads segment config
    statically; an imported constant is not resolvable and the build fails.

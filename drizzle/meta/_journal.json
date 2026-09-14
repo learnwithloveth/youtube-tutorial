@@ -36,6 +36,13 @@
       "when": 1789379328661,
       "tag": "0004_typical_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789400000000,
+      "tag": "0005_schema_per_context",
+      "breakpoints": true
     }
   ]
 }

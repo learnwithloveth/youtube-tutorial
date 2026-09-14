@@ -2,7 +2,7 @@ import 'server-only';
 
 import { inArray, sql } from 'drizzle-orm';
 
-import { db, schema } from '@/platform/db/client';
+import { db } from '@/platform/db/client';
 import { logger } from '@/platform/observability/logger';
 import { BasisPoints, Money } from '@/shared/kernel';
 
@@ -15,6 +15,7 @@ import {
   INSTRUMENT_BY_SYMBOL,
   LISTED_INSTRUMENTS,
 } from '../catalogue/instrument-catalogue';
+import { tickers, type TickerRow } from './schema';
 
 /**
  * Adapters. Everything that knows about Postgres and Drizzle lives here, behind
@@ -50,14 +51,14 @@ export class DrizzleTickerRepository implements TickerRepository {
     const handle = db();
     if (!handle || symbols.length === 0) return new Map();
 
-    let rows: (typeof schema.tickers.$inferSelect)[];
+    let rows: (TickerRow)[];
     try {
       rows = await handle
         .select()
-        .from(schema.tickers)
+        .from(tickers)
         .where(
           inArray(
-            schema.tickers.symbol,
+            tickers.symbol,
             symbols.map((symbol) => symbol.value),
           ),
         );
@@ -101,10 +102,10 @@ export class DrizzleTickerRepository implements TickerRepository {
     // One statement for the whole batch. Upsert on the natural key so the table
     // holds exactly one current row per symbol and never grows unbounded.
     await handle
-      .insert(schema.tickers)
+      .insert(tickers)
       .values(rows)
       .onConflictDoUpdate({
-        target: schema.tickers.symbol,
+        target: tickers.symbol,
         set: {
           price: sqlExcluded('price'),
           currency: sqlExcluded('currency'),
@@ -149,7 +150,7 @@ export class InMemoryTickerRepository implements TickerRepository {
  * or a value the domain rejects. Dropping the row is right: one corrupt record
  * should cost that asset its price cell, not take down the market table.
  */
-function toDomain(row: typeof schema.tickers.$inferSelect): Ticker | null {
+function toDomain(row: TickerRow): Ticker | null {
   const instrument = INSTRUMENT_BY_SYMBOL.get(row.symbol);
   if (!instrument) return null;
 

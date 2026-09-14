@@ -71,7 +71,7 @@ export interface IdentityModule {
    * Resolves ids to summaries, for a caller that holds a `UserId` and needs a name.
    *
    * The identity half of a cross-context join. Other modules hold an opaque id and
-   * never read `id_users`; this is how they turn one back into an email without
+   * never read `identity.users`; this is how they turn one back into an email without
    * that rule being broken.
    */
   readonly describeUsers: DescribeUsers;

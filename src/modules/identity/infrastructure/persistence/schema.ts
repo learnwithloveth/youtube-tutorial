@@ -1,23 +1,34 @@
-import {
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
+import { index, integer, pgSchema, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /**
  * Tables owned by the identity module.
  *
- * Module-local, prefixed `id_`. No other module may read them: Ledger and Trading
- * hold a `UserId` and nothing more. That is what allows identity to be lifted into
- * its own service — the tables travel with it, and the rest of the system only ever
- * held an opaque id.
+ * ── A Postgres schema, not a name prefix ──────────────────────────────────────
+ * These tables were once `public.id_users`, `public.id_sessions` and so on. The
+ * prefix was a namespace simulated in a string, which Postgres already provides
+ * properly — and `id_` was a poor choice of string besides, since `id` means
+ * *identifier* everywhere else in a database and `id_users` reads as "the id of
+ * users".
+ *
+ * A real schema buys three things a prefix cannot:
+ *
+ *  1. **Enforceable isolation.** `REVOKE ALL ON SCHEMA identity FROM app_reader`
+ *     is a grant the database applies. "Do not read tables starting with id_" is a
+ *     code review comment.
+ *  2. **Extraction as a dump.** `pg_dump --schema=identity` is the whole module,
+ *     with its indexes, constraints and future tables. That is the seam the module
+ *     boundary exists to preserve, made operational.
+ *  3. **Names that read.** `identity.users` says what it is. A reader does not
+ *     have to know the prefix convention to parse it.
+ *
+ * The rule the boundary enforces is unchanged: no other context reads these. Every
+ * other module holds an opaque `UserId` and nothing more.
  */
 
-export const users = pgTable(
-  'id_users',
+export const identitySchema = pgSchema('identity');
+
+export const users = identitySchema.table(
+  'users',
   {
     id: text('id').primaryKey(),
 
@@ -50,11 +61,11 @@ export const users = pgTable(
     /** Optimistic-concurrency token. */
     version: integer('version').notNull().default(0),
   },
-  (table) => [uniqueIndex('id_users_email_uq').on(table.email)],
+  (table) => [uniqueIndex('users_email_uq').on(table.email)],
 );
 
-export const sessions = pgTable(
-  'id_sessions',
+export const sessions = identitySchema.table(
+  'sessions',
   {
     /**
      * The raw session id. It is never exposed: the cookie carries an AES-GCM sealed
@@ -86,14 +97,14 @@ export const sessions = pgTable(
   },
   (table) => [
     // Covers "log out all devices" and the active-session list.
-    index('id_sessions_user_idx').on(table.userId, table.revokedAt),
+    index('sessions_user_idx').on(table.userId, table.revokedAt),
     // Drives the expiry sweep on an index rather than a table scan.
-    index('id_sessions_expires_idx').on(table.expiresAt),
+    index('sessions_expires_idx').on(table.expiresAt),
   ],
 );
 
-export const verificationTokens = pgTable(
-  'id_verification_tokens',
+export const verificationTokens = identitySchema.table(
+  'verification_tokens',
   {
     id: text('id').primaryKey(),
 
@@ -120,10 +131,10 @@ export const verificationTokens = pgTable(
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('id_verification_tokens_hash_uq').on(table.tokenHash),
+    uniqueIndex('verification_tokens_hash_uq').on(table.tokenHash),
     // Covers superseding a user's outstanding tokens when a new one is issued.
-    index('id_verification_tokens_user_idx').on(table.userId, table.purpose, table.consumedAt),
+    index('verification_tokens_user_idx').on(table.userId, table.purpose, table.consumedAt),
     // Drives the expiry sweep on an index rather than a table scan.
-    index('id_verification_tokens_expires_idx').on(table.expiresAt),
+    index('verification_tokens_expires_idx').on(table.expiresAt),
   ],
 );

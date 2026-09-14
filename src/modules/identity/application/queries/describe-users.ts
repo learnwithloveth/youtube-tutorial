@@ -10,7 +10,7 @@ import { toUserSummaryDto, type UserSummaryDto } from '../dto';
  *
  * ── Why this exists rather than a join ─────────────────────────────────────────
  * The presence context holds `UserId` and nothing more — no foreign key, no read
- * of `id_users` — which is the rule that keeps identity extractable. The live
+ * of `identity.users` — which is the rule that keeps identity extractable. The live
  * console still has to show an email next to a visitor, so the join has to happen
  * *above* both modules, in a facade that is allowed to talk to each of them.
  *

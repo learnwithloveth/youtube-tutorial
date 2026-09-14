@@ -4,7 +4,6 @@ import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 
 import { env } from '../env';
-import * as schema from './schema';
 
 /**
  * Database handle.
@@ -18,9 +17,20 @@ import * as schema from './schema';
  * serverless environment where connections are not reused between invocations.
  * A pool there is a liability: it holds sockets a function instance will never
  * get back to, and exhausts the server's connection limit under load.
+ *
+ * ── No schema is registered, deliberately ──────────────────────────────────
+ * `drizzle(client, { schema })` exists to power the relational query API
+ * (`db.query.users.findMany`). Registering one here would mean this file — the
+ * shared foundation every module imports — enumerating every module's tables,
+ * which is the dependency `platform-is-a-leaf` forbids, pointing the wrong way.
+ *
+ * Each module imports its own tables and uses `db.select().from(table)`, which
+ * needs no registration. The cost is that `db.query.*` is unavailable; the gain is
+ * that `platform` knows nothing about any bounded context, which is the property
+ * that lets any of them be extracted.
  */
 
-export type Database = ReturnType<typeof drizzle<typeof schema>>;
+export type Database = ReturnType<typeof drizzle>;
 
 let cached: Database | null = null;
 
@@ -31,7 +41,7 @@ export function db(): Database | null {
   const url = env().DATABASE_URL;
   if (!url) return null;
 
-  cached = drizzle(neon(url), { schema });
+  cached = drizzle(neon(url));
   return cached;
 }
 
@@ -50,5 +60,3 @@ export function requireDb(): Database {
   }
   return handle;
 }
-
-export { schema };
