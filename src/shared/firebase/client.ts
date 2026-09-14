@@ -69,26 +69,66 @@ export function firebaseAuth(): Auth | null {
 /**
  * Exchanges this application's session for a Firestore identity.
  *
- * Idempotent by uid: already signed in as the right person is a no-op, which
- * matters because a page with two subscribing components would otherwise race two
- * sign-ins and the loser's listeners would be torn down mid-snapshot.
- *
- * Returns false when support is not configured or the session has gone — both of
- * which the caller renders as an absence rather than an error.
+ * Returns why it failed rather than a bare false, because the caller has to tell
+ * somebody — and the most common cause is a project setting, not a fault.
  */
-export async function signInToFirebase(): Promise<boolean> {
-  const auth = firebaseAuth();
-  if (auth === null) return false;
+export type SignInOutcome =
+  | { readonly ok: true }
+  /**
+   * Why it failed, in words a developer can act on.
+   *
+   * Not for a customer — they see "reconnecting" and nothing about Firebase. This
+   * exists because the operator console is a developer-facing surface and the most
+   * common cause of a dead listener is a project setting nobody has flipped.
+   * "Live updates unavailable" sends somebody reading network traces; naming the
+   * switch takes thirty seconds.
+   */
+  | { readonly ok: false; readonly reason: string };
 
-  const response = await fetch('/api/support/session', {
-    method: 'POST',
-    cache: 'no-store',
-  });
-  if (!response.ok) return false;
+export async function signInToFirebase(): Promise<SignInOutcome> {
+  const auth = firebaseAuth();
+  if (auth === null) return { ok: false, reason: 'No Firebase project is configured.' };
+
+  let response: Response;
+  try {
+    response = await fetch('/api/support/session', { method: 'POST', cache: 'no-store' });
+  } catch {
+    return { ok: false, reason: 'Could not reach the server to get a token.' };
+  }
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason:
+        response.status === 401
+          ? 'Not signed in.'
+          : `The token endpoint answered ${response.status}.`,
+    };
+  }
 
   const { token, uid } = (await response.json()) as { token: string; uid: string };
-  if (auth.currentUser?.uid === uid) return true;
 
-  await signInWithCustomToken(auth, token);
-  return true;
+  // Idempotent by uid: already signed in as the right person is a no-op, which
+  // matters because a page with two subscribing components would otherwise race two
+  // sign-ins and the loser's listeners would be torn down mid-snapshot.
+  if (auth.currentUser?.uid === uid) return { ok: true };
+
+  try {
+    await signInWithCustomToken(auth, token);
+    return { ok: true };
+  } catch (error) {
+    const code = (error as { code?: string }).code ?? '';
+    // The one that looks like a bug and is a setting. Firebase answers
+    // CONFIGURATION_NOT_FOUND when a project has never had Authentication turned
+    // on — the server can still *mint* a token, because that is only signing a
+    // JWT, so everything looks healthy until the browser tries to redeem it.
+    if (code === 'auth/configuration-not-found') {
+      return {
+        ok: false,
+        reason:
+          'Firebase Authentication is not enabled on this project. Enable it in the Firebase console — Authentication → Get started. No sign-in provider is needed.',
+      };
+    }
+    return { ok: false, reason: `Sign-in was refused (${code || 'unknown'}).` };
+  }
 }

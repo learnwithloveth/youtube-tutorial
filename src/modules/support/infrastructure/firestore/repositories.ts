@@ -94,6 +94,19 @@ export class FirestoreConversationRepository implements ConversationRepository {
       : toConversation(document.id, document.data() as ConversationDocument);
   }
 
+  async findLatestForUser(userId: UserId): Promise<Conversation | null> {
+    const results = await this.collection()
+      .where('userId', '==', userId)
+      .orderBy('lastMessageAt', 'desc')
+      .limit(1)
+      .get();
+
+    const document = results.docs[0];
+    return document === undefined
+      ? null
+      : toConversation(document.id, document.data() as ConversationDocument);
+  }
+
   async list(query: {
     status?: ConversationStatus | undefined;
     assignedTo?: UserId | undefined;

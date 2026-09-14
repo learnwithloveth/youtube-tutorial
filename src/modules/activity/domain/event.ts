@@ -52,7 +52,17 @@ export type ActivityKind =
   | 'withdrawal-requested'
   | 'withdrawal-approved'
   | 'withdrawal-rejected'
-  | 'deposit-recorded';
+  | 'deposit-recorded'
+  /*
+   * Console access, withdrawn or restored.
+   *
+   * Written against the account it happened *to*, not the operator who did it, and
+   * named in the passive for that reason. Somebody investigating an account asks
+   * "what happened to this", and an entry filed under the person who acted would
+   * not be on the screen where that question gets asked. The actor is in the detail.
+   */
+  | 'admin-suspended'
+  | 'admin-reinstated';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -66,6 +76,8 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'withdrawal-approved',
   'withdrawal-rejected',
   'deposit-recorded',
+  'admin-suspended',
+  'admin-reinstated',
 ];
 
 export function isSecurityKind(kind: ActivityKind): boolean {

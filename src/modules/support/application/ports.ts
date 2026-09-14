@@ -33,6 +33,19 @@ export interface ConversationRepository {
    */
   findOpenForUser(userId: UserId): Promise<Conversation | null>;
 
+  /**
+   * The customer's most recent thread, open or not.
+   *
+   * A different question from `findOpenForUser`, which is why it is a different
+   * method. Posting needs to know whether there is an *open* thread to continue;
+   * the widget needs to show the last one either way, because a resolved thread is
+   * still the conversation a customer is looking at — and replying to it reopens it.
+   *
+   * They were the same call once, and the result was a server render that dropped
+   * the thread the moment an agent resolved it while the listener kept showing it.
+   */
+  findLatestForUser(userId: UserId): Promise<Conversation | null>;
+
   /** The console's list. Newest activity first — a support inbox is read from the top. */
   list(query: {
     status?: ConversationStatus | undefined;

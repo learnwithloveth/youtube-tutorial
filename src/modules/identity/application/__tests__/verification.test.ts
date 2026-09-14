@@ -150,6 +150,18 @@ class FakeSessions implements SessionRepository {
         session.userId === userId && session.revokedAt === null && session.expiresAt > now,
     );
   }
+  async lastSeenFor(userIds: readonly UserId[]) {
+    return new Map(
+      userIds.flatMap((id) => {
+        const seen = [...this.store.values()]
+          .filter((session) => session.userId === id && session.revokedAt === null)
+          .map((session) => session.lastSeenAt)
+          .sort((a, b) => b.getTime() - a.getTime())[0];
+        return seen ? ([[id, seen]] as [UserId, Date][]) : [];
+      }),
+    );
+  }
+
   async deleteExpired() {
     return 0;
   }

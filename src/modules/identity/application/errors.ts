@@ -29,7 +29,10 @@ export type IdentityError =
   | { _tag: 'EmailAlreadyVerified' }
   | { _tag: 'DisplayNameTooLong'; maximum: number }
   | { _tag: 'HandleInvalid' }
-  | { _tag: 'HandleTaken' };
+  | { _tag: 'HandleTaken' }
+  | { _tag: 'AdministratorNotFound' }
+  | { _tag: 'CannotSuspendSelf' }
+  | { _tag: 'LastAdministrator' };
 
 export const IdentityErrors = {
   emailMalformed: (): IdentityError => ({ _tag: 'EmailMalformed' }),
@@ -72,6 +75,9 @@ export const IdentityErrors = {
   }),
   handleInvalid: (): IdentityError => ({ _tag: 'HandleInvalid' }),
   handleTaken: (): IdentityError => ({ _tag: 'HandleTaken' }),
+  administratorNotFound: (): IdentityError => ({ _tag: 'AdministratorNotFound' }),
+  cannotSuspendSelf: (): IdentityError => ({ _tag: 'CannotSuspendSelf' }),
+  lastAdministrator: (): IdentityError => ({ _tag: 'LastAdministrator' }),
 } as const;
 
 /**
@@ -119,5 +125,12 @@ export function presentIdentityError(error: IdentityError): string {
       return 'A handle is 3 to 24 characters, using lowercase letters, numbers and underscores.';
     case 'HandleTaken':
       return 'That handle is already taken.';
+    case 'AdministratorNotFound':
+      return 'That administrator no longer exists.';
+    case 'CannotSuspendSelf':
+      // Says what to do instead, because the reflex is to try again harder.
+      return 'You cannot suspend your own account. Ask another administrator.';
+    case 'LastAdministrator':
+      return 'This is the only active administrator. Suspending it would lock everyone out of the console.';
   }
 }

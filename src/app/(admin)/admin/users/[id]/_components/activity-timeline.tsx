@@ -14,6 +14,8 @@ import {
   Send,
   UserPlus,
   Wifi,
+  ShieldCheck,
+  ShieldOff,
 } from 'lucide-react';
 
 import type { ActivityEventDto, ActivityKind, EventLocation } from '@/modules/activity';
@@ -46,6 +48,10 @@ const KIND_META: Record<
   'withdrawal-approved': { label: 'Withdrawal approved', icon: BadgeCheck, tone: 'up' },
   'withdrawal-rejected': { label: 'Withdrawal rejected', icon: Ban, tone: 'warn' },
   'deposit-recorded': { label: 'Deposit credited', icon: ArrowDownToLine, tone: 'brand' },
+  // Passive, because that is how they are recorded — against the account it
+  // happened to, with the operator who did it in the detail line.
+  'admin-suspended': { label: 'Console access suspended', icon: ShieldOff, tone: 'warn' },
+  'admin-reinstated': { label: 'Console access restored', icon: ShieldCheck, tone: 'up' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {

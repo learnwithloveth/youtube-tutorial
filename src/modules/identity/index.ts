@@ -17,6 +17,10 @@ export type { CurrentUserDto, SessionDto, UserSummaryDto } from './application/d
 export type { UserRole, UserStatus } from './domain/user';
 export { displayNameFor, initialsFor, HANDLE_PATTERN, MAX_DISPLAY_NAME } from './domain/profile';
 export type { ListUsersOptions, UserListDto } from './application/queries/list-users';
+export type {
+  AdministratorDto,
+  AdministratorsDto,
+} from './application/queries/list-administrators';
 export type { SessionSummaryDto } from './application/queries/list-sessions';
 export type { IdentityError } from './application/errors';
 export { presentIdentityError } from './application/errors';

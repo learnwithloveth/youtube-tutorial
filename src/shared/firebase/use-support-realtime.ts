@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   collection,
-  doc,
   limit as limitTo,
   onSnapshot,
   orderBy,
@@ -40,7 +39,17 @@ import { firebaseDb, signInToFirebase } from './client';
  * attached, and the UI says so.
  */
 
-export type RealtimeStatus = 'connecting' | 'live' | 'unavailable';
+/**
+ * `polling` is a real state, not a nicer word for broken.
+ *
+ * Messages still arrive; they arrive on a timer instead of instantly. Collapsing
+ * it into `unavailable` would tell an operator the chat is down while it is
+ * working, and hide the fact that the *listener* is the thing to fix.
+ */
+export type RealtimeStatus = 'connecting' | 'live' | 'polling' | 'unavailable';
+
+/** How often the fallback asks. Fast enough for a conversation, see the route. */
+const POLL_MS = 4_000;
 
 /** Firestore hands back `Timestamp`; the DTOs this app passes around use ISO strings. */
 function isoOf(value: unknown, fallback: string): string {
@@ -87,19 +96,30 @@ function toMessage(document: QueryDocumentSnapshot<DocumentData>): MessageDto {
  * Shared by the hooks below rather than repeated, because doing it twice on one
  * page races two sign-ins and the loser's listeners are torn down mid-snapshot.
  */
-function useFirebaseSession(enabled: boolean): RealtimeStatus {
-  const [status, setStatus] = useState<RealtimeStatus>('connecting');
+function useFirebaseSession(enabled: boolean): { status: RealtimeStatus; reason: string | null } {
+  const [state, setState] = useState<{ status: RealtimeStatus; reason: string | null }>({
+    status: 'connecting',
+    reason: null,
+  });
 
   useEffect(() => {
     if (!enabled) return;
 
     let cancelled = false;
     void signInToFirebase()
-      .then((ok) => {
-        if (!cancelled) setStatus(ok ? 'live' : 'unavailable');
+      .then((outcome) => {
+        if (cancelled) return;
+        setState(
+          outcome.ok
+            ? { status: 'live', reason: null }
+            : // Not `unavailable`: the poller below takes over from here, and the
+              // conversation keeps working. The reason travels with it so an
+              // operator can see what to fix.
+              { status: 'polling', reason: outcome.reason },
+        );
       })
       .catch(() => {
-        if (!cancelled) setStatus('unavailable');
+        if (!cancelled) setState({ status: 'polling', reason: 'Sign-in threw.' });
       });
 
     return () => {
@@ -110,7 +130,52 @@ function useFirebaseSession(enabled: boolean): RealtimeStatus {
   // Derived, not stored. Writing 'unavailable' into state from inside the effect
   // would be a second render for something already known at render time — and the
   // effect would then have to undo it when `enabled` flips back.
-  return enabled ? status : 'unavailable';
+  return enabled ? state : { status: 'unavailable', reason: null };
+}
+
+/**
+ * Calls back on a timer while the tab is visible.
+ *
+ * Skipping a hidden tab entirely is what keeps a console left open in a background
+ * window from costing anything — and on a per-document-billed database that is not
+ * a micro-optimisation, it is the difference between a free tier that lasts a day
+ * and one that lasts a month.
+ */
+function usePoll(active: boolean, tick: () => Promise<void>): void {
+  // Held in a ref so a caller's changing closure does not restart the timer — which
+  // would mean a request per render rather than one per interval. Written inside an
+  // effect rather than during render: a ref mutated while rendering is the thing
+  // React's compiler refuses, and correctly, because a render can be discarded.
+  const latest = useRef(tick);
+  useEffect(() => {
+    latest.current = tick;
+  }, [tick]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    let stopped = false;
+    let timer: number | null = null;
+
+    const run = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          await latest.current();
+        } catch {
+          // A failed poll is the next poll's problem. Surfacing it would flash an
+          // error on every dropped packet.
+        }
+      }
+      if (!stopped) timer = window.setTimeout(run, POLL_MS);
+    };
+
+    void run();
+
+    return () => {
+      stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [active]);
 }
 
 /**
@@ -132,10 +197,42 @@ export function useOwnConversation(input: {
   conversation: ConversationDto | null;
   messages: readonly MessageDto[];
   status: RealtimeStatus;
+  reason: string | null;
 } {
-  const session = useFirebaseSession(input.enabled);
+  const { status, reason } = useFirebaseSession(input.enabled);
+  const session = status;
   const [conversation, setConversation] = useState(input.initialConversation);
   const [messages, setMessages] = useState<readonly MessageDto[]>(input.initialMessages);
+
+  /**
+   * The fallback, used only when the listener could not attach.
+   *
+   * `since` is the newest message this client already holds, so an idle poll reads
+   * one document and answers "nothing changed" — see the route. Without it, a
+   * conversation open in two windows would burn a free tier's daily reads in an
+   * afternoon of silence.
+   */
+  const newest = messages.at(-1)?.sentAt ?? null;
+  const pollOnce = useCallback(async () => {
+    const url = newest === null
+      ? '/api/support/thread'
+      : `/api/support/thread?since=${encodeURIComponent(newest)}`;
+
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) return;
+
+    const body = (await response.json()) as {
+      changed: boolean;
+      conversation?: ConversationDto | null;
+      messages?: MessageDto[];
+    };
+    if (!body.changed) return;
+
+    setConversation(body.conversation ?? null);
+    setMessages(body.messages ?? []);
+  }, [newest]);
+
+  usePoll(input.enabled && session === 'polling', pollOnce);
 
   useEffect(() => {
     if (session !== 'live') return;
@@ -181,16 +278,34 @@ export function useOwnConversation(input: {
     );
   }, [session, conversationId]);
 
-  return { conversation, messages, status: session };
+  return { conversation, messages, status: session, reason };
 }
 
 /** The operator's inbox: every conversation, newest activity first. */
 export function useConversationInbox(input: {
   enabled: boolean;
   initial: readonly ConversationDto[];
-}): { conversations: readonly ConversationDto[]; status: RealtimeStatus } {
-  const session = useFirebaseSession(input.enabled);
+}): {
+  conversations: readonly ConversationDto[];
+  status: RealtimeStatus;
+  reason: string | null;
+} {
+  const { status, reason } = useFirebaseSession(input.enabled);
+  const session = status;
   const [conversations, setConversations] = useState(input.initial);
+
+  // The whole list every time, because there is no cheap "what changed" for a
+  // collection the way there is for one document. It is tens of rows and only runs
+  // when the listener could not attach.
+  const pollOnce = useCallback(async () => {
+    const response = await fetch('/api/support/thread', { method: 'POST', cache: 'no-store' });
+    if (!response.ok) return;
+
+    const body = (await response.json()) as { conversations?: ConversationDto[] };
+    if (body.conversations) setConversations(body.conversations);
+  }, []);
+
+  usePoll(input.enabled && session === 'polling', pollOnce);
 
   useEffect(() => {
     if (session !== 'live') return;
@@ -208,7 +323,7 @@ export function useConversationInbox(input: {
     );
   }, [session]);
 
-  return { conversations, status: session };
+  return { conversations, status: session, reason };
 }
 
 /** One thread's transcript, for whichever conversation the operator has open. */
@@ -217,7 +332,7 @@ export function useConversationMessages(input: {
   conversationId: string | null;
   initial: readonly MessageDto[];
 }): readonly MessageDto[] {
-  const session = useFirebaseSession(input.enabled);
+  const { status: session } = useFirebaseSession(input.enabled);
 
   /**
    * The transcript, tagged with the thread it belongs to.
@@ -253,11 +368,30 @@ export function useConversationMessages(input: {
     );
   }, [session, input.conversationId]);
 
-  return loaded.conversationId === input.conversationId ? loaded.messages : [];
-}
+  const shown = loaded.conversationId === input.conversationId ? loaded.messages : [];
 
-/** Kept for callers that only need a document reference, e.g. an optimistic read. */
-export function conversationRef(conversationId: string) {
-  const db = firebaseDb();
-  return db === null ? null : doc(db, 'conversations', conversationId);
+  // The fallback, conditional on the newest message already held — see the route.
+  const newest = shown.at(-1)?.sentAt ?? null;
+  const conversationId = input.conversationId;
+
+  const pollOnce = useCallback(async () => {
+    if (conversationId === null) return;
+
+    const params = new URLSearchParams({ conversationId });
+    if (newest !== null) params.set('since', newest);
+
+    const response = await fetch(`/api/support/thread?${params.toString()}`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) return;
+
+    const body = (await response.json()) as { changed: boolean; messages?: MessageDto[] };
+    if (!body.changed) return;
+
+    setLoaded({ conversationId, messages: body.messages ?? [] });
+  }, [conversationId, newest]);
+
+  usePoll(input.enabled && session === 'polling' && conversationId !== null, pollOnce);
+
+  return shown;
 }

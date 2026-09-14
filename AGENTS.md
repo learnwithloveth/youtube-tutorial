@@ -1,4 +1,7 @@
 <!-- BEGIN:nextjs-agent-rules -->
+# Don't touch my git
+Don't touch my git anything related to git command like, commit and others, I'll handle it, just tell me what to do or paste the command where necessary, then I'll do it.
+
 
 # This is NOT the Next.js you know
 

@@ -1,20 +1,33 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CornerDownLeft, Headset, ImagePlus, Loader2, MessageSquare, X } from 'lucide-react';
+import { Check, CheckCheck, Headset, X } from 'lucide-react';
 
-import {
-  MAX_ATTACHMENT_BYTES,
-  MAX_MESSAGE_LENGTH,
-  type ConversationDto,
-  type MessageDto,
-} from '@/modules/support';
+import type { ConversationDto, MessageDto } from '@/modules/support';
 import { useOwnConversation } from '@/shared/firebase/use-support-realtime';
-import { formatClock } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
+import { ChatComposer } from '@/shared/ui/chat/chat-composer';
+import { useAttachment } from '@/shared/ui/chat/use-attachment';
+
+import { CHAT_WALLPAPER, dayLabelFor, utcDayKey } from './chat-surface';
 
 /**
  * The customer's chat with support.
+ *
+ * ── Built to WhatsApp's conventions, in this product's palette ─────────────────
+ * The shapes and the behaviour are borrowed on purpose: a patterned ground, bubbles
+ * with a clipped corner on the sender's side, the timestamp tucked inside the
+ * bubble, day separators, and delivery ticks. Those are not decoration — they are
+ * the conventions a billion people already have in their hands, and matching them
+ * means nobody has to learn this.
+ *
+ * The composer is `ChatComposer`, shared with the operator's console so the two
+ * cannot drift apart again — they already had, and an agent could not answer a
+ * screenshot with a screenshot.
+ *
+ * The colours are not borrowed. A green WhatsApp clone dropped inside a violet
+ * exchange reads as a third-party embed, which is the opposite of what a support
+ * widget should look like.
  *
  * ── It sends through this application, and reads from Firestore ────────────────
  * Two different paths on purpose. The send is a POST to a route that holds the
@@ -55,24 +68,8 @@ export function SupportWidget({
    */
   const [pending, setPending] = useState<MessageDto[]>([]);
 
-  /**
-   * An image already uploaded and waiting to be sent.
-   *
-   * Uploaded as soon as it is picked, rather than on send, so the slow part happens
-   * while somebody is still typing their caption — and so a rejected file is
-   * rejected before they have written one.
-   *
-   * `preview` is an object URL over the local file, not the stored copy: drawing it
-   * from the server would mean waiting for a round trip to see the thing already on
-   * the machine.
-   */
-  const [attachment, setAttachment] = useState<{
-    id: string;
-    preview: string;
-    name: string;
-  } | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const { attachment, setAttachment, uploading, error: uploadError, attach } = useAttachment();
+  const threadRef = useRef<HTMLDivElement>(null);
 
   const { conversation, messages, status } = useOwnConversation({
     // No listener until the panel is opened. A customer who never contacts support
@@ -83,72 +80,36 @@ export function SupportWidget({
     initialMessages,
   });
 
-  const threadRef = useRef<HTMLDivElement>(null);
-
   const shown = useMemo(() => {
     const confirmed = new Set(messages.map((message) => message.body));
     // Dropped by body rather than by id: the server assigns the real id, so the
-    // optimistic copy can never match one. Same text from the same person within a
-    // second of sending it is the echo.
+    // optimistic copy can never match one.
     return [...messages, ...pending.filter((message) => !confirmed.has(message.body))];
   }, [messages, pending]);
+
+  /**
+   * How many of this customer's own messages the agent has already opened.
+   *
+   * Real, not decorative. `unreadForOperator` counts exactly the customer messages
+   * nobody has read, so the last N of them are unread and everything before is
+   * read. That gives the two ticks their actual meaning, instead of a checkmark
+   * that always says the same thing.
+   */
+  const unreadFromMe = conversation?.unreadForOperator ?? 0;
+  const readBoundary = useMemo(
+    () => shown.filter((message) => message.author === 'customer').length - unreadFromMe,
+    [shown, unreadFromMe],
+  );
 
   useEffect(() => {
     const node = threadRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [shown.length, open]);
 
-  // Object URLs are a leak if nothing releases them, and a widget that is opened
-  // and closed all day accumulates one per image picked.
-  useEffect(
-    () => () => {
-      if (attachment !== null) URL.revokeObjectURL(attachment.preview);
-    },
-    [attachment],
-  );
-
-  const pick = useCallback(async (file: File) => {
-    // Checked here as well as on the server: refusing a 40MB photograph before it
-    // crosses the network is the difference between an instant message and a long
-    // wait for a rejection.
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      setFailed('That image is larger than 2MB. A screenshot is usually well under it.');
-      return;
-    }
-
-    setUploading(true);
-    setFailed(null);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-
-      const response = await fetch('/api/support/attachments', { method: 'POST', body: form });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        setFailed(payload.error ?? 'That image could not be uploaded.');
-        return;
-      }
-
-      const { attachmentId } = (await response.json()) as { attachmentId: string };
-      setAttachment({
-        id: attachmentId,
-        preview: URL.createObjectURL(file),
-        name: file.name,
-      });
-    } catch {
-      setFailed('That image could not be uploaded. Check your connection.');
-    } finally {
-      setUploading(false);
-      // Cleared so picking the same file twice in a row still fires `change`.
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  }, []);
-
   const send = useCallback(async () => {
     const body = draft.trim();
-    // An image on its own is a message: somebody who screenshots the error has
-    // said something, and demanding a caption would be a field between them and
-    // the point.
+    // An image on its own is a message: somebody who screenshots the error has said
+    // something, and demanding a caption would be a field between them and the point.
     if ((body.length === 0 && attachment === null) || sending) return;
 
     const optimistic: MessageDto = {
@@ -182,8 +143,8 @@ export function SupportWidget({
       if (!response.ok) {
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         setFailed(payload.error ?? 'That did not send. Try again.');
-        // Both go back rather than being lost. Somebody typed the one and chose
-        // the other, and the upload is still stored and still unclaimed.
+        // Both go back rather than being lost. Somebody typed the one and chose the
+        // other, and the upload is still stored and still unclaimed.
         setDraft(body);
         setAttachment(sentAttachment);
         setPending((queue) => queue.filter((message) => message.id !== optimistic.id));
@@ -196,9 +157,12 @@ export function SupportWidget({
     } finally {
       setSending(false);
     }
-  }, [draft, sending, conversation, userId, attachment]);
+  }, [draft, sending, conversation, userId, attachment, setAttachment]);
 
   const unread = conversation?.unreadForCustomer ?? 0;
+  // Either source, one line. A rejected upload and a failed send are the same
+  // problem from where the customer is sitting.
+  const problem = failed ?? uploadError;
 
   if (!open) {
     return (
@@ -219,142 +183,202 @@ export function SupportWidget({
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 flex h-[32rem] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-lg border border-line bg-bg-elev shadow-float">
-      <header className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <Headset className="size-4 shrink-0 text-brand-soft" />
+    <div className="fixed bottom-5 right-5 z-40 flex h-[34rem] max-h-[calc(100dvh-2.5rem)] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl border border-line bg-bg-elev shadow-float">
+      <header className="flex items-center gap-3 border-b border-line bg-surface px-3 py-2.5">
+        <span
+          aria-hidden
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-brand/20 text-brand-soft"
+        >
+          <Headset className="size-4" />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-fg">Support</p>
-          <p className="truncate text-2xs text-fg-subtle">
-            {status === 'connecting'
-              ? 'Connecting…'
-              : status === 'unavailable'
-                ? 'Live updates unavailable — messages still send'
-                : conversation?.status === 'resolved'
-                  ? 'Resolved · reply to reopen'
-                  : 'We reply here, and by email if you leave'}
+          <p className="truncate text-sm font-semibold text-fg">Novex Support</p>
+          {/* Where WhatsApp shows "online". Ours reports the connection, because
+              that is what this application actually knows — nothing here tracks
+              whether an agent is at their desk. */}
+          <p className="flex items-center gap-1.5 truncate text-2xs text-fg-subtle">
+            {/* A customer is never told about a Firebase setting. Polling is a
+                working conversation on a timer, so it says so plainly and nothing
+                more — the specifics belong on the operator's screen. */}
+            {status === 'live' ? (
+              <>
+                <span aria-hidden className="size-1.5 rounded-full bg-up" />
+                Connected
+              </>
+            ) : status === 'connecting' ? (
+              'Connecting…'
+            ) : status === 'polling' ? (
+              <>
+                <span aria-hidden className="size-1.5 rounded-full bg-warn" />
+                Checking for replies
+              </>
+            ) : (
+              'Offline — messages still send'
+            )}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-md border border-line p-1.5 text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
+          className="grid size-8 shrink-0 place-items-center rounded-full text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
         >
-          <X className="size-3.5" />
+          <X className="size-4" />
           <span className="sr-only">Close support</span>
         </button>
       </header>
 
-      <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-        {shown.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
-            <MessageSquare className="size-5 text-fg-subtle" />
-            <p className="text-xs leading-relaxed text-fg-subtle">
-              Ask anything about your account, a deposit or a withdrawal. An agent sees
-              your account beside your message, so there is no reference to look up.
-            </p>
-          </div>
-        ) : (
-          shown.map((message) => <Bubble key={message.id} message={message} />)
-        )}
+      <div
+        ref={threadRef}
+        className="relative flex-1 overflow-y-auto bg-bg-sunken px-3 py-3"
+        // The wallpaper. Painted on the scroll container rather than on a child, so
+        // it stays put while the messages move over it — the way a chat ground does.
+        style={{
+          backgroundImage: CHAT_WALLPAPER,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '220px 220px',
+        }}
+      >
+        {/* The pattern is drawn in `currentColor`; this veil is what keeps it a
+            whisper rather than a rash, in either theme. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-bg-sunken/80" />
+
+        <div className="relative">
+          {shown.length === 0 ? (
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-6 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-brand/15 text-brand-soft">
+                <Headset className="size-5" />
+              </span>
+              <p className="text-xs leading-relaxed text-fg-muted">
+                Ask anything about your account, a deposit or a withdrawal. An agent
+                sees your account beside your message, so there is no reference to
+                look up.
+              </p>
+            </div>
+          ) : (
+            <Thread messages={shown} readBoundary={readBoundary} />
+          )}
+        </div>
       </div>
 
-      {failed !== null ? (
+      {problem !== null ? (
         <p role="status" className="border-t border-down/35 bg-down/8 px-4 py-2 text-2xs text-fg">
-          {failed}
+          {problem}
         </p>
       ) : null}
 
-      <div className="border-t border-line p-3">
-        {attachment !== null ? (
-          <div className="mb-2 flex items-center gap-2 rounded-md border border-line bg-bg-sunken/60 p-2">
-            {/* The local file, not the stored copy: drawing it from the server would
-                mean waiting for a round trip to see something already on the machine. */}
-            {/* eslint-disable-next-line @next/next/no-img-element --
-                an object URL has no remote origin for next/image to optimise. */}
-            <img
-              src={attachment.preview}
-              alt=""
-              className="size-10 shrink-0 rounded object-cover"
-            />
-            <span className="min-w-0 flex-1 truncate text-2xs text-fg-muted">
-              {attachment.name}
-            </span>
-            <button
-              type="button"
-              onClick={() => setAttachment(null)}
-              className="rounded border border-line p-1 text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
-            >
-              <X className="size-3" />
-              <span className="sr-only">Remove image</span>
-            </button>
-          </div>
-        ) : null}
-
-        <div className="flex items-end gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            // The formats the byte-sniffer accepts. It is a hint to the picker, not
-            // a control: the server decides from the bytes regardless.
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void pick(file);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading || attachment !== null}
-            aria-label="Attach an image"
-            className="grid size-9 shrink-0 place-items-center rounded-md border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:pointer-events-none disabled:opacity-40"
-          >
-            {uploading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <ImagePlus className="size-4" />
-            )}
-          </button>
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))}
-            onKeyDown={(event) => {
-              // Enter sends, Shift+Enter is a newline — the convention everyone
-              // already has in their fingers from every other chat.
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void send();
-              }
-            }}
-            rows={2}
-            placeholder="Type your message…"
-            aria-label="Message to support"
-            className="min-h-14 flex-1 resize-none rounded-md border border-line bg-bg-sunken/60 px-3 py-2 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-soft"
-          />
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={(draft.trim().length === 0 && attachment === null) || sending}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-brand-soft/40 bg-brand/12 px-3 text-xs font-medium text-brand-soft transition-colors hover:border-brand-soft/70 hover:bg-brand/20 disabled:pointer-events-none disabled:opacity-40"
-          >
-            {sending ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <CornerDownLeft className="size-3.5" />
-            )}
-            Send
-          </button>
-        </div>
-      </div>
+      <ChatComposer
+        value={draft}
+        onChange={setDraft}
+        onSend={() => void send()}
+        onAttach={(file) => void attach(file)}
+        attachment={attachment}
+        onClearAttachment={() => setAttachment(null)}
+        uploading={uploading}
+        sending={sending}
+      />
     </div>
   );
 }
 
-function Bubble({ message }: { message: MessageDto }) {
+/**
+ * The transcript, grouped by day and by run of author.
+ *
+ * ── Two groupings, both doing work ─────────────────────────────────────────────
+ * A day separator answers "when was this" without putting a date on every line.
+ * Collapsing consecutive messages from one author removes the repeated tail and
+ * lets a burst of three read as one turn — which is how people actually type, and
+ * why a thread without it looks like an argument.
+ */
+function Thread({
+  messages,
+  readBoundary,
+}: {
+  messages: readonly MessageDto[];
+  readBoundary: number;
+}) {
+  // Fixed for the render, so every separator in one paint agrees about "today".
+  const now = useMemo(() => new Date(), []);
+
+  /**
+   * The decoration computed in one pass, before anything renders.
+   *
+   * Both facts a row needs — whether it opens a new day, and how many of the
+   * customer's own messages came before it — depend on everything above it. Working
+   * that out inside the `map` means carrying a counter across the render, which is
+   * a mutation React's compiler correctly refuses. Doing it here keeps the render
+   * pure and the arithmetic in one place.
+   */
+  const rows = useMemo(() => {
+    // Where each of the customer's own messages falls in their own sequence, built
+    // once. Counting during the walk would mean a running total reassigned per row,
+    // which React's compiler refuses — and rightly: a mutation whose value depends
+    // on render order is exactly what breaks when rendering is interrupted.
+    const minePosition = new Map(
+      messages
+        .filter((message) => message.author === 'customer')
+        .map((message, position) => [message.id, position] as const),
+    );
+
+    return messages.map((message, index) => {
+      const previous = index > 0 ? messages[index - 1] : undefined;
+      // Purely positional: a row opens a new day when the row above it sits on a
+      // different one. No accumulator needed.
+      const newDay =
+        previous === undefined || utcDayKey(previous.sentAt) !== utcDayKey(message.sentAt);
+
+      return {
+        message,
+        newDay,
+        grouped: !newDay && previous?.author === message.author,
+        // Read once the agent has opened everything up to it — see `readBoundary`.
+        read:
+          message.author === 'customer' && (minePosition.get(message.id) ?? -1) < readBoundary,
+      };
+    });
+  }, [messages, readBoundary]);
+
+  return (
+    <>
+      {rows.map((row) => (
+        <div key={row.message.id}>
+          {row.newDay ? (
+            <div className="flex justify-center py-2">
+              <span className="rounded-full bg-bg-elev/90 px-2.5 py-1 text-2xs font-medium text-fg-subtle shadow-sm">
+                {dayLabelFor(row.message.sentAt, now)}
+              </span>
+            </div>
+          ) : null}
+
+          <Bubble message={row.message} grouped={row.grouped} read={row.read} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+const TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'UTC',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+function Bubble({
+  message,
+  grouped,
+  read,
+}: {
+  message: MessageDto;
+  grouped: boolean;
+  read: boolean;
+}) {
   if (message.author === 'system') {
     return (
-      <p className="text-center text-2xs leading-relaxed text-fg-subtle">{message.body}</p>
+      <div className="flex justify-center py-1.5">
+        <span className="max-w-[90%] rounded-lg bg-bg-elev/90 px-2.5 py-1 text-center text-2xs leading-relaxed text-fg-subtle shadow-sm">
+          {message.body}
+        </span>
+      </div>
     );
   }
 
@@ -362,13 +386,18 @@ function Bubble({ message }: { message: MessageDto }) {
   const unsent = message.id.startsWith(OPTIMISTIC_PREFIX);
 
   return (
-    <div className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+    <div
+      className={cn('flex', mine ? 'justify-end' : 'justify-start', grouped ? 'mt-0.5' : 'mt-2')}
+    >
       <div
         className={cn(
-          'max-w-[85%] rounded-lg px-3 py-2',
-          mine
-            ? 'rounded-br-sm bg-brand/15 text-fg'
-            : 'rounded-bl-sm border border-line bg-bg-sunken/70 text-fg',
+          'max-w-[85%] rounded-2xl px-2 py-1.5 shadow-sm',
+          mine ? 'bg-brand/20 text-fg' : 'border border-line bg-bg-elev text-fg',
+          // The clipped corner points at the sender, and only on the first message
+          // of a run — which is what makes a burst read as one turn rather than
+          // three separate interruptions.
+          mine && !grouped && 'rounded-br-md',
+          !mine && !grouped && 'rounded-bl-md',
           unsent && 'opacity-60',
         )}
       >
@@ -377,7 +406,7 @@ function Bubble({ message }: { message: MessageDto }) {
             href={`/api/support/attachments/${message.attachmentId}`}
             target="_blank"
             rel="noreferrer noopener"
-            className="mb-1.5 block overflow-hidden rounded border border-line"
+            className="mb-1 block overflow-hidden rounded-xl"
           >
             {/* eslint-disable-next-line @next/next/no-img-element --
                 next/image would proxy this through the optimiser, which caches by
@@ -390,12 +419,33 @@ function Bubble({ message }: { message: MessageDto }) {
             />
           </a>
         ) : null}
-        {message.body.length > 0 ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.body}</p>
-        ) : null}
-        <p className="mt-1 text-2xs text-fg-subtle">
-          {unsent ? 'Sending…' : formatClock(message.sentAt)}
-        </p>
+
+        {/* The timestamp sits inside the bubble and the text flows around it, which
+            is what stops a one-word message being three times taller than it needs
+            to be. The float is the mechanism; the cleared spacer reserves the room
+            so the last line never runs underneath it. */}
+        <div className="px-1.5">
+          <span className="float-right ml-2 mt-1 inline-flex select-none items-center gap-0.5 text-[10px] leading-none text-fg-subtle">
+            {TIME.format(new Date(message.sentAt))}
+            {mine ? (
+              unsent ? (
+                <Check className="size-3 opacity-50" />
+              ) : read ? (
+                <CheckCheck className="size-3 text-accent" />
+              ) : (
+                <Check className="size-3" />
+              )
+            ) : null}
+          </span>
+
+          {message.body.length > 0 ? (
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+              {message.body}
+            </p>
+          ) : null}
+
+          <span aria-hidden className="block clear-both" />
+        </div>
       </div>
     </div>
   );

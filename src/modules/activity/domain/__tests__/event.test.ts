@@ -110,6 +110,8 @@ describe('retention', () => {
       'withdrawal-approved',
       'withdrawal-rejected',
       'deposit-recorded',
+      'admin-suspended',
+      'admin-reinstated',
     ];
     expect(new Set([...SECURITY_KINDS, 'page-view'])).toEqual(new Set(all));
   });

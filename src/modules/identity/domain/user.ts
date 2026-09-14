@@ -192,6 +192,31 @@ export class User {
     this.props = { ...this.props, emailVerifiedAt: now };
   }
 
+  /**
+   * Withdraws access, by decision rather than by failed attempts.
+   *
+   * `disabled`, not `locked`. The two are different states on purpose: `locked` is
+   * what the failure counter produces and what a successful sign-in clears by
+   * itself, so suspending into it would mean the suspension lifts the moment the
+   * lockout window passes. `disabled` is refused at
+   * `canAttemptAuthentication` and by `resolveSession`, and nothing clears it
+   * except somebody deciding to.
+   */
+  suspend(): void {
+    this.props = { ...this.props, status: 'disabled' };
+  }
+
+  /**
+   * Restores access.
+   *
+   * Clears the failure counter too. Somebody suspended after a run of bad
+   * passwords would otherwise come back still one attempt from being locked out
+   * again, by a counter nobody can see.
+   */
+  reinstate(): void {
+    this.props = { ...this.props, status: 'active', failedAttempts: 0, lockedUntil: null };
+  }
+
   /** Snapshot for the persistence mapper. Infrastructure use only. */
   snapshot(): Readonly<UserProps> {
     return { ...this.props };

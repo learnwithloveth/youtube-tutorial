@@ -1,7 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity, BadgeCheck, Building2, CandlestickChart, Coins, FileClock, Gauge, Gift,
-  Headset, Megaphone, Percent, Radar, Receipt, ScrollText, ShieldAlert, Users, Wallet,
+  BadgeCheck, Building2, FileClock, Gauge,
+  Headset, Megaphone, Radar, Receipt, ScrollText, ShieldAlert, Users, Wallet,
+  // Needed again by the entries commented out below — Markets, Referral payouts
+  // and Health & flags. Kept here rather than deleted so re-enabling one of those
+  // is uncommenting two lines instead of hunting for the icon it wanted.
+  // Activity, CandlestickChart, Coins, Gift, Percent,
 } from 'lucide-react';
 
 /** Queue keys map onto `useQueues()` so a badge can never drift from the data. */
@@ -46,26 +50,26 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { label: 'Surveillance', href: '/admin/surveillance', icon: ShieldAlert, queue: 'surveillance' },
     ],
   },
-  {
-    heading: 'Markets',
-    items: [
-      { label: 'Listings', href: '/admin/listings', icon: CandlestickChart, queue: 'listings' },
-      { label: 'Fees & tiers', href: '/admin/fees', icon: Percent },
-      { label: 'Staking', href: '/admin/staking', icon: Coins },
-    ],
-  },
+  // {
+  //   heading: 'Markets',
+  //   items: [
+  //     { label: 'Listings', href: '/admin/listings', icon: CandlestickChart, queue: 'listings' },
+  //     { label: 'Fees & tiers', href: '/admin/fees', icon: Percent },
+  //     { label: 'Staking', href: '/admin/staking', icon: Coins },
+  //   ],
+  // },
   {
     heading: 'Platform',
     items: [
       { label: 'Treasury', href: '/admin/treasury', icon: Wallet },
-      { label: 'Referral payouts', href: '/admin/payouts', icon: Gift, queue: 'payouts' },
+      // { label: 'Referral payouts', href: '/admin/payouts', icon: Gift, queue: 'payouts' },
       { label: 'Announcements', href: '/admin/announcements', icon: Megaphone },
     ],
   },
   {
     heading: 'System',
     items: [
-      { label: 'Health & flags', href: '/admin/system', icon: Activity, queue: 'incidents' },
+      // { label: 'Health & flags', href: '/admin/system', icon: Activity, queue: 'incidents' },
       { label: 'Audit log', href: '/admin/audit', icon: ScrollText },
       { label: 'Admin team', href: '/admin/team', icon: Building2 },
     ],

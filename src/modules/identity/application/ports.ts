@@ -4,7 +4,7 @@ import type { EmailAddress } from '../domain/email-address';
 import type { PasswordHash } from '../domain/password';
 import type { Session, SessionId } from '../domain/session';
 import type { Profile } from '../domain/profile';
-import type { User, UserStatus } from '../domain/user';
+import type { User, UserRole, UserStatus } from '../domain/user';
 import type { VerificationPurpose, VerificationToken } from '../domain/verification-token';
 
 /**
@@ -45,6 +45,8 @@ export interface UserRepository {
   search(query: {
     term?: string | undefined;
     status?: UserStatus | undefined;
+    /** Narrows to one access tier. The console's team screen lists operators. */
+    role?: UserRole | undefined;
     limit: number;
     offset: number;
   }): Promise<User[]>;
@@ -53,6 +55,7 @@ export interface UserRepository {
   countMatching(query: {
     term?: string | undefined;
     status?: UserStatus | undefined;
+    role?: UserRole | undefined;
   }): Promise<number>;
 
   /** One row per status, for the header tiles. One query, not one per tile. */
@@ -103,6 +106,18 @@ export interface SessionRepository {
    * signal it is there to surface.
    */
   listActiveForUser(userId: UserId, now: Date): Promise<Session[]>;
+
+  /**
+   * When each of these accounts was last seen, in one query.
+   *
+   * The alternative is `listActiveForUser` per row, which on a team screen is one
+   * round trip per administrator to compute a column. Aggregated in the database
+   * for the same reason the activity module aggregates its tallies.
+   *
+   * Absent means no live session — which is a real answer, not a missing one, and
+   * the caller renders it as such rather than as a blank.
+   */
+  lastSeenFor(userIds: readonly UserId[], now: Date): Promise<Map<UserId, Date>>;
   deleteExpired(now: Date, limit: number): Promise<number>;
 }
 

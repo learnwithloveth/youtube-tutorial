@@ -359,6 +359,27 @@ export class DrizzleSessionRepository implements SessionRepository {
   }
 
   /** Bounded delete on the expiry index — never a full-table sweep. */
+  async lastSeenFor(userIds: readonly UserId[], now: Date): Promise<Map<UserId, Date>> {
+    if (userIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({ userId: sessions.userId, lastSeenAt: sql<string>`max(${sessions.lastSeenAt})` })
+      .from(sessions)
+      .where(
+        and(
+          inArray(sessions.userId, [...userIds]),
+          // Live sessions only. A revoked or expired one says when somebody *was*
+          // here, which on a column headed "last active" reads as somebody who is
+          // still signed in.
+          isNull(sessions.revokedAt),
+          gt(sessions.expiresAt, now),
+        ),
+      )
+      .groupBy(sessions.userId);
+
+    return new Map(rows.map((row) => [row.userId as UserId, new Date(row.lastSeenAt)]));
+  }
+
   async deleteExpired(now: Date, limit: number): Promise<number> {
     const deleted = await this.db
       .delete(sessions)

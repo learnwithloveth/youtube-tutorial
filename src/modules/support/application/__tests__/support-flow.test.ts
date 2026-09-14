@@ -49,6 +49,13 @@ class FakeConversations implements ConversationRepository {
       ) ?? null
     );
   }
+  async findLatestForUser(userId: UserId) {
+    return (
+      [...this.store.values()]
+        .filter((conversation) => conversation.userId === userId)
+        .at(-1) ?? null
+    );
+  }
   async list(query: { status?: ConversationStatus | undefined; limit: number }) {
     return [...this.store.values()]
       .filter((c) => query.status === undefined || c.status === query.status)

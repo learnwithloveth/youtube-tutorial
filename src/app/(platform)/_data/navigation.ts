@@ -1,7 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowLeftRight, Bell, CandlestickChart, Coins, Gift, LayoutDashboard,
-  Receipt, Repeat, Settings, Wallet,
+  ArrowLeftRight, Bell, CandlestickChart, LayoutDashboard,
+  Receipt, Settings, Wallet,
+  // Needed again by the entries commented out below. Parked here rather than
+  // deleted so re-enabling one is uncommenting two lines, not hunting for the icon
+  // it wanted. Same arrangement in the admin nav.
+  // Coins, Gift, Repeat,
 } from 'lucide-react';
 
 export interface DashNavItem {
@@ -24,17 +28,17 @@ export const DASH_NAV: DashNavGroup[] = [
     items: [
       { label: 'Overview', href: '/app', icon: LayoutDashboard, end: true },
       { label: 'Portfolio', href: '/app/portfolio', icon: ArrowLeftRight },
-      { label: 'Trade', href: '/app/trade', icon: CandlestickChart },
+      // { label: 'Trade', href: '/app/trade', icon: CandlestickChart },
     ],
   },
-  {
-    heading: 'Grow',
-    items: [
-      { label: 'Earn', href: '/app/earn', icon: Coins, badge: '12.4%' },
-      { label: 'Recurring buys', href: '/app/recurring', icon: Repeat, badge: '3' },
-      { label: 'Referrals', href: '/app/referrals', icon: Gift },
-    ],
-  },
+  // {
+  //   heading: 'Grow',
+  //   items: [
+  //     { label: 'Earn', href: '/app/earn', icon: Coins, badge: '12.4%' },
+  //     { label: 'Recurring buys', href: '/app/recurring', icon: Repeat, badge: '3' },
+  //     { label: 'Referrals', href: '/app/referrals', icon: Gift },
+  //   ],
+  // },
   {
     heading: 'Money',
     items: [

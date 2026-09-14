@@ -88,13 +88,15 @@ export async function getThread(
   }
 }
 
-/** The customer's own thread, for the widget's first paint. */
+/** The customer's own thread, for the widget's first paint and its polling. */
 export async function getOwnThread(
   deps: SupportDependencies,
   userId: UserId,
 ): Promise<ThreadDto> {
   try {
-    const conversation = await deps.conversations.findOpenForUser(userId);
+    // The latest, not the latest *open* one: a resolved thread is still the
+    // conversation the customer is looking at, and replying to it reopens it.
+    const conversation = await deps.conversations.findLatestForUser(userId);
     if (conversation === null) return { conversation: null, messages: [], degraded: false };
 
     return getThread(deps, conversation.id, userId);

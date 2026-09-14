@@ -6,7 +6,6 @@ import {
   Bell,
   BellOff,
   Check,
-  CornerDownLeft,
   Loader2,
   MapPin,
   MessageSquare,
@@ -14,13 +13,14 @@ import {
 } from 'lucide-react';
 
 import {
-  MAX_MESSAGE_LENGTH,
   type ConversationDto,
   type ConversationPriority,
   type MessageDto,
 } from '@/modules/support';
 import type { SupportCustomerDto } from '@/server/support';
 import { usePush } from '@/shared/firebase/use-push';
+import { ChatComposer } from '@/shared/ui/chat/chat-composer';
+import { useAttachment } from '@/shared/ui/chat/use-attachment';
 import {
   useConversationInbox,
   useConversationMessages,
@@ -72,6 +72,9 @@ const PRIORITY_TONE: Record<ConversationPriority, 'down' | 'warn' | 'neutral' | 
 /** Matches the presence heartbeat: a faster poll would learn nothing new. */
 const CONTEXT_REFRESH_MS = 20_000;
 
+/** Marks a reply shown before the server has confirmed it. */
+const OPTIMISTIC_PREFIX = 'pending:';
+
 export function SupportConsole({
   operatorId,
   initialConversations,
@@ -90,7 +93,20 @@ export function SupportConsole({
   const [customers, setCustomers] = useState(initialCustomers);
   const threadRef = useRef<HTMLDivElement>(null);
 
-  const { conversations, status } = useConversationInbox({
+  const { attachment, setAttachment, uploading, error: uploadError, attach } = useAttachment();
+
+  /**
+   * Replies posted but not yet echoed back.
+   *
+   * The console used to rely entirely on the listener to show an agent their own
+   * reply — "the listener carries the change back", which is true right up until
+   * the listener cannot attach. Then the box clears, nothing appears, and the agent
+   * has no way to tell whether the message was sent or swallowed. So it is shown
+   * immediately and reconciled when the real one arrives.
+   */
+  const [pending, setPending] = useState<MessageDto[]>([]);
+
+  const { conversations, status, reason } = useConversationInbox({
     enabled: true,
     initial: initialConversations,
   });
@@ -106,11 +122,23 @@ export function SupportConsole({
   const selected =
     conversations.find((conversation) => conversation.id === selectedId) ?? visible[0] ?? null;
 
-  const messages = useConversationMessages({
+  const confirmed = useConversationMessages({
     enabled: true,
     conversationId: selected?.id ?? null,
     initial: selected?.id === initialThread.conversationId ? initialThread.messages : [],
   });
+
+  const messages = useMemo(() => {
+    const seen = new Set(confirmed.map((message) => message.body));
+    // Dropped by body rather than by id: the server assigns the real id, so the
+    // optimistic copy can never match one.
+    return [
+      ...confirmed,
+      ...pending.filter(
+        (message) => message.conversationId === selected?.id && !seen.has(message.body),
+      ),
+    ];
+  }, [confirmed, pending, selected?.id]);
 
   // ── Customer context, refreshed on the presence cadence ────────────────────
   // Two reasons to re-ask, on one request: a conversation can arrive from somebody
@@ -188,24 +216,50 @@ export function SupportConsole({
 
   const send = useCallback(async () => {
     const body = draft.trim();
-    if (selected === null || body.length === 0 || sending) return;
+    if (selected === null || (body.length === 0 && attachment === null) || sending) return;
 
+    const optimistic: MessageDto = {
+      id: `${OPTIMISTIC_PREFIX}${Date.now()}`,
+      conversationId: selected.id,
+      author: 'operator',
+      authorId: operatorId,
+      body,
+      attachmentId: attachment?.id ?? null,
+      sentAt: new Date().toISOString(),
+    };
+
+    const sentAttachment = attachment;
     setDraft('');
+    setAttachment(null);
+    setPending((queue) => [...queue, optimistic]);
     setSending(true);
+
     try {
       const response = await fetch('/api/support/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: selected.id, body }),
+        body: JSON.stringify({
+          conversationId: selected.id,
+          body,
+          ...(sentAttachment !== null ? { attachmentId: sentAttachment.id } : {}),
+        }),
       });
-      // Put it back rather than lose what somebody typed.
-      if (!response.ok) setDraft(body);
+
+      if (!response.ok) {
+        // Both go back rather than being lost. Somebody typed the one and chose the
+        // other, and the upload is still stored and still unclaimed.
+        setDraft(body);
+        setAttachment(sentAttachment);
+        setPending((queue) => queue.filter((message) => message.id !== optimistic.id));
+      }
     } catch {
       setDraft(body);
+      setAttachment(sentAttachment);
+      setPending((queue) => queue.filter((message) => message.id !== optimistic.id));
     } finally {
       setSending(false);
     }
-  }, [draft, selected, sending]);
+  }, [draft, selected, sending, attachment, setAttachment, operatorId]);
 
   const customer = selected ? customers[selected.userId] : undefined;
 
@@ -229,11 +283,16 @@ export function SupportConsole({
                 status === 'live' ? 'animate-pulse bg-up' : 'bg-warn',
               )}
             />
+            {/* Named, not just flagged. This is an operator's screen, and the usual
+                cause of a dead listener is a project setting nobody has flipped —
+                "not receiving live updates" sends somebody reading network traces. */}
             {status === 'live'
               ? 'Live'
               : status === 'connecting'
                 ? 'Connecting…'
-                : 'Not receiving live updates — reload to reconnect'}
+                : status === 'polling'
+                  ? `Polling every few seconds${reason ? ` — ${reason}` : ''}`
+                  : 'Not receiving updates'}
           </p>
         </div>
       </div>
@@ -317,40 +376,26 @@ export function SupportConsole({
               ) : null}
             </div>
 
-            <div className="border-t border-line p-3">
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={draft}
-                  onChange={(event) =>
-                    setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))
-                  }
-                  onKeyDown={(event) => {
-                    // Enter sends; Shift+Enter is a newline — the convention every
-                    // agent already has in their fingers.
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void send();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Reply to the customer…  (Enter to send, Shift+Enter for a new line)"
-                  className="min-h-16 flex-1 resize-none rounded-md border border-line bg-bg-sunken/60 px-3 py-2 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-soft"
-                />
-                <ConfirmButton
-                  tone="brand"
-                  onClick={() => void send()}
-                  disabled={draft.trim().length === 0 || sending}
-                  className="h-9"
-                >
-                  {sending ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <CornerDownLeft className="size-3.5" />
-                  )}
-                  Send
-                </ConfirmButton>
-              </div>
-            </div>
+            {uploadError !== null ? (
+              <p
+                role="status"
+                className="border-t border-down/35 bg-down/8 px-4 py-2 text-2xs text-fg"
+              >
+                {uploadError}
+              </p>
+            ) : null}
+
+            <ChatComposer
+              value={draft}
+              onChange={setDraft}
+              onSend={() => void send()}
+              onAttach={(file) => void attach(file)}
+              attachment={attachment}
+              onClearAttachment={() => setAttachment(null)}
+              uploading={uploading}
+              sending={sending}
+              placeholder="Reply to the customer"
+            />
           </Panel>
         ) : (
           <Panel className="grid place-items-center text-xs text-fg-subtle">

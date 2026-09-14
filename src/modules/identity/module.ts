@@ -8,7 +8,15 @@ import {
   createDescribeUsers,
   type DescribeUsers,
 } from './application/queries/describe-users';
+import {
+  createListAdministrators,
+  type ListAdministrators,
+} from './application/queries/list-administrators';
 import { createListUsers, type ListUsers } from './application/queries/list-users';
+import {
+  createSetAdminStatus,
+  type SetAdminStatus,
+} from './application/use-cases/set-admin-status';
 import {
   createUpdateProfile,
   type UpdateProfile,
@@ -86,8 +94,12 @@ export interface IdentityModule {
   readonly describeUsers: DescribeUsers;
   /** The account holder changes their display name or handle. */
   readonly updateProfile: UpdateProfile;
+  /** Withdraws or restores an operator's console access. Never promotes. */
+  readonly setAdminStatus: SetAdminStatus;
   /** The console's account list: filtered, paged, with per-status tallies. */
   readonly listUsers: ListUsers;
+  /** Who can act in the console, with when each was last seen. */
+  readonly listAdministrators: ListAdministrators;
   /** A user's live sessions, for the security page. */
   readonly listSessions: ListSessions;
   /** Name of the session cookie. Owned here so the delivery layer cannot drift. */
@@ -146,7 +158,9 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     resetPassword: createResetPassword(dependencies),
     describeUsers: createDescribeUsers(dependencies),
     updateProfile: createUpdateProfile(dependencies),
+    setAdminStatus: createSetAdminStatus(dependencies),
     listUsers: createListUsers(dependencies),
+    listAdministrators: createListAdministrators(dependencies),
     listSessions: createListSessions(dependencies),
     cookieName: SESSION_COOKIE_NAME,
   };
