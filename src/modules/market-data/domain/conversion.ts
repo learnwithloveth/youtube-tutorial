@@ -43,6 +43,32 @@ export function estimateConversion(
 }
 
 /**
+ * quantity × price — what a holding is worth.
+ *
+ * The inverse of `divideToQuantity`, and the operation the ledger needs to value a
+ * balance and to check a withdrawal against a limit denominated in USD. It lives
+ * here rather than in the ledger because this module owns prices, and because the
+ * temptation it removes belongs here too: the obvious implementation is
+ * `Number(quantity) * Number(price)`, which puts money through a float at the one
+ * moment it is least affordable — deciding how much may leave a platform.
+ *
+ * Multiplying the two integer amounts and dividing once, at the end, keeps it
+ * exact. The intermediate product is large — an 18-decimal ether balance times a
+ * cent-scale price is well past `Number.MAX_SAFE_INTEGER` — which is precisely why
+ * it is `bigint` and not arithmetic.
+ */
+export function valueOf(quantity: Money, price: Money, valueScale = 2): Money {
+  if (quantity.minorUnits === 0n || price.minorUnits === 0n) {
+    return Money.zero(price.currency, valueScale);
+  }
+
+  const numerator = quantity.minorUnits * price.minorUnits * 10n ** BigInt(valueScale);
+  const denominator = 10n ** BigInt(quantity.scale + price.scale);
+
+  return Money.of(divideHalfUp(numerator, denominator), price.currency, valueScale);
+}
+
+/**
  * net / price, carried out entirely in integers.
  *
  * Scaling the numerator up by 10^(priceScale + quantityScale) before dividing is

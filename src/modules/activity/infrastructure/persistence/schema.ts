@@ -41,6 +41,10 @@ export const events = activitySchema.table(
         'password-reset',
         'verification-sent',
         'email-verified',
+        'withdrawal-requested',
+        'withdrawal-approved',
+        'withdrawal-rejected',
+        'deposit-recorded',
       ],
     }).notNull(),
 
@@ -58,6 +62,17 @@ export const events = activitySchema.table(
 
     /** Seconds the page was open. Written on departure — see `ActivityEventSnapshot`. */
     durationSeconds: integer('duration_seconds'),
+
+    /**
+     * What this event is about — a withdrawal id, a transfer id.
+     *
+     * Deliberately not a foreign key. The trail outlives what it describes and must
+     * survive a row being deleted in another context; a constraint would make the
+     * audit record the first casualty of a cleanup elsewhere.
+     */
+    reference: text('reference'),
+    /** A short human summary. Rendered, never parsed. */
+    detail: text('detail'),
 
     locationSource: text('location_source', { enum: ['device', 'edge', 'network'] }),
     locationPrecision: text('location_precision', {

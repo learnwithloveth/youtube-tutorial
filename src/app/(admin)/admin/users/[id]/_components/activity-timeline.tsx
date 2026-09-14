@@ -1,4 +1,8 @@
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  BadgeCheck,
+  Ban,
   Clock,
   Crosshair,
   FileText,
@@ -38,6 +42,10 @@ const KIND_META: Record<
   'password-reset': { label: 'Password reset', icon: KeyRound, tone: 'warn' },
   'verification-sent': { label: 'Verification email sent', icon: Send, tone: 'neutral' },
   'email-verified': { label: 'Email verified', icon: MailCheck, tone: 'up' },
+  'withdrawal-requested': { label: 'Requested a withdrawal', icon: ArrowUpFromLine, tone: 'warn' },
+  'withdrawal-approved': { label: 'Withdrawal approved', icon: BadgeCheck, tone: 'up' },
+  'withdrawal-rejected': { label: 'Withdrawal rejected', icon: Ban, tone: 'warn' },
+  'deposit-recorded': { label: 'Deposit credited', icon: ArrowDownToLine, tone: 'brand' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {
@@ -80,6 +88,9 @@ export function ActivityTimeline({ events }: { events: readonly ActivityEventDto
                 <span className="text-sm text-fg">{meta.label}</span>
                 {event.path ? (
                   <span className="font-mono text-xs text-brand-soft">{event.path}</span>
+                ) : null}
+                {event.detail ? (
+                  <span className="font-mono text-xs text-fg">{event.detail}</span>
                 ) : null}
                 {event.durationSeconds !== null ? (
                   <span className="inline-flex items-center gap-1 text-2xs text-fg-subtle">

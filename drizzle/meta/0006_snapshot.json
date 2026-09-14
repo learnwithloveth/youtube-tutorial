@@ -1,0 +1,1369 @@
+{
+  "id": "c9bcf731-0546-4ef9-a868-c266b3c20d38",
+  "prevId": "e766683c-7058-48aa-baae-105c1476dfaa",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "activity.events": {
+      "name": "events",
+      "schema": "activity",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_source": {
+          "name": "location_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_precision": {
+          "name": "location_precision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "region": {
+          "name": "region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "browser": {
+          "name": "browser",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_digest": {
+          "name": "ip_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "visitor_id": {
+          "name": "visitor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "events_user_idx": {
+          "name": "events_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "events_user_kind_idx": {
+          "name": "events_user_kind_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "events_kind_time_idx": {
+          "name": "events_kind_time_idx",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "identity.sessions": {
+      "name": "sessions",
+      "schema": "identity",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "authenticated_at": {
+          "name": "authenticated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent_hash": {
+          "name": "user_agent_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_hash": {
+          "name": "ip_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sessions_user_idx": {
+          "name": "sessions_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "revoked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_expires_idx": {
+          "name": "sessions_expires_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "schemaTo": "identity",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "identity.users": {
+      "name": "users",
+      "schema": "identity",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'customer'"
+        },
+        "email_verified_at": {
+          "name": "email_verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failed_attempts": {
+          "name": "failed_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "users_email_uq": {
+          "name": "users_email_uq",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "identity.verification_tokens": {
+      "name": "verification_tokens",
+      "schema": "identity",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consumed_at": {
+          "name": "consumed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "verification_tokens_hash_uq": {
+          "name": "verification_tokens_hash_uq",
+          "columns": [
+            {
+              "expression": "token_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "verification_tokens_user_idx": {
+          "name": "verification_tokens_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "consumed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "verification_tokens_expires_idx": {
+          "name": "verification_tokens_expires_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "verification_tokens_user_id_users_id_fk": {
+          "name": "verification_tokens_user_id_users_id_fk",
+          "tableFrom": "verification_tokens",
+          "tableTo": "users",
+          "schemaTo": "identity",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "ledger.accounts": {
+      "name": "accounts",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_kind": {
+          "name": "owner_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "asset": {
+          "name": "asset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scale": {
+          "name": "scale",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance": {
+          "name": "balance",
+          "type": "numeric(48, 36)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "held": {
+          "name": "held",
+          "type": "numeric(48, 36)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "accounts_owner_idx": {
+          "name": "accounts_owner_idx",
+          "columns": [
+            {
+              "expression": "owner_kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "accounts_owner_asset_uq": {
+          "name": "accounts_owner_asset_uq",
+          "columns": [
+            {
+              "expression": "owner_kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "asset",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "ledger.entries": {
+      "name": "entries",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "transfer_id": {
+          "name": "transfer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "asset": {
+          "name": "asset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delta": {
+          "name": "delta",
+          "type": "numeric(48, 36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "entries_account_idx": {
+          "name": "entries_account_idx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "entries_transfer_idx": {
+          "name": "entries_transfer_idx",
+          "columns": [
+            {
+              "expression": "transfer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "entries_transfer_id_transfers_id_fk": {
+          "name": "entries_transfer_id_transfers_id_fk",
+          "tableFrom": "entries",
+          "tableTo": "transfers",
+          "schemaTo": "ledger",
+          "columnsFrom": [
+            "transfer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entries_account_id_accounts_id_fk": {
+          "name": "entries_account_id_accounts_id_fk",
+          "tableFrom": "entries",
+          "tableTo": "accounts",
+          "schemaTo": "ledger",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "ledger.transfers": {
+      "name": "transfers",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "transfers_occurred_idx": {
+          "name": "transfers_occurred_idx",
+          "columns": [
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "ledger.withdrawal_approvals": {
+      "name": "withdrawal_approvals",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "withdrawal_id": {
+          "name": "withdrawal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operator_id": {
+          "name": "operator_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "withdrawal_approvals_once_uq": {
+          "name": "withdrawal_approvals_once_uq",
+          "columns": [
+            {
+              "expression": "withdrawal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "operator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "withdrawal_approvals_withdrawal_id_withdrawals_id_fk": {
+          "name": "withdrawal_approvals_withdrawal_id_withdrawals_id_fk",
+          "tableFrom": "withdrawal_approvals",
+          "tableTo": "withdrawals",
+          "schemaTo": "ledger",
+          "columnsFrom": [
+            "withdrawal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "ledger.withdrawals": {
+      "name": "withdrawals",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "asset": {
+          "name": "asset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scale": {
+          "name": "scale",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(48, 36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fee": {
+          "name": "fee",
+          "type": "numeric(48, 36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "network": {
+          "name": "network",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination": {
+          "name": "destination",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valued_at_usd": {
+          "name": "valued_at_usd",
+          "type": "numeric(38, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "withdrawals_status_idx": {
+          "name": "withdrawals_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "withdrawals_user_idx": {
+          "name": "withdrawals_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "market_data.tickers": {
+      "name": "tickers",
+      "schema": "market_data",
+      "columns": {
+        "symbol": {
+          "name": "symbol",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(38, 18)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "price_scale": {
+          "name": "price_scale",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_24h_bp": {
+          "name": "change_24h_bp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_7d_bp": {
+          "name": "change_7d_bp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "market_cap": {
+          "name": "market_cap",
+          "type": "numeric(38, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "volume_24h": {
+          "name": "volume_24h",
+          "type": "numeric(38, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "circulating_supply": {
+          "name": "circulating_supply",
+          "type": "numeric(38, 0)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sparkline": {
+          "name": "sparkline",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tickers_observed_at_idx": {
+          "name": "tickers_observed_at_idx",
+          "columns": [
+            {
+              "expression": "observed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "presence.visitors": {
+      "name": "visitors",
+      "schema": "presence",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path_since": {
+          "name": "path_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_views": {
+          "name": "page_views",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "engagement": {
+          "name": "engagement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'engaged'"
+        },
+        "location_source": {
+          "name": "location_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_precision": {
+          "name": "location_precision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accuracy_metres": {
+          "name": "accuracy_metres",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "region": {
+          "name": "region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_observed_at": {
+          "name": "location_observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "browser": {
+          "name": "browser",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_digest": {
+          "name": "ip_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "departed_at": {
+          "name": "departed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "visitors_last_seen_idx": {
+          "name": "visitors_last_seen_idx",
+          "columns": [
+            {
+              "expression": "last_seen_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "visitors_user_idx": {
+          "name": "visitors_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_seen_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "activity": "activity",
+    "identity": "identity",
+    "ledger": "ledger",
+    "market_data": "market_data",
+    "presence": "presence"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

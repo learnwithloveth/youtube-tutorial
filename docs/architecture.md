@@ -48,6 +48,10 @@ src/
 │   │   ├── domain/            ActivityEvent, retention windows per kind
 │   │   ├── application/       Ports, append, sweep, per-account timeline
 │   │   └── infrastructure/    Drizzle, append-only with aggregate reads
+│   ├── ledger/                Balances, transfers, withdrawals and approvals
+│   │   ├── domain/            Account, Transfer (balanced), Withdrawal, limits
+│   │   ├── application/       Ports, request/decide/deposit, wallet query
+│   │   └── infrastructure/    Drizzle, asset catalogue with storage scales
 │   └── content/               Supporting context: editorial copy
 │
 ├── platform/              ══ SHARED INFRASTRUCTURE ══
@@ -60,6 +64,7 @@ src/
 │   ├── presence.ts            Live activity; joins presence to identity
 │   ├── activity.ts            Append and read the account history trail
 │   ├── users.ts               The console account view; joins all three
+│   ├── ledger.ts              Wallet and approvals; wires prices to the ledger
 │   ├── request-context.ts     Location and device for the current request
 │   └── auth.ts                The one place a session is interpreted
 │
@@ -623,3 +628,125 @@ The snapshot (`meta/0005_snapshot.json`) was written to match, and the check tha
 is right is that `drizzle-kit generate` reports **"No schema changes"** against it.
 Anything else means the snapshot and the schema files disagree, and the next
 migration would be generated from a false baseline.
+
+---
+
+## 14. Ledger
+
+The `ledger` context owns balances and the money that moves between them. It backs
+the customer wallet and the operator approvals queue, which are two views of the
+same state.
+
+### Double-entry, enforced in the type
+
+`Transfer.create` refuses a set of entries that does not sum to zero **per asset**.
+That check is in the domain rather than in a database constraint or a review
+convention because it is the property that makes a ledger a ledger: a system that
+can write an unbalanced transfer can create money, and it will eventually do so
+through a branch nobody tested. Making the balanced set the only constructible
+thing means the unbalanced case has no representation to reach.
+
+Per asset, not overall. Summing across assets would let `-1 BTC, +1 USD` pass as
+balanced, which is how a ledger loses a bitcoin and reports that everything adds up.
+
+Four owners, so both sides of every movement are accounts:
+
+| Owner | What its balance means |
+| --- | --- |
+| `user` | What we owe one customer in one asset |
+| `custody` | The contra account. Negative by construction; its magnitude is the total customer liability |
+| `fees` | Fee revenue, credited when a withdrawal is approved |
+| `payable` | Approved withdrawals that have not yet left the platform |
+
+### The balance is stored, and the entries are the truth
+
+Deriving a balance by summing entries is correct and unusable — it turns the
+most-read value on the platform into a scan of an account's whole history. So the
+balance is stored and updated *in the same transaction as the entries that justify
+it*, and remains reconcilable by summing. `version` makes the update optimistic:
+two withdrawals that both read version 7 produce two conditional writes at version
+7, and only one succeeds.
+
+That choice is connected to the transport. `db.batch()` on the Neon HTTP driver is
+a real Postgres transaction, but a **non-interactive** one — there is no
+`SELECT ... FOR UPDATE`, read, then branch. A pessimistic lock is unavailable, so
+the guard has to be a conditional write whose failure the caller detects afterwards.
+
+### A withdrawal is a request, not a command
+
+It is the one action that is irreversible once complete and the first thing an
+attacker performs. So it becomes a record a human decides on, and the funds are
+**held** — reserved, not moved — until they do.
+
+Holding rather than moving is what makes a rejection leave no trace. If the request
+had debited the account, the rejection would need a compensating credit and the
+customer's statement would show two movements for something that never happened.
+
+| Step | What moves |
+| --- | --- |
+| Request | Nothing. `amount + fee` is held on the customer's account |
+| Reject | Nothing. The hold is released, with a reason the customer is shown |
+| Approve | `user -(amount+fee)`, `payable +amount`, `fees +fee`, hold consumed |
+
+`payable` rather than "sent" is the honest end state: the money has left the
+customer and has not left the platform. Marking it settled would assert a broadcast
+that does not happen, because there is no chain client behind this application.
+
+### Limits are in dollars, and refuse to guess
+
+A per-asset cap would be trivially avoidable — someone at their bitcoin limit
+withdraws ether instead — so the cap is on value leaving the platform.
+
+The consequence is that a withdrawal cannot be checked without a price, and
+`requestWithdrawal` **refuses** when none is available. The price oracle accepts
+only a `live` quote, not a `stale` one: a stale price is good enough to render
+behind a "last updated" label and not good enough to decide how much money may
+leave. When the feed goes quiet, withdrawals stop rather than being approved
+against yesterday's prices.
+
+Dual control above a threshold is about the operator, not the customer: it makes a
+single compromised console account unable to move a large sum alone. An operator
+cannot sign twice, and cannot approve their own withdrawal. One operator can
+*reject* anything — declining to move money is always safe, and requiring a second
+signature to stop a payment would mean an operator who spots fraud cannot act.
+
+### Deposits are operator-recorded, and that is a real limitation
+
+On a real exchange a deposit originates outside the application: a chain listener
+sees a confirmed transaction, or a banking partner posts a settlement webhook. This
+platform has neither. Three options existed and only one was honest:
+
+1. Let the customer credit themselves from the UI — a button that prints money.
+2. Simulate arrivals on a timer — the same, slower and harder to notice.
+3. Require an operator to record what actually arrived, against a reference.
+
+This is the third. The wallet's deposit tab shows an address and an instruction; it
+credits nothing. When a chain listener exists it calls `recordDeposit` with the
+transaction hash as the reference and nothing else in the ledger changes.
+
+Deposit addresses come from configuration (`DEPOSIT_ADDRESS_*`) and are absent by
+default — the panel warns rather than showing a plausible-looking string, because
+an address that is not ours is a customer's funds sent nowhere.
+
+### The asset catalogue is code
+
+An asset's **storage scale** is not data that changes; it is the definition of what
+the integer in the balance column means, and changing it is a migration that
+rewrites every row. A table would make the most dangerous value in the system
+editable by anyone with database access and no migration.
+
+It is also a different number from market-data's *quoting* precision, which changes
+when a writer decides a price reads better with fewer decimals. Sharing one would
+let an editorial decision divide everyone's balance by a hundred.
+
+### What is deliberately absent
+
+No trading, no staking, no transfers between customers, and no payout broadcast.
+The approvals queue ends at `payable`; something has to pick those up and send
+them, and that something needs a chain client and a hot-wallet policy that do not
+exist here.
+
+Risk scores and surveillance signals are also absent from the approvals screen. The
+fixtures had them and they were `Math.random()`; a number presented as risk on the
+one screen where somebody decides whether to release funds is worse than no number
+at all.

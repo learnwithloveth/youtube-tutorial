@@ -15,6 +15,8 @@ export interface ActivityEventDto {
   readonly occurredAt: string;
   readonly path: string | null;
   readonly durationSeconds: number | null;
+  readonly reference: string | null;
+  readonly detail: string | null;
   readonly location: EventLocation | null;
   readonly device: 'desktop' | 'mobile' | 'tablet' | 'bot' | 'unknown' | null;
   readonly browser: string | null;
@@ -83,6 +85,8 @@ export function toActivityEventDto(event: ActivityEvent): ActivityEventDto {
     occurredAt: event.occurredAt.toISOString(),
     path: event.path,
     durationSeconds: event.durationSeconds,
+    reference: event.reference,
+    detail: event.detail,
     location: event.location,
     device: event.agent?.device ?? null,
     browser: event.agent?.browser ?? null,

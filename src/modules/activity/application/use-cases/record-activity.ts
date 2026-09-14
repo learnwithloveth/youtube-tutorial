@@ -13,6 +13,10 @@ export interface RecordActivityCommand {
   readonly kind: ActivityKind;
   readonly path?: string | null | undefined;
   readonly durationSeconds?: number | null | undefined;
+  /** What this event is about — a withdrawal id, a transfer id. */
+  readonly reference?: string | null | undefined;
+  /** A short human summary, e.g. "0.50000000 BTC". Rendered, never parsed. */
+  readonly detail?: string | null | undefined;
   readonly location?: EventLocation | null | undefined;
   readonly agent?: EventAgent | null | undefined;
   readonly ipDigest?: string | null | undefined;
@@ -46,6 +50,8 @@ export function createRecordActivity(deps: ActivityDependencies) {
       occurredAt: command.occurredAt ?? deps.clock.now(),
       path: command.path ?? null,
       durationSeconds: normaliseDuration(command.durationSeconds),
+      reference: command.reference ?? null,
+      detail: command.detail ?? null,
       location: command.location ?? null,
       agent: command.agent ?? null,
       ipDigest: command.ipDigest ?? null,

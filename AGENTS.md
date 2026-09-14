@@ -28,6 +28,7 @@ short version: the rules that are easy to break by accident.
 | Touch a visitor location or the live board | `docs/architecture.md` §11 — presence |
 | Log or read what a user did | `docs/architecture.md` §12 — activity |
 | Add or move a database table | `docs/architecture.md` §13 — schema per context |
+| Touch a balance, withdrawal or approval | `docs/architecture.md` §14 — ledger |
 | Decide server vs client | `docs/architecture.md` §5 |
 | Set caching on a page | `docs/architecture.md` §6 |
 

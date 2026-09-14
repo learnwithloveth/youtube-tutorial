@@ -25,7 +25,7 @@ export { MAX_TICKER_AGE_SECONDS } from './domain/ticker';
 
 /* The conversion estimator is pure and framework-free, so the buy/sell widget
    can use it on the client and keep its arithmetic exact. */
-export { estimateConversion, QUANTITY_SCALE } from './domain/conversion';
+export { estimateConversion, valueOf, QUANTITY_SCALE } from './domain/conversion';
 export type { ConversionEstimate } from './domain/conversion';
 
 export { listMarkets } from './application/queries/list-markets';

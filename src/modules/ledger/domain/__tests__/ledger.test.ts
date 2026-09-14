@@ -1,0 +1,297 @@
+import { describe, expect, it } from 'vitest';
+
+import { Money } from '@/shared/kernel';
+import type { UserId } from '@/shared/kernel/ids';
+
+import { accountIdFor, LedgerAccount, platformOwner, userOwner } from '../account';
+import { approvalsRequired, checkDailyLimit, limitsFor } from '../limits';
+import { Transfer } from '../transfer';
+import { Withdrawal } from '../withdrawal';
+
+const NOW = new Date('2026-09-14T12:00:00.000Z');
+const ALICE = '11111111-1111-4111-8111-111111111111' as UserId;
+const BOB = '22222222-2222-4222-8222-222222222222' as UserId;
+const CAROL = '33333333-3333-4333-8333-333333333333' as UserId;
+
+const btc = (value: string) => Money.fromDecimalString(value, 'BTC', 8);
+const usd = (value: string) => Money.fromDecimalString(value, 'USD', 2);
+
+const BITCOIN = { code: 'BTC', scale: 8 };
+
+function account(owner = userOwner(ALICE)): LedgerAccount {
+  return LedgerAccount.open(owner, BITCOIN.code, BITCOIN.scale);
+}
+
+describe('account identity', () => {
+  it('derives an addressable id from owner and asset', () => {
+    expect(accountIdFor(userOwner(ALICE), 'btc')).toBe(`user:${ALICE}:BTC`);
+    expect(accountIdFor(platformOwner('custody'), 'BTC')).toBe('platform:custody:BTC');
+  });
+});
+
+describe('balances and holds', () => {
+  it('separates what is held from what may be spent', () => {
+    const acc = account();
+    acc.applyDelta(btc('1.00000000'));
+
+    expect(acc.hold(btc('0.30000000'))).toBe(true);
+    expect(acc.balance.toDecimalString()).toBe('1.00000000');
+    expect(acc.held.toDecimalString()).toBe('0.30000000');
+    expect(acc.available.toDecimalString()).toBe('0.70000000');
+  });
+
+  /* The check that stops the same balance funding two withdrawals. */
+  it('refuses a hold larger than what is free', () => {
+    const acc = account();
+    acc.applyDelta(btc('1.00000000'));
+    acc.hold(btc('0.80000000'));
+
+    expect(acc.hold(btc('0.30000000'))).toBe(false);
+    expect(acc.held.toDecimalString()).toBe('0.80000000');
+  });
+
+  it('gives a reservation back on release', () => {
+    const acc = account();
+    acc.applyDelta(btc('1.00000000'));
+    acc.hold(btc('0.40000000'));
+    acc.release(btc('0.40000000'));
+
+    expect(acc.available.toDecimalString()).toBe('1.00000000');
+  });
+
+  it('refuses to release what was never held', () => {
+    expect(() => account().release(btc('0.10000000'))).toThrow(RangeError);
+  });
+
+  /* Money that does not exist is the failure this whole module is built to
+     prevent, so a customer account simply cannot go negative. */
+  it('refuses to overdraw a customer account', () => {
+    const acc = account();
+    acc.applyDelta(btc('0.50000000'));
+
+    expect(() => acc.applyDelta(btc('-0.60000000'))).toThrow(RangeError);
+    expect(acc.balance.toDecimalString()).toBe('0.50000000');
+  });
+
+  /* Custody is negative by construction — its magnitude is what the platform owes
+     its customers — so the overdraw rule is scoped to the accounts where negative
+     would be wrong. */
+  it('allows a platform account to go negative', () => {
+    const custody = account(platformOwner('custody'));
+    custody.applyDelta(btc('-2.00000000'));
+
+    expect(custody.balance.toDecimalString()).toBe('-2.00000000');
+  });
+});
+
+describe('transfers must balance', () => {
+  const base = { id: 't1', kind: 'deposit' as const, occurredAt: NOW, reference: 'test' };
+
+  it('accepts a balanced pair', () => {
+    const transfer = Transfer.create({
+      ...base,
+      entries: [
+        { accountId: 'a', delta: btc('1.00000000') },
+        { accountId: 'b', delta: btc('-1.00000000') },
+      ],
+    });
+
+    expect(transfer.assets).toEqual(['BTC']);
+  });
+
+  /* The invariant the type exists for. A system that can write this can create
+     money, and it will eventually do so through a branch nobody tested. */
+  it('refuses entries that do not sum to zero', () => {
+    expect(() =>
+      Transfer.create({
+        ...base,
+        entries: [
+          { accountId: 'a', delta: btc('1.00000000') },
+          { accountId: 'b', delta: btc('-0.90000000') },
+        ],
+      }),
+    ).toThrow(RangeError);
+  });
+
+  /* Summing across assets would let "−1 BTC, +1 USD" pass as balanced, which is how
+     a ledger loses a bitcoin and reports that everything adds up. */
+  it('balances per asset, not overall', () => {
+    expect(() =>
+      Transfer.create({
+        ...base,
+        entries: [
+          { accountId: 'a', delta: btc('-1.00000000') },
+          { accountId: 'b', delta: usd('1.00') },
+        ],
+      }),
+    ).toThrow(RangeError);
+  });
+
+  it('accepts a multi-asset transfer where each asset balances', () => {
+    const transfer = Transfer.create({
+      ...base,
+      kind: 'adjustment',
+      entries: [
+        { accountId: 'a', delta: btc('-1.00000000') },
+        { accountId: 'b', delta: btc('1.00000000') },
+        { accountId: 'c', delta: usd('-50.00') },
+        { accountId: 'd', delta: usd('50.00') },
+      ],
+    });
+
+    expect(new Set(transfer.assets)).toEqual(new Set(['BTC', 'USD']));
+  });
+
+  it('refuses a single-legged transfer and an unexplained one', () => {
+    expect(() =>
+      Transfer.create({ ...base, entries: [{ accountId: 'a', delta: btc('0.00000000') }] }),
+    ).toThrow(RangeError);
+
+    expect(() =>
+      Transfer.create({
+        ...base,
+        reference: '   ',
+        entries: [
+          { accountId: 'a', delta: btc('1.00000000') },
+          { accountId: 'b', delta: btc('-1.00000000') },
+        ],
+      }),
+    ).toThrow(RangeError);
+  });
+
+  /* Storage is trusted elsewhere in this codebase; here it is re-checked, because
+     what is being trusted is that no migration or manual UPDATE ever unbalanced a
+     transfer. */
+  it('re-checks the invariant when rehydrating', () => {
+    expect(() =>
+      Transfer.rehydrate({
+        ...base,
+        entries: [
+          { accountId: 'a', delta: btc('1.00000000') },
+          { accountId: 'b', delta: btc('-0.50000000') },
+        ],
+      }),
+    ).toThrow(RangeError);
+  });
+});
+
+describe('withdrawal approval', () => {
+  function pending(valued = usd('5000.00'), owner: UserId = ALICE): Withdrawal {
+    return Withdrawal.request({
+      id: 'w1',
+      userId: owner,
+      amount: btc('0.50000000'),
+      fee: btc('0.00004000'),
+      network: 'bitcoin',
+      destination: 'bc1qexampleaddressvaluethatislongenough',
+      valuedAtUsd: valued,
+      now: NOW,
+    });
+  }
+
+  it('reserves the amount plus the fee', () => {
+    expect(pending().totalReserved.toDecimalString()).toBe('0.50004000');
+  });
+
+  it('completes on a single approval below the dual-control threshold', () => {
+    const withdrawal = pending();
+    expect(withdrawal.approve(BOB, 1, NOW)).toBe(true);
+    expect(withdrawal.status).toBe('approved');
+  });
+
+  it('stays pending until the second signature above the threshold', () => {
+    const withdrawal = pending();
+
+    expect(withdrawal.approve(BOB, 2, NOW)).toBe(false);
+    expect(withdrawal.status).toBe('pending');
+
+    expect(withdrawal.approve(CAROL, 2, NOW)).toBe(true);
+    expect(withdrawal.status).toBe('approved');
+    expect(withdrawal.approvals).toHaveLength(2);
+  });
+
+  /* Otherwise dual control is one person clicking the same button in two tabs. */
+  it('refuses the same operator twice', () => {
+    const withdrawal = pending();
+    withdrawal.approve(BOB, 2, NOW);
+
+    expect(() => withdrawal.approve(BOB, 2, NOW)).toThrow(RangeError);
+    expect(withdrawal.status).toBe('pending');
+  });
+
+  /* A threshold that makes a payment need two signatures is worth nothing if one
+     of them may be the person being paid. */
+  it('refuses self-approval', () => {
+    const withdrawal = pending(usd('5000.00'), BOB);
+    expect(() => withdrawal.approve(BOB, 1, NOW)).toThrow(RangeError);
+  });
+
+  it('refuses a decision on something already decided', () => {
+    const withdrawal = pending();
+    withdrawal.approve(BOB, 1, NOW);
+
+    expect(() => withdrawal.reject(CAROL, 'too late', NOW)).toThrow(RangeError);
+  });
+
+  /* Declining to move money is always safe; requiring a second signature to stop a
+     payment would mean an operator who spots fraud cannot act on it. */
+  it('lets one operator reject regardless of the threshold', () => {
+    const withdrawal = pending(usd('900000.00'));
+    withdrawal.reject(BOB, 'Destination flagged by surveillance', NOW);
+
+    expect(withdrawal.status).toBe('rejected');
+    expect(withdrawal.reason).toBe('Destination flagged by surveillance');
+  });
+
+  it('refuses a rejection with no reason, because the customer is told', () => {
+    expect(() => pending().reject(BOB, '   ', NOW)).toThrow(RangeError);
+  });
+
+  it('refuses a zero or negative request', () => {
+    expect(() =>
+      Withdrawal.request({
+        id: 'w2',
+        userId: ALICE,
+        amount: btc('0.00000000'),
+        fee: btc('0.00004000'),
+        network: 'bitcoin',
+        destination: 'bc1q…',
+        valuedAtUsd: usd('0.00'),
+        now: NOW,
+      }),
+    ).toThrow(RangeError);
+  });
+});
+
+describe('limits', () => {
+  const limits = limitsFor('standard');
+
+  it('allows a withdrawal inside the remaining room', () => {
+    const check = checkDailyLimit(usd('5000.00'), usd('1000.00'), limits);
+    expect(check.allowed).toBe(true);
+    expect(check.remainingUsd.toDecimalString()).toBe('24000.00');
+  });
+
+  it('refuses one that would exceed the cap', () => {
+    const check = checkDailyLimit(usd('5000.00'), usd('22000.00'), limits);
+    expect(check.allowed).toBe(false);
+  });
+
+  /* A cap lowered while withdrawals were already counted against it would otherwise
+     render as a negative allowance on the customer's page. */
+  it('never reports a negative allowance', () => {
+    const check = checkDailyLimit(usd('1.00'), usd('40000.00'), limits);
+    expect(check.remainingUsd.toDecimalString()).toBe('0.00');
+  });
+
+  it('requires two signatures above the dual-control threshold', () => {
+    expect(approvalsRequired(usd('9999.99'), limits)).toBe(1);
+    expect(approvalsRequired(usd('10000.00'), limits)).toBe(2);
+  });
+
+  /* Assuming an unvalued withdrawal is small would make a missing price the
+     cheapest way to bypass dual control. */
+  it('treats an unvalued withdrawal as needing two signatures', () => {
+    expect(approvalsRequired(null, limits)).toBe(2);
+  });
+});

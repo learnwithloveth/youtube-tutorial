@@ -36,7 +36,23 @@ export type ActivityKind =
   | 'sign-out'
   | 'password-reset'
   | 'verification-sent'
-  | 'email-verified';
+  | 'email-verified'
+  /*
+   * Money movements.
+   *
+   * They belong in the same trail as the sign-ins rather than in a ledger-only
+   * log, because the question an operator actually asks is "what did this account
+   * do", and the answer that matters is a withdrawal request forty seconds after a
+   * sign-in from an unfamiliar country. Two separate logs make that correlation a
+   * manual join across two screens.
+   *
+   * The ledger remains the record of truth for the money itself. These are the
+   * narrative, not the accounting.
+   */
+  | 'withdrawal-requested'
+  | 'withdrawal-approved'
+  | 'withdrawal-rejected'
+  | 'deposit-recorded';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -46,6 +62,10 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'password-reset',
   'verification-sent',
   'email-verified',
+  'withdrawal-requested',
+  'withdrawal-approved',
+  'withdrawal-rejected',
+  'deposit-recorded',
 ];
 
 export function isSecurityKind(kind: ActivityKind): boolean {
@@ -114,6 +134,16 @@ export interface ActivityEventSnapshot {
    * that is `presence`'s job, and the two are shown together on the console.
    */
   readonly durationSeconds: number | null;
+  /**
+   * The thing this event is about — a withdrawal id, a transfer id.
+   *
+   * Deliberately not a foreign key. The activity trail outlives what it describes
+   * and must survive a row being deleted in another context; a constraint would
+   * make the audit record the first casualty of a cleanup elsewhere.
+   */
+  readonly reference: string | null;
+  /** A short human summary, e.g. "0.50000000 BTC". Rendered, never parsed. */
+  readonly detail: string | null;
   readonly location: EventLocation | null;
   readonly agent: EventAgent | null;
   /** Keyed digest of the connecting address. Never the address. */
@@ -136,6 +166,8 @@ export class ActivityEvent {
   readonly occurredAt: Date;
   readonly path: string | null;
   readonly durationSeconds: number | null;
+  readonly reference: string | null;
+  readonly detail: string | null;
   readonly location: EventLocation | null;
   readonly agent: EventAgent | null;
   readonly ipDigest: string | null;
@@ -148,6 +180,8 @@ export class ActivityEvent {
     this.occurredAt = snapshot.occurredAt;
     this.path = snapshot.path;
     this.durationSeconds = snapshot.durationSeconds;
+    this.reference = snapshot.reference;
+    this.detail = snapshot.detail;
     this.location = snapshot.location;
     this.agent = snapshot.agent;
     this.ipDigest = snapshot.ipDigest;

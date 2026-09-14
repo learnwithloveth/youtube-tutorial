@@ -30,6 +30,8 @@ export class DrizzleActivityRepository implements ActivityRepository {
       occurredAt: event.occurredAt,
       path: event.path,
       durationSeconds: event.durationSeconds,
+      reference: event.reference,
+      detail: event.detail,
       locationSource: event.location?.source ?? null,
       locationPrecision: event.location?.precision ?? null,
       city: event.location?.city ?? null,
@@ -167,6 +169,8 @@ function toDomain(row: ActivityEventRow): ActivityEvent {
     occurredAt: row.occurredAt,
     path: row.path,
     durationSeconds: row.durationSeconds,
+    reference: row.reference,
+    detail: row.detail,
     location:
       row.locationSource === null || row.locationPrecision === null
         ? null

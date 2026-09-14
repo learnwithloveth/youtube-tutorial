@@ -23,6 +23,8 @@ function build(overrides: Partial<Parameters<typeof ActivityEvent.record>[0]> = 
     occurredAt: NOW,
     path: '/markets',
     durationSeconds: 42,
+    reference: null,
+    detail: null,
     location: null,
     agent: null,
     ipDigest: null,
@@ -104,6 +106,10 @@ describe('retention', () => {
       'password-reset',
       'verification-sent',
       'email-verified',
+      'withdrawal-requested',
+      'withdrawal-approved',
+      'withdrawal-rejected',
+      'deposit-recorded',
     ];
     expect(new Set([...SECURITY_KINDS, 'page-view'])).toEqual(new Set(all));
   });
