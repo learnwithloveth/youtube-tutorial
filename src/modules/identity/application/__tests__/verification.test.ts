@@ -142,6 +142,12 @@ class FakeSessions implements SessionRepository {
     }
     return count;
   }
+  async listActiveForUser(userId: UserId, now: Date) {
+    return [...this.store.values()].filter(
+      (session) =>
+        session.userId === userId && session.revokedAt === null && session.expiresAt > now,
+    );
+  }
   async deleteExpired() {
     return 0;
   }

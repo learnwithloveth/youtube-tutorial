@@ -62,6 +62,14 @@ export interface SessionRepository {
   save(session: Session): Promise<void>;
   /** Revokes every session for a user — "log out all devices". */
   revokeAllForUser(userId: UserId, now: Date): Promise<number>;
+  /**
+   * A user's live sessions, most recently seen first.
+   *
+   * Only the unrevoked and unexpired ones: a session list exists so somebody can
+   * spot one they do not recognise, and padding it with dead rows buries the
+   * signal it is there to surface.
+   */
+  listActiveForUser(userId: UserId, now: Date): Promise<Session[]>;
   deleteExpired(now: Date, limit: number): Promise<number>;
 }
 

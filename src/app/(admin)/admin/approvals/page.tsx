@@ -13,6 +13,7 @@ import { toUserId, type UserId } from '@/shared/kernel/ids';
 
 import { AdminPageHeader, EmptyState } from '../../_components/admin-ui';
 import { Panel } from '../../../_console/components/page-header';
+import { usd } from '../../../(platform)/app/_lib/format-usd';
 import { DecisionForm } from './_components/decision-form';
 
 /**
@@ -242,10 +243,3 @@ async function describeRequesters(
   }
 }
 
-/** Formats an exact decimal string as USD, without a `Number()` on the money path. */
-function usd(decimal: string): string {
-  const [whole = '0', fraction = '00'] = decimal.split('.');
-  const negative = whole.startsWith('-');
-  const digits = (negative ? whole.slice(1) : whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${negative ? '-' : ''}$${digits}.${fraction.padEnd(2, '0').slice(0, 2)}`;
-}

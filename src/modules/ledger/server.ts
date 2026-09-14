@@ -18,6 +18,7 @@ export type { PriceOracle } from './application/ports';
 
 export { getWallet } from './application/queries/wallet';
 export { listPendingApprovals } from './application/queries/pending-approvals';
+export { getStatement } from './application/queries/statement';
 
 export type { RequestWithdrawalCommand } from './application/use-cases/request-withdrawal';
 export type { DecideWithdrawalCommand } from './application/use-cases/decide-withdrawal';

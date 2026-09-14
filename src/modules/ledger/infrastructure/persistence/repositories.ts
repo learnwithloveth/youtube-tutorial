@@ -18,7 +18,11 @@ import {
 import type { LedgerAsset } from '../../domain/asset';
 import { Transfer } from '../../domain/transfer';
 import { Withdrawal, type WithdrawalStatus } from '../../domain/withdrawal';
-import type { LedgerRepository, WithdrawalRepository } from '../../application/ports';
+import type {
+  LedgerRepository,
+  StatementEntry,
+  WithdrawalRepository,
+} from '../../application/ports';
 import {
   accounts,
   entries,
@@ -155,6 +159,63 @@ export class DrizzleLedgerRepository implements LedgerRepository {
       const rows = await this.updateBalance(account);
       if (rows.length === 0) throw new ConcurrencyError('Account', account.id);
     }
+  }
+
+  async listEntries(query: {
+    owner: AccountOwner;
+    asset?: string | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<StatementEntry[]> {
+    const rows = await this.db
+      .select({
+        id: entries.id,
+        transferId: entries.transferId,
+        accountId: entries.accountId,
+        asset: entries.asset,
+        delta: entries.delta,
+        occurredAt: entries.occurredAt,
+        scale: accounts.scale,
+        kind: transfers.kind,
+        reference: transfers.reference,
+      })
+      .from(entries)
+      // Joined rather than fetched per row: a statement of fifty lines would
+      // otherwise be a hundred extra round trips to answer "why did this change".
+      .innerJoin(accounts, eq(entries.accountId, accounts.id))
+      .innerJoin(transfers, eq(entries.transferId, transfers.id))
+      .where(this.ownerScope(query.owner, query.asset))
+      .orderBy(desc(entries.occurredAt), desc(entries.id))
+      .limit(query.limit)
+      .offset(query.offset);
+
+    return rows.map((row) => ({
+      id: row.id,
+      transferId: row.transferId,
+      kind: row.kind,
+      reference: row.reference,
+      accountId: row.accountId,
+      delta: Money.fromDecimalString(row.delta, row.asset, row.scale),
+      occurredAt: row.occurredAt,
+    }));
+  }
+
+  async countEntries(owner: AccountOwner, asset?: string | undefined): Promise<number> {
+    const rows = await this.db
+      .select({ total: count() })
+      .from(entries)
+      .innerJoin(accounts, eq(entries.accountId, accounts.id))
+      .where(this.ownerScope(owner, asset));
+
+    return rows[0]?.total ?? 0;
+  }
+
+  /** Restricts a statement read to one owner, and optionally one asset. */
+  private ownerScope(owner: AccountOwner, asset?: string | undefined) {
+    const ownerId = owner.kind === 'user' ? owner.userId : owner.purpose;
+    const clauses = [eq(accounts.ownerKind, owner.kind), eq(accounts.ownerId, ownerId)];
+    if (asset) clauses.push(eq(entries.asset, asset.toUpperCase()));
+    return and(...clauses);
   }
 
   private updateBalance(account: LedgerAccount) {

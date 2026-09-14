@@ -3,7 +3,7 @@ import type { IdGenerator, UserId } from '@/shared/kernel/ids';
 
 import type { LedgerAsset } from '../domain/asset';
 import type { AccountId, AccountOwner, LedgerAccount } from '../domain/account';
-import type { Transfer } from '../domain/transfer';
+import type { Transfer, TransferKind } from '../domain/transfer';
 import type { Withdrawal, WithdrawalStatus } from '../domain/withdrawal';
 
 /**
@@ -41,6 +41,38 @@ export interface LedgerRepository {
 
   /** Persists account state with no transfer — a hold or a release. */
   saveAccounts(accounts: readonly LedgerAccount[]): Promise<void>;
+
+  /**
+   * One owner's movements, newest first — the statement.
+   *
+   * Reads `entries` rather than reconstructing anything from balances, because the
+   * entries *are* the record and the balance is the materialised view of them. A
+   * statement derived from anything else would be a second opinion about what
+   * happened.
+   *
+   * Returns the transfer's kind and reference alongside each entry: a bare delta
+   * says a number changed, and what a customer needs is why.
+   */
+  listEntries(query: {
+    owner: AccountOwner;
+    asset?: string | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<StatementEntry[]>;
+
+  countEntries(owner: AccountOwner, asset?: string | undefined): Promise<number>;
+}
+
+/** One line of a statement: the movement, and what caused it. */
+export interface StatementEntry {
+  readonly id: string;
+  readonly transferId: string;
+  readonly kind: TransferKind;
+  readonly reference: string;
+  readonly accountId: AccountId;
+  /** Signed: positive credited the account, negative debited it. */
+  readonly delta: Money;
+  readonly occurredAt: Date;
 }
 
 export interface WithdrawalRepository {

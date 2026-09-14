@@ -1,191 +1,285 @@
-'use client';
-
-import { useMemo, useState } from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowUpDown, Download } from 'lucide-react';
+import { ArrowRight, PieChart, TriangleAlert, Wallet2 } from 'lucide-react';
+
+import { requireUser } from '@/server/auth';
+import { getWalletFor } from '@/server/ledger';
+import { getMarkets } from '@/server/market-data';
+import { formatPercent } from '@/shared/lib/format';
+import { cn } from '@/shared/lib/cn';
+import { Badge } from '@/shared/ui/primitives/badge';
+import { StatTile } from '@/shared/ui/charts/stat-tile';
+import { DonutChart, type DonutSlice } from '@/shared/ui/charts/donut-chart';
+import { AssetMark } from '@/shared/ui/visuals/asset-mark';
+import type { UserId } from '@/shared/kernel/ids';
+
 import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
-import { ChartFrame } from '@/shared/ui/charts/chart-frame';
-import { DonutChart } from '@/shared/ui/charts/donut-chart';
-import { BarChart } from '@/shared/ui/charts/bar-chart';
-import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { Button } from '@/shared/ui/primitives/button';
-import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
-import { AssetMark } from '@/shared/ui/visuals/asset-mark';
-import { Sparkline } from '@/shared/ui/visuals/sparkline';
-import { usePortfolio, useAllocation } from '../../_data/use-account';
-import { MONTHLY_PNL } from '../../_data/data';
-import { axisMoney, money, moneyExact, signedMoney, signedPercent } from '../../../_console/data/format';
-import { formatCompact, formatQuantity } from '@/shared/lib/format';
-import { cn } from '@/shared/lib/cn';
+import { usd } from '../_lib/format-usd';
 
-type SortKey = 'value' | 'pnl' | 'weight' | 'symbol';
+/**
+ * The portfolio: what is held, and how it is distributed.
+ *
+ * ── There is no performance chart, and that is the honest answer ───────────────
+ * The page this replaced drew a 30-day portfolio curve from a fixture. Recomputing
+ * it needs two things this system does not store: a snapshot of what was held on
+ * each past day, and the price of each asset on that day. A curve drawn from
+ * today's prices and today's balances is not history — it is one number repeated,
+ * and it would redraw itself differently on every page load.
+ *
+ * Building it properly means a daily valuation job writing a snapshot per account
+ * per day. That is a real feature with a real cost, and a chart that looks like it
+ * already exists is the worst way to decide whether to pay it.
+ *
+ * ── Allocation is computable, and is here ──────────────────────────────────────
+ * "What fraction of my portfolio is bitcoin" needs only current balances and
+ * current prices, both of which are real. It is shown, with the unpriceable
+ * holdings called out rather than folded in at zero.
+ */
 
-export default function PortfolioPage() {
+export const dynamic = 'force-dynamic';
 
-  const { holdings, total, invested, pnl, pnlPercent } = usePortfolio();
-  const allocation = useAllocation(5);
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'value', dir: 'desc' });
-  const [view, setView] = useState<'all' | 'staked'>('all');
+export const metadata: Metadata = {
+  title: 'Portfolio',
+  robots: { index: false, follow: false },
+};
 
-  const rows = useMemo(() => {
-    const base = view === 'staked' ? holdings.filter((h) => h.staked > 0) : holdings;
-    const factor = sort.dir === 'asc' ? 1 : -1;
-    return [...base].sort((a, b) => {
-      if (sort.key === 'symbol') return a.asset.symbol.localeCompare(b.asset.symbol) * factor;
-      if (sort.key === 'pnl') return (a.pnl - b.pnl) * factor;
-      if (sort.key === 'weight') return (a.weight - b.weight) * factor;
-      return (a.value - b.value) * factor;
-    });
-  }, [holdings, sort, view]);
+export default async function PortfolioPage() {
+  const user = await requireUser('/app/portfolio');
 
-  const toggle = (key: SortKey) =>
-    setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }));
+  const [wallet, markets] = await Promise.all([
+    getWalletFor(user.id as UserId),
+    getMarkets(),
+  ]);
 
-  const realised = MONTHLY_PNL.reduce((s, m) => s + m.value, 0);
-  const bestMonth = MONTHLY_PNL.reduce((a, b) => (b.value > a.value ? b : a));
+  const marks = new Map(markets.map((m) => [m.symbol, m]));
+  const held = wallet.balances.filter((balance) => Number(balance.total) > 0);
+
+  const priced = held.filter((balance) => balance.valueUsd !== null);
+  const unpriced = held.filter((balance) => balance.valueUsd === null);
+
+  // Shares are computed over the priced subset only, and the page says so. Folding
+  // an unpriceable holding in at zero would silently overstate everything else.
+  const pricedTotal = priced.reduce((sum, balance) => sum + Number(balance.valueUsd), 0);
+
+  const slices: DonutSlice[] = priced.map((balance) => ({
+    key: balance.asset,
+    label: balance.asset,
+    value: Number(balance.valueUsd),
+    share: pricedTotal > 0 ? Number(balance.valueUsd) / pricedTotal : 0,
+  }));
 
   return (
     <>
       <PageHeader
         title="Portfolio"
-        description="Cost basis, unrealised position and realised results by month."
-        actions={
-          <Button variant="outline" size="sm">
-            <Download className="size-3.5" />
-            Export CSV
-          </Button>
-        }
+        description="What you hold and how it is distributed, valued at the live market."
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Market value" value={moneyExact(total)} delta={{ value: signedPercent(pnlPercent), direction: pnl >= 0 ? 'up' : 'down', period: 'unrealised' }} />
-        <StatTile label="Total invested" value={money(invested)} delta={{ value: `${holdings.length} assets`, direction: 'flat', period: 'held' }} />
-        <StatTile label="Unrealised P&L" value={signedMoney(pnl)} delta={{ value: signedPercent(pnlPercent), direction: pnl >= 0 ? 'up' : 'down', period: 'on cost basis' }} />
-        <StatTile label="Realised, 12 months" value={signedMoney(realised)} delta={{ value: `Best ${bestMonth.month}`, direction: 'up', period: signedMoney(bestMonth.value) }} />
-      </div>
-
-      <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1.25fr]">
-        <ChartFrame
-          title="Allocation"
-          subtitle="By market value"
-          table={{
-            columns: ['Asset', 'Value', 'Share'],
-            numericFrom: 1,
-            rows: allocation.map((a) => [a.label, moneyExact(a.value), `${a.share.toFixed(1)}%`]),
-          }}
-        >
-          <DonutChart slices={allocation} formatValue={money} centerLabel="Total" centerValue={formatCompact(total, 'USD')} />
-        </ChartFrame>
-
-        <ChartFrame
-          title="Realised profit and loss"
-          subtitle="Closed positions by month — the sign is carried by the baseline, the hue and the label"
-          legend={[
-            { label: 'Profit', color: 'var(--up)' },
-            { label: 'Loss', color: 'var(--down)' },
-          ]}
-          table={{
-            columns: ['Month', 'Realised'],
-            numericFrom: 1,
-            rows: MONTHLY_PNL.map((m) => [m.month, signedMoney(m.value)]),
-          }}
-        >
-          <BarChart
-            bars={MONTHLY_PNL.map((m) => ({ label: m.month, value: m.value }))}
-            formatValue={axisMoney}
-            ariaSummary={`Realised profit and loss by month over the past year, totalling ${signedMoney(realised)}.`}
-          />
-        </ChartFrame>
-      </div>
-
-      <Panel>
-        <PanelHeader
-          title="Holdings"
-          subtitle="Every position, with cost basis and live mark"
-          actions={
-            <SegmentedControl
-              ariaLabel="Filter holdings"
-              size="sm"
-              segments={[
-                { value: 'all', label: 'All' },
-                { value: 'staked', label: 'Staked' },
-              ]}
-              value={view}
-              onChange={setView}
-            />
-          }
+      {wallet.degraded ? (
+        <Notice
+          title="Your portfolio could not be loaded."
+          body="This is a failed query, not an empty account."
         />
-        <TableShell caption="Holdings with quantity, cost basis, market value and profit or loss" minWidth="54rem">
-          <thead>
-            <tr>
-              {([
-                ['Asset', 'symbol', false],
-                ['Quantity', null, true],
-                ['Avg cost', null, true],
-                ['Price', null, true],
-                ['Value', 'value', true],
-                ['P&L', 'pnl', true],
-                ['Weight', 'weight', true],
-              ] as const).map(([label, key, numeric]) => (
-                <Th key={label} numeric={numeric}
-                    aria-sort={key && sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
-                  {key ? (
-                    <button
-                      type="button"
-                      onClick={() => toggle(key)}
-                      className={cn(
-                        'inline-flex items-center gap-1 transition-colors hover:text-fg',
-                        sort.key === key && 'text-fg',
-                      )}
-                    >
-                      {label}
-                      <ArrowUpDown className="size-3" />
-                    </button>
-                  ) : (
-                    label
-                  )}
-                </Th>
-              ))}
-              <Th numeric className="hidden lg:table-cell">7d</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((h) => (
-              <Tr key={h.asset.id}>
-                <Td>
-                  <Link href={`/markets/${h.asset.id}`} className="flex items-center gap-3">
-                    <AssetMark symbol={h.asset.symbol} glyph={h.asset.glyph} hue={h.asset.hue} size="sm" />
-                    <span>
-                      <span className="block text-sm font-medium text-fg">{h.asset.name}</span>
-                      <span className="block text-2xs text-fg-subtle">
-                        {h.asset.symbol}
-                        {h.staked > 0 ? ` · ${formatQuantity(h.staked, 2)} staked` : ''}
-                      </span>
-                    </span>
-                  </Link>
-                </Td>
-                <Td numeric>{formatQuantity(h.quantity, h.quantity < 1 ? 4 : 2)}</Td>
-                <Td numeric>{moneyExact(h.costBasis)}</Td>
-                <Td numeric>{moneyExact(h.price)}</Td>
-                <Td numeric className="font-medium text-fg">{moneyExact(h.value)}</Td>
-                <Td numeric>
-                  <span className={h.pnl >= 0 ? 'text-up' : 'text-down'}>
-                    {signedMoney(h.pnl)}
-                    <span className="ml-1.5 text-2xs opacity-80">{signedPercent(h.pnlPercent)}</span>
-                  </span>
-                </Td>
-                <Td numeric>{h.weight.toFixed(1)}%</Td>
-                <Td numeric className="hidden lg:table-cell">
-                  <div className="flex justify-end">
-                    <Sparkline id={`portfolio-${h.asset.symbol}`} data={h.spark} positive={h.asset.change7d >= 0} width={70} height={22} filled={false} />
-                  </div>
-                </Td>
-              </Tr>
-            ))}
-          </tbody>
-        </TableShell>
-      </Panel>
+      ) : null}
+
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <StatTile
+          label="Portfolio value"
+          value={wallet.totalValueUsd === null ? '—' : usd(wallet.totalValueUsd)}
+          delta={{
+            value:
+              wallet.totalValueUsd === null
+                ? `${unpriced.length} unpriced`
+                : 'valued now',
+            direction: 'flat',
+            period: '',
+          }}
+          icon={<Wallet2 className="size-4" />}
+        />
+        <StatTile
+          label="Assets held"
+          value={String(held.length)}
+          delta={{
+            value: `${priced.length} priced`,
+            direction: 'flat',
+            period: '',
+          }}
+          icon={<PieChart className="size-4" />}
+        />
+        <StatTile
+          label="Largest position"
+          value={slices[0]?.label ?? '—'}
+          delta={{
+            value:
+              slices[0] === undefined
+                ? 'nothing held'
+                : `${(slices[0].share * 100).toFixed(1)}% of priced value`,
+            direction: 'flat',
+            period: '',
+          }}
+        />
+      </div>
+
+      {held.length === 0 ? (
+        <Panel>
+          <p className="py-14 text-center text-sm text-fg-subtle">
+            {wallet.degraded
+              ? 'Balances could not be read.'
+              : 'Nothing held yet. Deposits appear here once an operator confirms them.'}{' '}
+            <Link href="/app/wallet" className="text-brand-soft hover:underline">
+              Open the wallet
+            </Link>
+          </p>
+        </Panel>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_1.4fr]">
+          <Panel>
+            <PanelHeader
+              title="Allocation"
+              subtitle={
+                unpriced.length > 0
+                  ? `Of the ${priced.length} holdings we can price — ${unpriced.length} excluded`
+                  : 'By current market value'
+              }
+            />
+            {slices.length === 0 ? (
+              <p className="py-10 text-center text-sm text-fg-subtle">
+                Nothing here can be priced right now, so there is no share to show.
+              </p>
+            ) : (
+              <div className="flex justify-center">
+                <DonutChart
+                  slices={slices}
+                  size={220}
+                  formatValue={(value) => usd(value.toFixed(2))}
+                  centerLabel="Priced value"
+                  centerValue={usd(pricedTotal.toFixed(2))}
+                />
+              </div>
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelHeader
+              title="Holdings"
+              subtitle="Balances are exact; values follow the live market"
+              actions={
+                <Link
+                  href="/app/transactions"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-soft hover:underline"
+                >
+                  Statement
+                  <ArrowRight className="size-3" />
+                </Link>
+              }
+            />
+            <TableShell caption="Your holdings" minWidth="40rem">
+              <thead>
+                <tr>
+                  <Th>Asset</Th>
+                  <Th numeric>Balance</Th>
+                  <Th numeric>Price</Th>
+                  <Th numeric>24h</Th>
+                  <Th numeric>Value</Th>
+                  <Th numeric>Share</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {held.map((balance) => {
+                  const market = marks.get(balance.asset);
+                  const quote = market?.quote.state === 'live' ? market.quote : null;
+                  const share =
+                    balance.valueUsd !== null && pricedTotal > 0
+                      ? Number(balance.valueUsd) / pricedTotal
+                      : null;
+
+                  return (
+                    <Tr key={balance.asset}>
+                      <Td>
+                        <span className="flex items-center gap-2.5">
+                          <AssetMark
+                            symbol={balance.asset}
+                            glyph={market?.glyph ?? balance.asset.slice(0, 1)}
+                            hue={market?.hue ?? 'var(--chart-1)'}
+                            size="sm"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm text-fg">{balance.asset}</span>
+                            <span className="block text-2xs text-fg-subtle">
+                              {balance.name}
+                            </span>
+                          </span>
+                        </span>
+                      </Td>
+                      <Td numeric className="font-mono">
+                        {balance.total}
+                      </Td>
+                      <Td numeric>
+                        {quote === null ? (
+                          <Badge tone="neutral">No price</Badge>
+                        ) : (
+                          usd(quote.price)
+                        )}
+                      </Td>
+                      <Td numeric>
+                        {quote === null ? (
+                          <span className="text-fg-subtle">—</span>
+                        ) : (
+                          <span
+                            className={cn(
+                              quote.change24hPercent >= 0 ? 'text-up' : 'text-down',
+                            )}
+                          >
+                            {formatPercent(quote.change24hPercent)}
+                          </span>
+                        )}
+                      </Td>
+                      <Td numeric>
+                        {balance.valueUsd === null ? (
+                          <span className="text-2xs text-fg-subtle">Not priced</span>
+                        ) : (
+                          usd(balance.valueUsd)
+                        )}
+                      </Td>
+                      <Td numeric>
+                        {share === null ? (
+                          <span className="text-fg-subtle">—</span>
+                        ) : (
+                          `${(share * 100).toFixed(1)}%`
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </tbody>
+            </TableShell>
+
+            {unpriced.length > 0 ? (
+              <p className="mt-4 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
+                {unpriced.map((balance) => balance.asset).join(', ')}{' '}
+                {unpriced.length === 1 ? 'has' : 'have'} no live quote, so{' '}
+                {unpriced.length === 1 ? 'it is' : 'they are'} excluded from the total
+                and the shares rather than counted as zero.
+              </p>
+            ) : null}
+          </Panel>
+        </div>
+      )}
     </>
+  );
+}
+
+function Notice({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      role="status"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-down/35 bg-down/8 px-4 py-3"
+    >
+      <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
+      <p className="min-w-0 text-sm text-fg">
+        {title} <span className="text-fg-muted">{body}</span>
+      </p>
+    </div>
   );
 }

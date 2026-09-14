@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, count, desc, eq, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -228,6 +228,23 @@ export class DrizzleSessionRepository implements SessionRepository {
       .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
       .returning({ id: sessions.id });
     return revoked.length;
+  }
+
+  async listActiveForUser(userId: UserId, now: Date): Promise<Session[]> {
+    const rows = await this.db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          isNull(sessions.revokedAt),
+          gt(sessions.expiresAt, now),
+        ),
+      )
+      .orderBy(desc(sessions.lastSeenAt))
+      .limit(50);
+
+    return rows.map(sessionToDomain);
   }
 
   /** Bounded delete on the expiry index — never a full-table sweep. */

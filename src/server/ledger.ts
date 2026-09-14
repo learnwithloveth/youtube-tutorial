@@ -2,8 +2,9 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import type { ApprovalQueueDto, WalletDto } from '@/modules/ledger';
+import type { ApprovalQueueDto, StatementDto, StatementOptions, WalletDto } from '@/modules/ledger';
 import {
+  getStatement,
   getWallet,
   LEDGER_ASSETS,
   listPendingApprovals,
@@ -120,6 +121,25 @@ export const getApprovalQueue = cache(async (): Promise<ApprovalQueueDto> => {
 
   return listPendingApprovals(context.dependencies);
 });
+
+/**
+ * One customer's statement.
+ *
+ * Not deduplicated per request, unlike the wallet: it is parameterised by page and
+ * asset, and `cache` keyed on nothing would return the first page to a caller
+ * asking for the third.
+ */
+export async function getStatementFor(
+  userId: UserId,
+  options: StatementOptions = {},
+): Promise<StatementDto> {
+  const context = ledger();
+  if (context === null) {
+    return { lines: [], total: 0, limit: options.limit ?? 25, offset: 0, degraded: true };
+  }
+
+  return getStatement(context.dependencies, userId, options);
+}
 
 /** The withdrawal form's options: assets, networks, fees and minimums. */
 export function withdrawableAssets() {

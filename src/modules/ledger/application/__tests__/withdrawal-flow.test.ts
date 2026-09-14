@@ -72,6 +72,42 @@ class FakeLedger implements LedgerRepository {
   async saveAccounts(updated: readonly LedgerAccount[]) {
     for (const account of updated) this.store.set(account.id, account);
   }
+  private statement(owner: AccountOwner, asset?: string | undefined) {
+    const scope = owner.kind === 'user' ? `user:${owner.userId}:` : `platform:${owner.purpose}:`;
+    return this.posted
+      .flatMap((transfer) =>
+        transfer.entries
+          .filter(
+            (entry) =>
+              entry.accountId.startsWith(scope) &&
+              (!asset || entry.delta.currency === asset.toUpperCase()),
+          )
+          .map((entry, position) => ({
+            id: `${transfer.id}:${position}`,
+            transferId: transfer.id,
+            kind: transfer.kind,
+            reference: transfer.reference,
+            accountId: entry.accountId,
+            delta: entry.delta,
+            occurredAt: transfer.occurredAt,
+          })),
+      )
+      .reverse();
+  }
+  async listEntries(query: {
+    owner: AccountOwner;
+    asset?: string | undefined;
+    limit: number;
+    offset: number;
+  }) {
+    return this.statement(query.owner, query.asset).slice(
+      query.offset,
+      query.offset + query.limit,
+    );
+  }
+  async countEntries(owner: AccountOwner, asset?: string | undefined) {
+    return this.statement(owner, asset).length;
+  }
 }
 
 class FakeWithdrawals implements WithdrawalRepository {

@@ -13,6 +13,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
+import { usd } from '../_lib/format-usd';
 import { WithdrawForm } from './_components/withdraw-form';
 
 /**
@@ -268,20 +269,6 @@ export default async function WalletPage() {
   );
 }
 
-/**
- * Formats an exact decimal string as USD.
- *
- * Takes a string and splits it, rather than `Number(value).toLocaleString()`. For
- * the amounts on this page a float would round identically, so the reason is not
- * arithmetic — it is that a `Number()` anywhere on the money path is the thing a
- * later edit copies somewhere it does matter.
- */
-function usd(decimal: string): string {
-  const [whole = '0', fraction = '00'] = decimal.split('.');
-  const negative = whole.startsWith('-');
-  const digits = (negative ? whole.slice(1) : whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${negative ? '-' : ''}$${digits}.${fraction.padEnd(2, '0').slice(0, 2)}`;
-}
 
 function LimitBar({ label, used, cap }: { label: string; used: string; cap: string }) {
   // Percentages are for a bar's width, which is a rendering concern rather than an

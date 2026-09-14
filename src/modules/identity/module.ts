@@ -9,6 +9,10 @@ import {
   type DescribeUsers,
 } from './application/queries/describe-users';
 import { createListUsers, type ListUsers } from './application/queries/list-users';
+import {
+  createListSessions,
+  type ListSessions,
+} from './application/queries/list-sessions';
 import { createAuthenticate, type Authenticate } from './application/use-cases/authenticate';
 import { createRegisterUser, type RegisterUser } from './application/use-cases/register-user';
 import {
@@ -77,6 +81,8 @@ export interface IdentityModule {
   readonly describeUsers: DescribeUsers;
   /** The console's account list: filtered, paged, with per-status tallies. */
   readonly listUsers: ListUsers;
+  /** A user's live sessions, for the security page. */
+  readonly listSessions: ListSessions;
   /** Name of the session cookie. Owned here so the delivery layer cannot drift. */
   readonly cookieName: string;
 }
@@ -132,6 +138,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     resetPassword: createResetPassword(dependencies),
     describeUsers: createDescribeUsers(dependencies),
     listUsers: createListUsers(dependencies),
+    listSessions: createListSessions(dependencies),
     cookieName: SESSION_COOKIE_NAME,
   };
 }

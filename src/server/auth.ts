@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 
-import type { CurrentUserDto } from '@/modules/identity';
+import type { CurrentUserDto, SessionSummaryDto } from '@/modules/identity';
 import {
   registerIdentity,
   SESSION_COOKIE_NAME,
@@ -12,6 +12,7 @@ import {
 } from '@/modules/identity/server';
 import { requireDb } from '@/platform/db/client';
 import { env, sessionSecret, smtpConfig } from '@/platform/env';
+import { logger } from '@/platform/observability/logger';
 
 /**
  * The application's authentication facade.
@@ -99,6 +100,45 @@ export async function requireUser(returnTo?: string): Promise<CurrentUserDto> {
  * produces a logout that does not log anyone out.
  */
 export { SESSION_COOKIE_NAME as SESSION_COOKIE };
+
+/**
+ * The caller's own live sessions, newest activity first.
+ *
+ * Reads the cookie here rather than taking a session id from the caller: this
+ * feeds a page that offers to end sessions, and a caller-supplied id is how one
+ * account's page ends another account's session.
+ */
+export const getSessions = cache(async (): Promise<SessionSummaryDto[]> => {
+  const { user } = await getAuth();
+  if (user === null) return [];
+
+  const sealed = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
+
+  try {
+    return await identity().listSessions(user.id, sealed);
+  } catch (error) {
+    // The security page also shows the account and its verification state; losing
+    // the session list should cost that panel, not the page.
+    logger.warn({ event: 'session_list_failed', module: 'identity' }, error);
+    return [];
+  }
+});
+
+/**
+ * Ends every session for the signed-in user, including this one.
+ *
+ * "Log out everywhere" is the reason sessions are server-side rows at all — it
+ * takes effect immediately rather than whenever a JWT would have expired. It
+ * deliberately includes the current session: someone who believes their account is
+ * compromised should not have to reason about which device they are on, and
+ * leaving one live is the one that might not be theirs.
+ */
+export async function revokeAllSessions(): Promise<number> {
+  const { user } = await getAuth();
+  if (user === null) return 0;
+
+  return identity().revokeAllSessions(user.id);
+}
 
 /**
  * The signed-in user, required to be an operator.

@@ -32,3 +32,9 @@ export type { WithdrawalStatus } from './domain/withdrawal';
  * — the same trap `presence` and `activity` document. They live in `./server`.
  */
 export type { ApprovalQueueDto } from './application/queries/pending-approvals';
+export type {
+  StatementDto,
+  StatementLineDto,
+  StatementOptions,
+} from './application/queries/statement';
+export type { TransferKind } from './domain/transfer';
