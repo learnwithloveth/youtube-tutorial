@@ -1,308 +1,290 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Info, TriangleAlert } from 'lucide-react';
 
-import { useMemo, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
-import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
-import { TableShell, Td, Th, Tr, EmptyRow } from '../../../_console/components/table';
-import { ChartFrame } from '@/shared/ui/charts/chart-frame';
-import { CandleChart } from '@/shared/ui/charts/candle-chart';
-import { DepthChart } from '@/shared/ui/charts/depth-chart';
-import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
+import type { CandleInterval } from '@/modules/market-data';
+import { CANDLE_INTERVALS } from '@/modules/market-data';
+import { requireUser } from '@/server/auth';
+import { getWalletFor } from '@/server/ledger';
+import { getBook, getMarketCandles, getMarkets, getTape } from '@/server/market-data';
+import { formatPercent } from '@/shared/lib/format';
+import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { AssetMark } from '@/shared/ui/visuals/asset-mark';
-import { OrderBook } from '../../_components/order-book';
-import { OrderForm } from '../../_components/order-form';
-import { ASSETS, ASSET_BY_ID, FIRST_ASSET } from '../../../_console/data/assets';
-import { useLiveQuotes } from '../../_data/use-markets';
-import { AVAILABLE_CASH, OPEN_ORDERS, RECENT_FILLS, buildBook, buildCandles } from '../../_data/data';
-import { dayLabel, dateTimeLabel, fullDayLabel, money, moneyExact } from '../../../_console/data/format';
-import { formatCompact, formatPercent, formatQuantity } from '@/shared/lib/format';
-import { useEscape, useOutsideClick } from '@/shared/lib/hooks';
-import { cn } from '@/shared/lib/cn';
-import { useRef } from 'react';
+import type { UserId } from '@/shared/kernel/ids';
 
-const MARKETS = ASSETS.slice(0, 10).filter((a) => a.category !== 'Stablecoin');
-type Tab = 'orders' | 'fills';
+import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
+import { Depth, PriceChart, Tape } from './_components/market-panels';
 
-export default function TradeTerminalPage() {
+/**
+ * The trading terminal.
+ *
+ * ── What is real now ───────────────────────────────────────────────────────────
+ * The book, the candles, the depth and the tape all come from Binance's public
+ * market-data service — live depth to twenty levels, real OHLCV, real prints.
+ * Everything on this page that describes *the market* is an observation.
+ *
+ * ── What is not, and why there is no order form ────────────────────────────────
+ * The page this replaced had a working-looking order ticket over a simulated book
+ * built by `buildBook()`. Placing an order needs one of two things this platform
+ * does not have: a matching engine with its own book, or a principal desk that
+ * sells from inventory and hedges. Neither is an API away — they are the exchange.
+ *
+ * A ticket that accepts an order and does nothing with it is worse than no ticket,
+ * so it is gone and the page says why. The balances beside the book are real, from
+ * the ledger, so the one honest thing the page can tell a customer about their own
+ * position is still there.
+ *
+ * ── The market selection lives in the URL ──────────────────────────────────────
+ * Which keeps this a Server Component: the book is fetched per request, a market is
+ * a shareable link, and no order book ships to the browser as JSON for a component
+ * to re-render.
+ */
 
-  const [assetId, setAssetId] = useState('btc');
-  const [picker, setPicker] = useState(false);
-  const [tab, setTab] = useState<Tab>('orders');
-  const pickerRef = useRef<HTMLDivElement>(null);
-  useOutsideClick(pickerRef, () => setPicker(false), picker);
-  useEscape(() => setPicker(false), picker);
+export const dynamic = 'force-dynamic';
 
-  // ASSETS is a non-empty literal catalogue; the fallback keeps the compiler
-  // honest without an assertion, and the throw is unreachable in practice.
-  const asset = ASSET_BY_ID.get(assetId) ?? FIRST_ASSET;
-  const quotes = useLiveQuotes([asset]);
-  const live = quotes[0]?.live ?? asset.price;
-  const [limitPrice, setLimitPrice] = useState(asset.price);
+export const metadata: Metadata = {
+  title: 'Trade',
+  robots: { index: false, follow: false },
+};
 
-  const market = `${asset.symbol}-USD`;
-  const candles = useMemo(() => buildCandles(asset.symbol), [asset.symbol]);
-  const book = useMemo(() => buildBook(asset.price), [asset.price]);
+export default async function TradeTerminalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ market?: string; interval?: string }>;
+}) {
+  const params = await searchParams;
+  const user = await requireUser('/app/trade');
 
-  const priceFmt = (v: number) =>
-    v >= 1000 ? v.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : v.toFixed(v >= 1 ? 3 : 5);
+  const markets = await getMarkets({ limit: 12 });
+  const selected =
+    markets.find((market) => market.symbol === params.market?.toUpperCase()) ?? markets[0];
 
-  const up = asset.change24h >= 0;
-  const orders = OPEN_ORDERS;
+  const interval = (CANDLE_INTERVALS as readonly string[]).includes(params.interval ?? '')
+    ? (params.interval as CandleInterval)
+    : '1h';
+
+  if (selected === undefined) {
+    return (
+      <>
+        <PageHeader title="Trade" description="No markets are listed." />
+        <Panel>
+          <p className="py-14 text-center text-sm text-fg-subtle">
+            The catalogue returned nothing to trade.
+          </p>
+        </Panel>
+      </>
+    );
+  }
+
+  // Independent reads, awaited together. Each resolves to null on failure rather
+  // than rejecting, so there is no unattached rejection to leak.
+  const [book, candles, tape, wallet] = await Promise.all([
+    getBook(selected.symbol, 20),
+    getMarketCandles(selected.symbol, interval, 120),
+    getTape(selected.symbol, 24),
+    getWalletFor(user.id as UserId),
+  ]);
+
+  const balance = wallet.balances.find((entry) => entry.asset === selected.symbol);
+  const quote = selected.quote.state === 'unavailable' ? null : selected.quote;
 
   return (
     <>
       <PageHeader
         title="Trade"
-        description="The same order book institutions trade on, with the maker rate your tier earns."
+        description="Live depth, candles and prints from the public market."
       />
 
-      {/* Market header — price, session stats, pair selector. */}
-      <Panel className="mb-4" padded={false}>
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-4 p-4">
-          <div className="relative" ref={pickerRef}>
-            <button
-              type="button"
-              onClick={() => setPicker((v) => !v)}
-              aria-expanded={picker}
-              aria-haspopup="listbox"
-              className="flex items-center gap-3 rounded-md border border-line px-3 py-2 transition-colors hover:border-line-strong"
-            >
-              <AssetMark symbol={asset.symbol} glyph={asset.glyph} hue={asset.hue} size="sm" />
-              <span className="text-left">
-                <span className="block text-sm font-semibold text-fg">{market}</span>
-                <span className="block text-2xs text-fg-subtle">{asset.name}</span>
-              </span>
-              <ChevronDown className={cn('size-4 text-fg-subtle transition-transform', picker && 'rotate-180')} />
-            </button>
-            {picker ? (
-              <ul
-                role="listbox"
-                aria-label="Select market"
-                className="absolute left-0 top-full z-30 mt-2 max-h-72 w-64 overflow-y-auto rounded-lg border border-line bg-bg-elev/98 p-1.5 shadow-float backdrop-blur-2xl"
-              >
-                {MARKETS.map((m) => (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={m.id === assetId}
-                      onClick={() => {
-                        setAssetId(m.id);
-                        setLimitPrice(m.price);
-                        setPicker(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left transition-colors',
-                        m.id === assetId ? 'bg-surface-hover' : 'hover:bg-surface',
-                      )}
-                    >
-                      <AssetMark symbol={m.symbol} glyph={m.glyph} hue={m.hue} size="sm" />
-                      <span className="flex-1 text-sm text-fg">{m.symbol}-USD</span>
-                      <span className={cn('text-2xs tabular-nums', m.change24h >= 0 ? 'text-up' : 'text-down')}>
-                        {formatPercent(m.change24h)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+      <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-bg-elev/70 px-4 py-3">
+        <Info className="mt-0.5 size-4 shrink-0 text-brand-soft" />
+        <p className="min-w-0 text-sm text-fg">
+          Order placement is not available on this platform.{' '}
+          <span className="text-fg-muted">
+            The market data below is live. Executing against it needs a matching
+            engine or a principal desk, neither of which exists here — so there is
+            no order ticket rather than one that accepts orders and does nothing.
+          </span>
+        </p>
+      </div>
 
-          <div>
-            <p className={cn('font-mono text-2xl font-semibold tabular-nums', up ? 'text-up' : 'text-down')}>
-              {priceFmt(live)}
-            </p>
-            <p className="text-2xs text-fg-subtle">Last price</p>
-          </div>
-
-          <dl className="flex flex-wrap gap-x-8 gap-y-3">
-            {[
-              { k: '24h change', v: formatPercent(asset.change24h), tone: up ? 'text-up' : 'text-down' },
-              { k: '24h high', v: priceFmt(asset.price * 1.024) },
-              { k: '24h low', v: priceFmt(asset.price * 0.973) },
-              { k: '24h volume', v: formatCompact(asset.volume24h, 'USD') },
-              { k: 'Market cap', v: formatCompact(asset.marketCap, 'USD') },
-            ].map((stat) => (
-              <div key={stat.k}>
-                <dt className="text-2xs uppercase tracking-wider text-fg-subtle">{stat.k}</dt>
-                <dd className={cn('mt-0.5 font-mono text-sm tabular-nums text-fg', stat.tone)}>{stat.v}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </Panel>
-
-      <div className="grid gap-4 xl:grid-cols-[1fr_20rem] 2xl:grid-cols-[1fr_22rem]">
-        <div className="min-w-0 space-y-4">
-          <ChartFrame
-            title={`${market} · daily`}
-            subtitle="Price and volume share one x-axis and keep separate scales — never a dual axis"
-            legend={[
-              { label: 'Close above open', color: 'var(--up)' },
-              { label: 'Close below open', color: 'var(--down)' },
-            ]}
-            table={{
-              columns: ['Date', 'Open', 'High', 'Low', 'Close', 'Volume'],
-              numericFrom: 1,
-              rows: candles.slice(-30).map((c) => [
-                fullDayLabel(c.t), priceFmt(c.o), priceFmt(c.h), priceFmt(c.l), priceFmt(c.c),
-                formatCompact(c.v),
-              ]),
-            }}
+      {/* ── Market picker ─────────────────────────────────────────────────── */}
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {markets.map((market) => (
+          <Link
+            key={market.symbol}
+            href={`/app/trade?market=${market.symbol}${interval === '1h' ? '' : `&interval=${interval}`}`}
+            aria-current={market.symbol === selected.symbol ? 'page' : undefined}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              market.symbol === selected.symbol
+                ? 'border-brand-soft/60 bg-brand/12 text-fg'
+                : 'border-line text-fg-muted hover:border-line-strong hover:text-fg',
+            )}
           >
-            <CandleChart
-              candles={candles}
-              height={360}
-              formatPrice={priceFmt}
-              formatAxis={(v) => formatCompact(v, 'USD')}
-              formatX={dayLabel}
-              formatVolume={(v) => formatCompact(v, 'USD')}
+            <AssetMark
+              symbol={market.symbol}
+              glyph={market.glyph}
+              hue={market.hue}
+              size="sm"
             />
-          </ChartFrame>
+            {market.symbol}
+          </Link>
+        ))}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-baseline gap-4">
+        <h2 className="font-display text-2xl font-semibold text-fg">
+          {selected.name}
+          <span className="ml-2 text-base font-normal text-fg-subtle">
+            {selected.symbol}
+          </span>
+        </h2>
+        {quote === null ? (
+          <Badge tone="neutral">No price</Badge>
+        ) : (
+          <>
+            <span className="font-sans text-2xl font-semibold tabular-nums text-fg">
+              {/* The exact string from the feed, not a parsed number. */}
+              {quote.price}
+              <span className="ml-1.5 text-sm text-fg-subtle">{quote.currency}</span>
+            </span>
+            <span
+              className={cn(
+                'text-sm',
+                quote.change24hPercent >= 0 ? 'text-up' : 'text-down',
+              )}
+            >
+              {formatPercent(quote.change24hPercent)}
+            </span>
+            {quote.state === 'stale' ? <Badge tone="warn">Stale</Badge> : null}
+          </>
+        )}
+        {balance ? (
+          <span className="ml-auto text-xs text-fg-subtle">
+            You hold{' '}
+            <span className="font-mono text-fg">
+              {balance.total} {balance.asset}
+            </span>
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
+        <div className="space-y-4">
+          {/* ── Interval picker ─────────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-1">
+            {CANDLE_INTERVALS.map((option) => (
+              <Link
+                key={option}
+                href={`/app/trade?market=${selected.symbol}&interval=${option}`}
+                aria-current={option === interval ? 'page' : undefined}
+                className={cn(
+                  'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+                  option === interval
+                    ? 'bg-surface-strong text-fg'
+                    : 'text-fg-muted hover:bg-surface hover:text-fg',
+                )}
+              >
+                {option}
+              </Link>
+            ))}
+          </div>
+
+          <PriceChart
+            candles={candles ?? []}
+            interval={interval}
+            quoteCurrency={book?.quoteCurrency ?? 'USDT'}
+          />
 
           <Panel>
-            <div className="mb-4 flex items-center gap-1 border-b border-line">
-              {([['orders', `Open orders (${orders.length})`], ['fills', 'Recent fills']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTab(key)}
-                  aria-pressed={tab === key}
-                  className={cn(
-                    'relative px-3 pb-2.5 text-sm transition-colors',
-                    tab === key ? 'font-medium text-fg' : 'text-fg-muted hover:text-fg',
-                  )}
-                >
-                  {label}
-                  {tab === key ? (
-                    <span aria-hidden className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-soft" />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-
-            {tab === 'orders' ? (
-              <TableShell caption="Open orders" minWidth="46rem">
-                <thead>
-                  <tr>
-                    <Th>Market</Th><Th>Side</Th><Th>Type</Th>
-                    <Th numeric>Price</Th><Th numeric>Size</Th><Th numeric>Filled</Th>
-                    <Th className="hidden md:table-cell">Placed</Th><Th numeric>{''}</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.length === 0 ? (
-                    <EmptyRow colSpan={8}>No open orders.</EmptyRow>
-                  ) : (
-                    orders.map((order) => (
-                      <Tr key={order.id}>
-                        <Td className="font-medium text-fg">{order.market}</Td>
-                        <Td>
-                          <Badge tone={order.side === 'buy' ? 'up' : 'down'}>{order.side}</Badge>
-                        </Td>
-                        <Td className="capitalize">{order.type}</Td>
-                        <Td numeric>{moneyExact(order.price)}</Td>
-                        <Td numeric>{formatQuantity(order.size, 4)}</Td>
-                        <Td numeric>
-                          {((order.filled / order.size) * 100).toFixed(0)}%
-                        </Td>
-                        <Td className="hidden md:table-cell">{dateTimeLabel(order.placedAt)}</Td>
-                        <Td numeric>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-sm border border-line px-2 py-1 text-2xs text-fg-muted transition-colors hover:border-down/50 hover:text-down"
-                          >
-                            <X className="size-3" />
-                            Cancel
-                          </button>
-                        </Td>
-                      </Tr>
-                    ))
-                  )}
-                </tbody>
-              </TableShell>
+            <PanelHeader
+              title="Depth"
+              subtitle={
+                book === null
+                  ? 'Unavailable'
+                  : `Twenty levels each side, quoted in ${book.quoteCurrency}`
+              }
+            />
+            {book === null ? (
+              <Unavailable what="depth" />
             ) : (
-              <TableShell caption="Recent fills" minWidth="42rem">
-                <thead>
-                  <tr>
-                    <Th>Market</Th><Th>Side</Th><Th>Role</Th>
-                    <Th numeric>Price</Th><Th numeric>Size</Th><Th numeric>Fee</Th><Th>Time</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {RECENT_FILLS.map((fill) => (
-                    <Tr key={fill.id}>
-                      <Td className="font-medium text-fg">{fill.market}</Td>
-                      <Td>
-                        <Badge tone={fill.side === 'buy' ? 'up' : 'down'}>{fill.side}</Badge>
-                      </Td>
-                      <Td className="capitalize">{fill.role}</Td>
-                      <Td numeric>{moneyExact(fill.price)}</Td>
-                      <Td numeric>{formatQuantity(fill.size, 4)}</Td>
-                      <Td numeric>{moneyExact(fill.fee)}</Td>
-                      <Td>{dateTimeLabel(fill.filledAt)}</Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </TableShell>
+              <Depth book={book} />
             )}
           </Panel>
         </div>
 
         <div className="space-y-4">
           <Panel>
-            <PanelHeader title="Place order" subtitle={`Available ${money(AVAILABLE_CASH)}`} />
-            <OrderForm
-              market={market}
-              base={asset.symbol}
-              price={limitPrice}
-              available={AVAILABLE_CASH}
-              onPriceChange={setLimitPrice}
+            <PanelHeader
+              title="Order book"
+              subtitle={
+                book === null
+                  ? 'Unavailable'
+                  : book.spread !== null
+                    ? `Spread ${book.spread} ${book.quoteCurrency}`
+                    : `Quoted in ${book.quoteCurrency}`
+              }
             />
+            {book === null ? (
+              <Unavailable what="the book" />
+            ) : (
+              <div className="space-y-1 font-mono text-xs">
+                {[...book.asks].slice(0, 8).reverse().map((level) => (
+                  <Row key={`a${level.price}`} level={level} side="ask" />
+                ))}
+
+                <p className="flex items-baseline justify-between border-y border-line py-2 text-sm">
+                  <span className="text-fg">{book.bestBid ?? '—'}</span>
+                  <span className="text-2xs text-fg-subtle">
+                    {book.spread === null ? 'no spread' : `spread ${book.spread}`}
+                  </span>
+                </p>
+
+                {book.bids.slice(0, 8).map((level) => (
+                  <Row key={`b${level.price}`} level={level} side="bid" />
+                ))}
+              </div>
+            )}
           </Panel>
 
-          <Panel padded={false}>
-            <div className="flex items-center justify-between px-4 pb-3 pt-4">
-              <h2 className="font-display text-sm font-semibold text-fg">Order book</h2>
-              <SegmentedControl
-                ariaLabel="Book grouping"
-                size="sm"
-                segments={[{ value: '1', label: '1' }, { value: '10', label: '10' }]}
-                value="1"
-                onChange={() => undefined}
-              />
-            </div>
-            <OrderBook
-              bids={book.bids}
-              asks={book.asks}
-              mid={asset.price}
-              spread={book.spread}
-              formatPrice={priceFmt}
-              onPick={setLimitPrice}
-            />
+          <Panel>
+            <PanelHeader title="Recent trades" subtitle="Prints from the venue" />
+            {tape === null ? <Unavailable what="the tape" /> : <Tape trades={tape} />}
           </Panel>
-
-          <ChartFrame
-            title="Market depth"
-            subtitle="Cumulative size either side of the mid"
-            legend={[
-              { label: 'Bids', color: 'var(--up)', shape: 'line' },
-              { label: 'Asks', color: 'var(--down)', shape: 'line' },
-            ]}
-            table={{
-              columns: ['Side', 'Price', 'Size', 'Cumulative'],
-              numericFrom: 1,
-              rows: [
-                ...book.bids.map((b) => ['Bid', priceFmt(b.price), formatQuantity(b.size, 3), formatQuantity(b.total, 3)]),
-                ...book.asks.map((a) => ['Ask', priceFmt(a.price), formatQuantity(a.size, 3), formatQuantity(a.total, 3)]),
-              ],
-            }}
-          >
-            <DepthChart bids={book.bids} asks={book.asks} mid={asset.price} formatPrice={priceFmt} />
-          </ChartFrame>
         </div>
       </div>
     </>
+  );
+}
+
+function Row({
+  level,
+  side,
+}: {
+  level: { price: string; size: string };
+  side: 'bid' | 'ask';
+}) {
+  return (
+    <p className="flex items-baseline justify-between gap-3 tabular-nums">
+      <span className={cn(side === 'bid' ? 'text-up' : 'text-down')}>{level.price}</span>
+      <span className="text-fg-muted">{level.size}</span>
+    </p>
+  );
+}
+
+/**
+ * The absence of market data, stated.
+ *
+ * Never a zero and never an empty chart that reads as a flat market — "we did not
+ * get an answer" and "there is nothing there" are different facts, and on a
+ * trading screen the difference is the whole point.
+ */
+function Unavailable({ what }: { what: string }) {
+  return (
+    <p className="flex items-center justify-center gap-2 py-10 text-sm text-fg-subtle">
+      <TriangleAlert className="size-4 text-warn" />
+      The venue did not return {what} for this market.
+    </p>
   );
 }

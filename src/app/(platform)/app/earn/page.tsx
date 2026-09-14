@@ -1,175 +1,220 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { ArrowRight, Info, Landmark, Percent, TrendingUp } from 'lucide-react';
 
-import { useMemo, useState } from 'react';
-import { Coins, ShieldCheck, Timer } from 'lucide-react';
-import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
-import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
-import { ChartFrame } from '@/shared/ui/charts/chart-frame';
-import { AreaChart } from '@/shared/ui/charts/area-chart';
-import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { Button } from '@/shared/ui/primitives/button';
+import { requireUser } from '@/server/auth';
+import { getWalletFor } from '@/server/ledger';
+import { getInstruments, getYields } from '@/server/market-data';
+import { formatCompact } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/primitives/badge';
-import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
+import { StatTile } from '@/shared/ui/charts/stat-tile';
 import { AssetMark } from '@/shared/ui/visuals/asset-mark';
-import { ASSETS } from '../../../_console/data/assets';
-import { REWARDS_SERIES, STAKE_POSITIONS, STAKING_ANNUAL, STAKING_VALUE } from '../../_data/data';
-import { axisMoney, dayLabel, fullDayLabel, money, moneyExact } from '../../../_console/data/format';
-import { formatQuantity } from '@/shared/lib/format';
+import type { UserId } from '@/shared/kernel/ids';
 
-const HORIZONS = [
-  { value: '1y', label: '1 year' },
-  { value: '3y', label: '3 years' },
-  { value: '5y', label: '5 years' },
-] as const;
+import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
+import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
+import { usd } from '../_lib/format-usd';
 
-export default function EarnPage() {
+/**
+ * Earn — observed staking rates.
+ *
+ * ── What is real, and what this page is careful not to claim ───────────────────
+ * Every rate here is observed: DefiLlama's public yields index, filtered to
+ * single-sided pools with no impermanent loss above a size floor, largest pool per
+ * asset. Each row names the protocol, the chain and the value staked, because "ETH
+ * earns 2.2%" is not a fact about ether — it is a fact about Lido on Ethereum this
+ * week, and a number without that attribution is not checkable.
+ *
+ * What the page does **not** do is offer to stake anything. This platform has no
+ * staking context: no lock, no accrual, no unbonding period. The fixture it
+ * replaced showed positions, rewards and a claim button for all three, which is
+ * the most expensive kind of lie a financial product can tell — one that looks
+ * like an account balance.
+ *
+ * So the rates are shown, the customer's own holding is shown next to each, and
+ * the page says plainly that staking is not live. When a staking context exists,
+ * the rates on this page are what it will quote.
+ */
 
-  const [horizon, setHorizon] = useState<'1y' | '3y' | '5y'>('1y');
-  const years = horizon === '1y' ? 1 : horizon === '3y' ? 3 : 5;
+export const dynamic = 'force-dynamic';
 
-  const earnedToDate = STAKE_POSITIONS.reduce((s, p) => s + p.earnedToDate, 0);
-  const blendedApy = STAKING_VALUE === 0 ? 0 : (STAKING_ANNUAL / STAKING_VALUE) * 100;
+export const metadata: Metadata = {
+  title: 'Earn',
+  robots: { index: false, follow: false },
+};
 
-  const projection = useMemo(
-    () => STAKE_POSITIONS.reduce((sum, p) => sum + p.value * (Math.pow(1 + p.apy / 100 / 365, 365 * years) - 1), 0),
-    [years],
-  );
+export default async function EarnPage() {
+  const user = await requireUser('/app/earn');
 
-  const stakeable = ASSETS.filter(
-    (a) => (a.apy ?? 0) > 0 && !STAKE_POSITIONS.some((p) => p.symbol === a.symbol),
-  ).slice(0, 6);
+  const [yields, wallet, instruments] = await Promise.all([
+    getYields(),
+    getWalletFor(user.id as UserId),
+    getInstruments(),
+  ]);
+
+  const marks = new Map(instruments.map((i) => [i.symbol, i]));
+  const balances = new Map(wallet.balances.map((b) => [b.asset, b]));
+
+  const best = yields[0];
+  // Only counts assets the customer actually holds — an average across rates they
+  // cannot access would be a number about the market, labelled as being about them.
+  const held = yields.filter((entry) => balances.has(entry.symbol));
 
   return (
     <>
       <PageHeader
         title="Earn"
-        description="Native protocol staking. Principal is never lent out and never leaves custody you can verify."
-        actions={<Button size="sm"><Coins className="size-3.5" />Stake assets</Button>}
+        description="Staking rates observed across the protocols that hold the stake. Each row names where the number came from."
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Staked value" value={moneyExact(STAKING_VALUE)} delta={{ value: `${STAKE_POSITIONS.length} positions`, direction: 'flat', period: 'active' }} />
-        <StatTile label="Blended APY" value={`${blendedApy.toFixed(2)}%`} delta={{ value: `${money(STAKING_ANNUAL)}`, direction: 'up', period: 'projected per year' }} />
-        <StatTile label="Rewards to date" value={money(earnedToDate)} delta={{ value: '+$41.28', direction: 'up', period: 'paid in the last 24h' }} />
-        <StatTile label="Next payout" value="In 6 hours" delta={{ value: 'Daily at 00:00 UTC', direction: 'flat', period: '' }} />
+      <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-bg-elev/70 px-4 py-3">
+        <Info className="mt-0.5 size-4 shrink-0 text-brand-soft" />
+        <p className="min-w-0 text-sm text-fg">
+          Staking is not live on this platform yet.{' '}
+          <span className="text-fg-muted">
+            These are the rates available in the market today, not positions you
+            hold. Nothing here is locked, accruing, or claimable.
+          </span>
+        </p>
       </div>
 
-      <div className="mb-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <ChartFrame
-          title="Cumulative rewards"
-          subtitle="Paid daily and compounded, last 90 days"
-          table={{
-            columns: ['Date', 'Cumulative rewards'],
-            numericFrom: 1,
-            rows: REWARDS_SERIES.map((p) => [fullDayLabel(p.t), moneyExact(p.v)]),
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <StatTile
+          label="Best observed rate"
+          value={best ? `${best.apyPercent.toFixed(2)}%` : '—'}
+          delta={{
+            value: best ? `${best.symbol} via ${best.protocol}` : 'no rates available',
+            direction: 'flat',
+            period: '',
           }}
-        >
-          <AreaChart
-            data={REWARDS_SERIES}
-            color="var(--chart-2)"
-            height={250}
-            label="Cumulative rewards"
-            formatValue={axisMoney}
-            formatX={dayLabel}
-            ariaSummary={`Cumulative staking rewards over 90 days, reaching ${money(earnedToDate)}.`}
-          />
-        </ChartFrame>
-
-        <Panel>
-          <PanelHeader
-            title="Projection"
-            subtitle="Current rates, daily compounding"
-            actions={
-              <SegmentedControl
-                ariaLabel="Projection horizon"
-                size="sm"
-                segments={HORIZONS}
-                value={horizon}
-                onChange={setHorizon}
-              />
-            }
-          />
-          <p className="font-sans text-3xl font-semibold tracking-tight text-fg">{money(projection)}</p>
-          <p className="mt-1.5 text-sm text-fg-muted">
-            projected rewards over {years} {years === 1 ? 'year' : 'years'} on today&apos;s staked balance
-          </p>
-
-          <ul className="mt-6 space-y-3 border-t border-line pt-5">
-            {[
-              { icon: Timer, text: 'Rewards credited every 24 hours at 00:00 UTC, not at epoch end.' },
-              { icon: ShieldCheck, text: 'Validator faults covered to $50M by the slashing shield.' },
-              { icon: Coins, text: 'Flat 8% commission — the industry charges 25–35% of rewards.' },
-            ].map((item) => (
-              <li key={item.text} className="flex gap-2.5 text-xs leading-relaxed text-fg-muted">
-                <item.icon className="mt-0.5 size-3.5 shrink-0 text-brand-soft" />
-                {item.text}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-5 text-2xs leading-relaxed text-fg-subtle">
-            Rates float with network conditions. A projection is an illustration, not a forecast,
-            and staking pays in the same asset — a 9% yield on something that halves is still a loss.
-          </p>
-        </Panel>
+          icon={<Percent className="size-4" />}
+        />
+        <StatTile
+          label="Rates tracked"
+          value={String(yields.length)}
+          delta={{ value: 'assets we list', direction: 'flat', period: '' }}
+          icon={<TrendingUp className="size-4" />}
+        />
+        <StatTile
+          label="On assets you hold"
+          value={String(held.length)}
+          delta={{
+            value: held.length === 0 ? 'nothing held yet' : 'of your balances',
+            direction: 'flat',
+            period: '',
+          }}
+          icon={<Landmark className="size-4" />}
+        />
       </div>
 
-      <Panel className="mb-4">
-        <PanelHeader title="Your positions" subtitle="Staked balances and accrued rewards" />
-        <TableShell caption="Active staking positions" minWidth="48rem">
+      <Panel>
+        <PanelHeader
+          title="Observed rates"
+          subtitle="Largest single-sided pool per asset, refreshed hourly"
+          actions={
+            <Link
+              href="/app/wallet"
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-soft hover:underline"
+            >
+              Wallet
+              <ArrowRight className="size-3" />
+            </Link>
+          }
+        />
+
+        <TableShell caption="Observed staking rates" minWidth="52rem">
           <thead>
             <tr>
-              <Th>Asset</Th><Th numeric>Staked</Th><Th numeric>Value</Th>
-              <Th numeric>APY</Th><Th numeric>Earned</Th>
-              <Th className="hidden md:table-cell">Unstaking</Th><Th numeric>{''}</Th>
+              <Th>Asset</Th>
+              <Th numeric>APY</Th>
+              <Th>Where</Th>
+              <Th numeric>Pool size</Th>
+              <Th numeric>You hold</Th>
             </tr>
           </thead>
           <tbody>
-            {STAKE_POSITIONS.map((p) => (
-              <Tr key={p.symbol}>
-                <Td>
-                  <span className="flex items-center gap-2.5">
-                    <AssetMark symbol={p.symbol} glyph={p.glyph} hue={p.hue} size="sm" />
-                    <span>
-                      <span className="block text-sm font-medium text-fg">{p.name}</span>
-                      <span className="block text-2xs text-fg-subtle">{p.symbol}</span>
-                    </span>
-                  </span>
-                </Td>
-                <Td numeric>{formatQuantity(p.staked, 2)}</Td>
-                <Td numeric className="font-medium text-fg">{moneyExact(p.value)}</Td>
-                <Td numeric><span className="text-up">{p.apy.toFixed(1)}%</span></Td>
-                <Td numeric className="text-up">{moneyExact(p.earnedToDate)}</Td>
-                <Td className="hidden md:table-cell">
-                  <Badge tone={p.unbonding === 'Instant' ? 'up' : 'neutral'}>{p.unbonding}</Badge>
-                </Td>
-                <Td numeric>
-                  <button type="button" className="rounded-sm border border-line px-2.5 py-1 text-2xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg">
-                    Unstake
-                  </button>
-                </Td>
-              </Tr>
-            ))}
+            {yields.length === 0 ? (
+              <EmptyRow colSpan={5}>
+                Rates could not be read right now. This is a failed lookup, not a
+                market paying nothing.
+              </EmptyRow>
+            ) : (
+              yields.map((entry) => {
+                const mark = marks.get(entry.symbol);
+                const balance = balances.get(entry.symbol);
+
+                return (
+                  <Tr key={`${entry.symbol}-${entry.protocol}`}>
+                    <Td>
+                      <span className="flex items-center gap-2.5">
+                        <AssetMark
+                          symbol={entry.symbol}
+                          glyph={mark?.glyph ?? entry.symbol.slice(0, 1)}
+                          hue={mark?.hue ?? 'var(--chart-1)'}
+                          size="sm"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm text-fg">{entry.symbol}</span>
+                          <span className="block text-2xs text-fg-subtle">
+                            {mark?.name ?? entry.symbol}
+                          </span>
+                        </span>
+                      </span>
+                    </Td>
+
+                    <Td numeric>
+                      <span className="font-sans text-base font-semibold text-fg">
+                        {entry.apyPercent.toFixed(2)}%
+                      </span>
+                      {entry.rewardApyPercent !== null && entry.rewardApyPercent > 0.01 ? (
+                        <span className="mt-0.5 block text-2xs text-fg-subtle">
+                          incl. {entry.rewardApyPercent.toFixed(2)}% incentives
+                        </span>
+                      ) : null}
+                    </Td>
+
+                    <Td>
+                      <span className="block text-xs text-fg">{entry.protocol}</span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-2xs text-fg-subtle">
+                        {entry.chain}
+                        {entry.poolSymbol !== entry.symbol ? (
+                          <Badge tone="neutral">{entry.poolSymbol}</Badge>
+                        ) : null}
+                      </span>
+                    </Td>
+
+                    <Td numeric>{formatCompact(entry.tvlUsd, 'USD')}</Td>
+
+                    <Td numeric>
+                      {balance === undefined ? (
+                        <span className="text-fg-subtle">—</span>
+                      ) : (
+                        <>
+                          <span className="block font-mono text-xs text-fg">
+                            {balance.total}
+                          </span>
+                          {balance.valueUsd !== null ? (
+                            <span className="block text-2xs text-fg-subtle">
+                              {usd(balance.valueUsd)}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </Td>
+                  </Tr>
+                );
+              })
+            )}
           </tbody>
         </TableShell>
-      </Panel>
 
-      <Panel>
-        <PanelHeader title="Available to stake" subtitle="Assets you hold or can buy that earn a yield" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {stakeable.map((a) => (
-            <div key={a.id} className="flex items-center gap-3 rounded-md border border-line bg-bg-sunken/50 p-4">
-              <AssetMark symbol={a.symbol} glyph={a.glyph} hue={a.hue} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-fg">{a.name}</p>
-                <p className="text-2xs text-fg-subtle">{a.symbol}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold tabular-nums text-up">{a.apy?.toFixed(1)}%</p>
-                <p className="text-2xs uppercase tracking-wider text-fg-subtle">APY</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
+          Bitcoin shows close to nothing because it has no native staking — any
+          non-zero BTC rate is a lending or wrapped-asset product carrying
+          counterparty risk that proof-of-stake rewards do not. Rates are the
+          largest single-sided pool per asset with no impermanent loss, which is a
+          judgement about comparability, not a recommendation.
+        </p>
       </Panel>
     </>
   );

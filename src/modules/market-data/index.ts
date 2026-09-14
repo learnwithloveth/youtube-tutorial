@@ -33,5 +33,21 @@ export type { ListMarketsOptions } from './application/queries/list-markets';
 export { getMarketBySlug } from './application/queries/get-market';
 export { listInstruments } from './application/queries/list-instruments';
 export type { ListInstrumentsOptions } from './application/queries/list-instruments';
+export {
+  getCandles,
+  getOrderBook,
+  getRecentTrades,
+  getStakingYields,
+} from './application/queries/live-market';
+export type {
+  CandleDto,
+  OrderBookDto,
+  PriceLevelDto,
+  PublicTradeDto,
+  StakingYieldDto,
+} from './application/queries/live-market';
+export type { CandleInterval } from './domain/order-book';
+export { CANDLE_INTERVALS, MAX_BOOK_AGE_SECONDS } from './domain/order-book';
+
 export { refreshTickers } from './application/use-cases/refresh-tickers';
 export type { RefreshTickersResult } from './application/use-cases/refresh-tickers';

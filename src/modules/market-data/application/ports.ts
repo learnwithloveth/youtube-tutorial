@@ -3,6 +3,13 @@ import type { Result } from '@/shared/kernel';
 import type { AssetSymbol } from '../domain/asset-symbol';
 import type { MarketDataError } from '../domain/errors';
 import type { Instrument } from '../domain/instrument';
+import type {
+  Candle,
+  CandleInterval,
+  OrderBook,
+  PublicTrade,
+} from '../domain/order-book';
+import type { StakingYield } from '../domain/staking-yield';
 import type { Ticker, TickerSnapshot } from '../domain/ticker';
 
 /**
@@ -46,4 +53,37 @@ export interface MarketDataFeed {
   fetchQuotes(
     instruments: readonly Instrument[],
   ): Promise<Result<TickerSnapshot[], MarketDataError>>;
+}
+
+/**
+ * The live book, candles and recent trades for one market.
+ *
+ * A separate port from `MarketDataFeed`, not an addition to it, because the two
+ * have opposite cadences and opposite failure costs. Tickers are polled on a
+ * schedule and written to a table; a book is read at request time and never
+ * stored, because a stored order book is wrong before the write returns.
+ *
+ * Every method returns null on failure rather than throwing. A trading screen with
+ * no book is a screen that says so; one that throws is a page that does not render
+ * at all, and the price and the balance on it were fine.
+ */
+export interface OrderBookFeed {
+  fetchBook(symbol: AssetSymbol, depth: number): Promise<OrderBook | null>;
+  fetchCandles(
+    symbol: AssetSymbol,
+    interval: CandleInterval,
+    limit: number,
+  ): Promise<Candle[] | null>;
+  fetchTrades(symbol: AssetSymbol, limit: number): Promise<PublicTrade[] | null>;
+}
+
+/**
+ * Observed staking yields.
+ *
+ * Returns every yield the source knows about for the assets asked for; choosing
+ * between two pools for the same asset is a judgement the application layer makes,
+ * not something an adapter should decide by picking one.
+ */
+export interface YieldFeed {
+  fetchYields(symbols: readonly AssetSymbol[]): Promise<StakingYield[] | null>;
 }

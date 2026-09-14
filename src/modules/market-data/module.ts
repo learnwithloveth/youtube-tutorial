@@ -5,9 +5,13 @@ import { systemClock, type Clock } from '@/shared/kernel';
 import type {
   InstrumentRepository,
   MarketDataFeed,
+  OrderBookFeed,
   TickerRepository,
+  YieldFeed,
 } from './application/ports';
+import { BinanceBookFeed } from './infrastructure/feeds/binance-book-feed';
 import { CoinGeckoFeed } from './infrastructure/feeds/coingecko-feed';
+import { DefiLlamaYieldFeed } from './infrastructure/feeds/defillama-yield-feed';
 import {
   CatalogueInstrumentRepository,
   DrizzleTickerRepository,
@@ -29,6 +33,17 @@ export interface MarketDataModule {
   readonly instruments: InstrumentRepository;
   readonly tickers: TickerRepository;
   readonly feed: MarketDataFeed;
+  /**
+   * The live venue: depth, candles and the tape.
+   *
+   * A separate port from `feed`, because the two have opposite cadences. Tickers
+   * are polled on a schedule and written to a table; a book is read at request
+   * time and never stored, since a stored order book is wrong before the write
+   * returns.
+   */
+  readonly book: OrderBookFeed;
+  /** Observed staking yields. Replaces the editorial number in the catalogue. */
+  readonly yields: YieldFeed;
   readonly clock: Clock;
 }
 
@@ -37,6 +52,8 @@ export function createMarketDataModule(clock: Clock = systemClock): MarketDataMo
     instruments: new CatalogueInstrumentRepository(),
     tickers: new DrizzleTickerRepository(),
     feed: new CoinGeckoFeed(clock),
+    book: new BinanceBookFeed(clock),
+    yields: new DefiLlamaYieldFeed(clock),
     clock,
   };
 }
