@@ -13,6 +13,7 @@ import { HmacAddressDigest } from './infrastructure/crypto/hmac-digest';
 import { BestAnswerLocator } from './infrastructure/geo/best-answer-locator';
 import { EdgeHintLocator } from './infrastructure/geo/edge-hint-locator';
 import { IpLookupLocator } from './infrastructure/geo/ip-lookup-locator';
+import { customProvider, DEFAULT_PROVIDERS } from './infrastructure/geo/providers';
 import { UserAgentParser } from './infrastructure/http/user-agent-parser';
 import { DrizzlePresenceRepository } from './infrastructure/persistence/repositories';
 
@@ -29,12 +30,17 @@ import { DrizzlePresenceRepository } from './infrastructure/persistence/reposito
  * ── The location resolver is a chain, not a service ────────────────────────────
  * Two adapters, tried in order by `BestAnswerLocator`. Behind a geo-aware CDN the
  * first one answers and no third party is contacted at all; everywhere else the
- * lookup service is the fallback, which is what makes a location available for a
- * visitor who granted the browser nothing.
+ * lookup adapter is the fallback, which is what makes a location available for a
+ * visitor who granted the browser nothing — the majority of them.
+ *
+ * The lookup adapter is itself a chain of free providers, for a reason worth
+ * stating here rather than only in `providers.ts`: a free tier is a quota, and a
+ * quota is an outage scheduled in advance. One provider means the board stops
+ * resolving anyone at whatever hour the day's allowance runs out.
  *
  * Omitting `lookup` composes the chain with only the edge adapter. That is the
  * correct configuration for a deployment that does not want a third party in the
- * request path, and the honest outcome is `unavailable` rather than a guess.
+ * request path, and the honest outcome there is `unavailable` rather than a guess.
  */
 
 export interface PresenceModule {
@@ -49,15 +55,34 @@ export interface RegisterPresenceOptions {
   /** At least 32 characters. The address digest key is HKDF-derived from it. */
   digestSecret: string;
   /** Omit to resolve locations from CDN headers only. */
-  lookup?: { baseUrl: string; apiKey?: string | undefined } | undefined;
+  lookup?: PresenceLookupOptions | undefined;
   clock?: Clock;
+}
+
+export interface PresenceLookupOptions {
+  /** An operator's own endpoint, tried ahead of the free chain. */
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined;
+  /** Resolve this machine's address when the visitor's is loopback. Dev only. */
+  resolveOwnAddress?: boolean | undefined;
 }
 
 export function registerPresence(options: RegisterPresenceOptions): PresenceModule {
   const resolvers: LocationResolver[] = [new EdgeHintLocator()];
+
   if (options.lookup) {
+    // A configured endpoint goes first: someone who set one wants it used, not
+    // held in reserve behind three services they did not choose.
+    const providers = options.lookup.baseUrl
+      ? [customProvider(options.lookup.baseUrl), ...DEFAULT_PROVIDERS]
+      : DEFAULT_PROVIDERS;
+
     resolvers.push(
-      new IpLookupLocator({ baseUrl: options.lookup.baseUrl, apiKey: options.lookup.apiKey }),
+      new IpLookupLocator({
+        providers,
+        apiKey: options.lookup.apiKey,
+        resolveOwnAddress: options.lookup.resolveOwnAddress ?? false,
+      }),
     );
   }
 

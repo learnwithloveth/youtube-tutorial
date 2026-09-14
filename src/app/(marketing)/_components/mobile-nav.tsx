@@ -3,16 +3,30 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 import { useEscape, useScrollLock } from '@/shared/lib/hooks';
-import { ButtonLink } from '@/shared/ui/primitives/button-link';
 
 import { PRIMARY_NAV } from '../_lib/navigation';
-import { ThemeToggle } from './theme-toggle';
 
-export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * `account` is a slot, not an import — the same arrangement `Navbar` uses and for
+ * the same reason. This component is interactive, so it is a Client Component; the
+ * account block needs the session, which only the server can read.
+ *
+ * The slot's links carry no `onClose`, and do not need one: `Navbar` closes the
+ * drawer when the pathname changes, so navigating from inside it already shuts it.
+ */
+export function MobileNav({
+  open,
+  onClose,
+  account,
+}: {
+  open: boolean;
+  onClose: () => void;
+  account: ReactNode;
+}) {
   const [expanded, setExpanded] = useState<number | null>(0);
   useScrollLock(open);
   useEscape(onClose, open);
@@ -83,23 +97,7 @@ export function MobileNav({ open, onClose }: { open: boolean; onClose: () => voi
               })}
             </ul>
 
-            <div className="mt-auto grid gap-3">
-              <ButtonLink href="/signup" size="lg" sheen onClick={onClose}>
-                Create free account
-              </ButtonLink>
-              <div className="flex items-center gap-3">
-                <ButtonLink
-                  href="/login"
-                  variant="outline"
-                  size="lg"
-                  className="flex-1"
-                  onClick={onClose}
-                >
-                  Log in
-                </ButtonLink>
-                <ThemeToggle className="size-12" />
-              </div>
-            </div>
+            <div className="mt-auto grid gap-3">{account}</div>
           </div>
         </motion.div>
       ) : null}

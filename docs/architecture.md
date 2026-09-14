@@ -356,8 +356,29 @@ regardless of what the visitor grants:
 | Source | Needs permission | Precision | Trust |
 | --- | --- | --- | --- |
 | `edge` | No | City, or only a country | First-hand: the CDN derived it from the connection |
-| `network` | No | City, usually | Second-hand, and wrong behind a VPN |
+| `network` | No | City, approximately | Second-hand, and wrong behind a VPN |
 | `device` | **Yes** | Exact | Precise, and **self-reported** — it arrives in a body the client composes |
+
+The address lookup is **on by default** and needs no configuration: it walks a
+chain of free services (`ipwho.is`, `freeipapi.com`, `ipapi.co`) until one
+answers. Three reasons it is a chain and not a service:
+
+1. **A free tier is a quota, and a quota is an outage scheduled in advance.** One
+   provider means the board stops resolving anyone at whatever hour the day's
+   allowance runs out — silently, since a refusal looks exactly like an address
+   nobody knows.
+2. **They disagree.** An address one service has never seen is often known to
+   another, so the next one in line is coverage as well as failover.
+3. **A refusal is not an HTTP error.** `ipapi.co` answers `200` with
+   `{ error: true, reason: "RateLimited" }`, so a status check alone reads a
+   rate-limit as a successful lookup of nowhere.
+
+Each provider owns its own response shape in `providers.ts`, and each is pinned by
+a test against a payload captured from the live service. That is not ceremony: two
+of the three parsers were wrong when written from documentation — `freeipapi`
+returns `timeZones` as an array of the *country's* zones rather than a `timeZone`
+string, and `ipwho.is` nests the zone under `timezone.id`. Both produced a
+silently null timezone and nothing failed anywhere.
 
 `LocationFix.supersedes` decides which survives, and the order of its tests is the
 whole design: a stale incumbent always loses, then **precision**, then source, then
@@ -369,6 +390,18 @@ The one rule that makes precise location usable at all lives in `Presence.locate
 an address fix arrives on *every* heartbeat and a device fix does not, so
 last-writer-wins would discard a consented GPS position twenty seconds after it
 arrived.
+
+### Local development resolves too
+
+A request from `localhost` carries no client address at all — Next sets no
+forwarding headers — so there is nothing to look up and every row would read "not
+resolved" until the app was deployed. Outside production the lookup therefore asks
+where *this machine* connects from, which on a developer's laptop is genuinely
+where the visitor is, because they are the same person on the same network.
+
+It is refused in production, where they are not the same person: a loopback
+request there is a health check or a sidecar, and resolving it would pin every one
+of them to the datacentre and label it a visitor's location.
 
 ### Permission is asked for once, deliberately
 

@@ -25,7 +25,14 @@ import { ThemeToggle } from './theme-toggle';
  * lets a Server Component live inside a Client Component: it arrives as rendered
  * output rather than as a module the browser has to execute.
  */
-export function Navbar({ account }: { account: ReactNode }) {
+export function Navbar({
+  account,
+  mobileAccount,
+}: {
+  account: ReactNode;
+  /** The same slot again, laid out for the drawer rather than the header row. */
+  mobileAccount: ReactNode;
+}) {
   const [open, setOpen] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(false);
   const scrolled = useScrolled(10);
@@ -158,7 +165,7 @@ export function Navbar({ account }: { account: ReactNode }) {
         </AnimatePresence>
       </header>
 
-      <MobileNav open={drawer} onClose={() => setDrawer(false)} />
+      <MobileNav open={drawer} onClose={() => setDrawer(false)} account={mobileAccount} />
     </>
   );
 }

@@ -36,17 +36,29 @@ const schema = z.object({
   NEXT_PUBLIC_SITE_URL: z.url().default('https://novex.io'),
 
   /**
-   * IP geolocation service, used when nothing in front of the app supplies geo
-   * headers of its own.
+   * IP geolocation for the live-activity console.
    *
-   * Optional, and the default is *off*. Turning it on sends visitor IP addresses
-   * to a third party, which is a decision an operator should make deliberately
-   * rather than inherit from a default — behind a geo-aware CDN it buys nothing,
-   * and without one it is the difference between knowing where visitors are and
-   * not. With it unset, locations resolve from CDN headers alone and honestly
-   * report `unavailable` when there are none.
+   * On by default. Locating a visitor from the connection is the point of the
+   * presence feature — it is what works for the majority who will never grant the
+   * browser anything — and a default of *off* meant the console shipped reporting
+   * "not resolved" for every row until someone found this variable.
    *
-   * The response shape parsed is ipapi.co's; see `IpLookupLocator`.
+   * Set `GEOIP_ENABLED=false` to turn it off, which is the right setting behind a
+   * CDN that already attaches geo headers (those are tried first regardless, and
+   * cost nothing), or anywhere sending addresses to a third party is unacceptable.
+   * Locations then resolve from headers alone and honestly report `unavailable`
+   * where there are none.
+   */
+  GEOIP_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
+  /**
+   * An operator-supplied lookup endpoint, tried before the built-in free chain.
+   *
+   * For a paid plan or a self-hosted mirror. Parsed as ipapi.co's response shape,
+   * which is what a paid ipapi key and most MaxMind wrappers already speak.
    */
   GEOIP_LOOKUP_URL: z.url().optional(),
   GEOIP_LOOKUP_KEY: z.string().min(1).optional(),
@@ -125,17 +137,31 @@ export function sessionSecret(): string {
 }
 
 /**
- * IP lookup settings, or null when the service is not configured.
+ * IP lookup settings, or null when geolocation is switched off.
  *
- * Null is a supported configuration, not a degraded one: the presence module
+ * Null is a supported configuration, not a degraded one: the presence module then
  * composes its resolver chain without the HTTP adapter and reports `unavailable`
  * for any visitor whose location the network did not already reveal.
+ *
+ * `resolveOwnAddress` is what makes the board useful on a developer's machine. A
+ * local request carries no client address, so there is nothing to look up; outside
+ * production the module asks where *this* machine connects from instead, which on
+ * a laptop is the same place the visitor is. See `IpLookupOptions` for why that is
+ * refused in production.
  */
-export function geoLookupConfig(): { baseUrl: string; apiKey?: string | undefined } | null {
+export function geoLookupConfig(): {
+  baseUrl?: string | undefined;
+  apiKey?: string | undefined;
+  resolveOwnAddress: boolean;
+} | null {
   const config = env();
-  if (!config.GEOIP_LOOKUP_URL) return null;
+  if (!config.GEOIP_ENABLED) return null;
 
-  return { baseUrl: config.GEOIP_LOOKUP_URL, apiKey: config.GEOIP_LOOKUP_KEY };
+  return {
+    baseUrl: config.GEOIP_LOOKUP_URL,
+    apiKey: config.GEOIP_LOOKUP_KEY,
+    resolveOwnAddress: config.NODE_ENV !== 'production',
+  };
 }
 
 /** SMTP settings, or null when no host is configured. */

@@ -5,6 +5,7 @@ import { AccountMenu } from '../_components/account-menu';
 import { VerificationBanner } from '../_components/verification-banner';
 
 import { Footer } from './_components/footer';
+import { MobileAccountMenu } from './_components/mobile-account-menu';
 import { Navbar } from './_components/navbar';
 
 /**
@@ -32,7 +33,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         Skip to content
       </a>
       {user && !user.emailVerified ? <VerificationBanner email={user.email} /> : null}
-      <Navbar account={<AccountMenu />} />
+      <Navbar account={<AccountMenu />} mobileAccount={<MobileAccountMenu />} />
       <main id="main" className="flex-1">
         {children}
       </main>
