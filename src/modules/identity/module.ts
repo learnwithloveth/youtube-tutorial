@@ -10,6 +10,10 @@ import {
 } from './application/queries/describe-users';
 import { createListUsers, type ListUsers } from './application/queries/list-users';
 import {
+  createUpdateProfile,
+  type UpdateProfile,
+} from './application/use-cases/update-profile';
+import {
   createListSessions,
   type ListSessions,
 } from './application/queries/list-sessions';
@@ -45,6 +49,7 @@ import {
 } from './infrastructure/email/smtp-sender';
 import {
   DrizzleSessionRepository,
+  DrizzleProfileRepository,
   DrizzleUserRepository,
   DrizzleVerificationTokenRepository,
 } from './infrastructure/persistence/repositories';
@@ -79,6 +84,8 @@ export interface IdentityModule {
    * that rule being broken.
    */
   readonly describeUsers: DescribeUsers;
+  /** The account holder changes their display name or handle. */
+  readonly updateProfile: UpdateProfile;
   /** The console's account list: filtered, paged, with per-status tallies. */
   readonly listUsers: ListUsers;
   /** A user's live sessions, for the security page. */
@@ -115,6 +122,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
 
   const dependencies: IdentityDependencies = {
     users: new DrizzleUserRepository(options.db),
+    profiles: new DrizzleProfileRepository(options.db),
     sessions: new DrizzleSessionRepository(options.db),
     tokens: new DrizzleVerificationTokenRepository(options.db),
     hasher: new ScryptPasswordHasher(),
@@ -137,6 +145,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     requestPasswordReset: createRequestPasswordReset(dependencies),
     resetPassword: createResetPassword(dependencies),
     describeUsers: createDescribeUsers(dependencies),
+    updateProfile: createUpdateProfile(dependencies),
     listUsers: createListUsers(dependencies),
     listSessions: createListSessions(dependencies),
     cookieName: SESSION_COOKIE_NAME,

@@ -76,6 +76,35 @@ const schema = z.object({
   APP_URL: z.url().default('http://localhost:3000'),
 
   /**
+   * Firebase, for live support only.
+   *
+   * ── Why any of this is here ────────────────────────────────────────────────
+   * Chat is the one thing in this application that genuinely needs a socket, and
+   * a serverless deployment cannot hold one. Firestore is the realtime *read*
+   * channel: browsers subscribe, the server writes through the Admin SDK, and
+   * nothing else moves to Firebase. Presence, activity, identity and the ledger
+   * stay in Postgres, where they can be joined to each other.
+   *
+   * ── The service account is the only secret ─────────────────────────────────
+   * The `NEXT_PUBLIC_` values are *meant* to be public: Firebase ships them in
+   * every browser bundle by design, and access is controlled by security rules,
+   * not by hiding an API key. They are validated here anyway so a typo fails at
+   * boot rather than as a silent `undefined` in the client config.
+   *
+   * All optional: a clone with no Firebase project must still run. The support
+   * screens then report themselves unavailable rather than the app failing to
+   * start, which is the same rule `DATABASE_URL` follows.
+   */
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().min(1).optional(),
+  NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1).optional(),
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1).optional(),
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1).optional(),
+  NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1).optional(),
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1).optional(),
+  /** The public half of the Web Push key pair. Safe in the bundle; it has to be. */
+  NEXT_PUBLIC_FIREBASE_VAPID_KEY: z.string().min(1).optional(),
+
+  /**
    * SMTP transport. Absent means messages are logged instead of sent, so a clone
    * with no `docker compose up` still completes a signup and prints the link.
    */
@@ -161,6 +190,59 @@ export function geoLookupConfig(): {
     baseUrl: config.GEOIP_LOOKUP_URL,
     apiKey: config.GEOIP_LOOKUP_KEY,
     resolveOwnAddress: config.NODE_ENV !== 'production',
+  };
+}
+
+/**
+ * The Firebase service account, parsed, or null when none is configured.
+ *
+ * ── Parsed here rather than where it is used ───────────────────────────────────
+ * A malformed JSON blob in an environment variable is the kind of fault that
+ * otherwise surfaces three layers down as "Cannot read properties of undefined",
+ * long after the stack that could explain it has been discarded. This turns it
+ * into one error naming the variable.
+ *
+ * The private key needs the newline repair. Environment files and most secret
+ * managers cannot carry a literal newline, so the key arrives with `
+` written
+ * out as two characters — and the crypto layer rejects it with a message about
+ * PEM formatting that says nothing about where the string came from.
+ */
+export function firebaseServiceAccount(): {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+} | null {
+  const raw = env().FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON. Paste the whole downloaded key file as a single line.',
+    );
+  }
+
+  const account = z
+    .object({
+      project_id: z.string().min(1),
+      client_email: z.string().min(1),
+      private_key: z.string().min(1),
+    })
+    .safeParse(parsed);
+
+  if (!account.success) {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_JSON is missing project_id, client_email or private_key. Use the key downloaded from Project settings → Service accounts.',
+    );
+  }
+
+  return {
+    projectId: account.data.project_id,
+    clientEmail: account.data.client_email,
+    privateKey: account.data.private_key.replace(/\\n/g, '\n'),
   };
 }
 

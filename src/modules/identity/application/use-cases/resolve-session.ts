@@ -55,8 +55,14 @@ export function createResolveSession(deps: IdentityDependencies) {
       await deps.sessions.save(session);
     }
 
+    // One extra read on a primary key, on a path that runs for every request — and
+    // it is worth it: without the name here, every surface that renders a person
+    // would have to fetch it separately, which is the same read done many times
+    // instead of once. Never fatal: a missing profile is the normal case.
+    const profile = await deps.profiles.find(user.id).catch(() => null);
+
     return ok({
-      user: toCurrentUserDto(user),
+      user: toCurrentUserDto(user, profile),
       stepUpSatisfied: session.validateForStepUpAt(now).ok,
     });
   };

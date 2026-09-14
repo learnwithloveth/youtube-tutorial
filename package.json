@@ -18,6 +18,7 @@
     "db:studio": "drizzle-kit studio",
     "db:refresh": "node --conditions=react-server --import tsx scripts/refresh-market-data.ts",
     "map:generate": "node --import tsx scripts/generate-world-map.ts",
+    "firebase:deploy": "node --conditions=react-server --import tsx scripts/deploy-firestore.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm lint:boundaries && pnpm test",
     "admin:grant": "node --conditions=react-server --import tsx scripts/grant-admin.ts",
     "admin:revoke": "node --conditions=react-server --import tsx scripts/grant-admin.ts --revoke"
@@ -27,6 +28,8 @@
     "@tanstack/react-query": "^5.102.8",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.4.0",
     "lucide-react": "^1.43.0",
     "motion": "^13.2.0",
     "next": "16.3.4",

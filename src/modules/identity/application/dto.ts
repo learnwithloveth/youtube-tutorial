@@ -1,5 +1,6 @@
 import type { UserId } from '@/shared/kernel/ids';
 
+import { displayNameFor, initialsFor, type Profile } from '../domain/profile';
 import type { User, UserRole, UserStatus } from '../domain/user';
 
 /**
@@ -24,15 +25,41 @@ export interface CurrentUserDto {
   emailVerified: boolean;
   role: UserRole;
   createdAt: string;
+  /** What the account holder set, or null. Most never will. */
+  displayName: string | null;
+  /** Without the leading `@`, which the interface adds. */
+  handle: string | null;
+  /**
+   * What to actually render, resolved once here.
+   *
+   * Every surface that shows a person — the top bar, the sidebar, a support
+   * thread, an operator's account page — needs the same answer, and four call
+   * sites each falling back differently is four subtly different names for one
+   * account. So the fallback chain runs at the boundary and the UI renders a
+   * string.
+   */
+  name: string;
+  /** Two letters for an avatar, derived from `name`. */
+  initials: string;
 }
 
-export function toCurrentUserDto(user: User): CurrentUserDto {
+export function toCurrentUserDto(user: User, profile?: Profile | null): CurrentUserDto {
+  const name = displayNameFor({
+    displayName: profile?.displayName,
+    handle: profile?.handle,
+    email: user.email.value,
+  });
+
   return {
     id: user.id,
     email: user.email.value,
     emailVerified: user.isEmailVerified,
     role: user.role,
     createdAt: user.createdAt.toISOString(),
+    displayName: profile?.displayName ?? null,
+    handle: profile?.handle ?? null,
+    name,
+    initials: initialsFor(name),
   };
 }
 
@@ -50,6 +77,12 @@ export function toCurrentUserDto(user: User): CurrentUserDto {
  * in a screenshot.
  */
 export interface UserSummaryDto {
+  /** Resolved the same way `CurrentUserDto.name` is, so one account reads the
+   *  same in the console as it does to its owner. */
+  name: string;
+  initials: string;
+  displayName: string | null;
+  handle: string | null;
   id: UserId;
   email: string;
   emailVerified: boolean;
@@ -58,7 +91,13 @@ export interface UserSummaryDto {
   createdAt: string;
 }
 
-export function toUserSummaryDto(user: User): UserSummaryDto {
+export function toUserSummaryDto(user: User, profile?: Profile | null): UserSummaryDto {
+  const name = displayNameFor({
+    displayName: profile?.displayName,
+    handle: profile?.handle,
+    email: user.email.value,
+  });
+
   return {
     id: user.id,
     email: user.email.value,
@@ -66,5 +105,9 @@ export function toUserSummaryDto(user: User): UserSummaryDto {
     role: user.role,
     status: user.status,
     createdAt: user.createdAt.toISOString(),
+    displayName: profile?.displayName ?? null,
+    handle: profile?.handle ?? null,
+    name,
+    initials: initialsFor(name),
   };
 }

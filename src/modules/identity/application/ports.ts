@@ -3,6 +3,7 @@ import type { UserId } from '@/shared/kernel/ids';
 import type { EmailAddress } from '../domain/email-address';
 import type { PasswordHash } from '../domain/password';
 import type { Session, SessionId } from '../domain/session';
+import type { Profile } from '../domain/profile';
 import type { User, UserStatus } from '../domain/user';
 import type { VerificationPurpose, VerificationToken } from '../domain/verification-token';
 
@@ -35,9 +36,11 @@ export interface UserRepository {
   /**
    * The console's account list: filtered, paged, newest first.
    *
-   * `term` matches an email or an id. Not a name, because this module does not
-   * hold one — a display name belongs to a profile context, and letting it in
-   * here is how a forty-field user object forms.
+   * `term` matches an email or an id, never a display name. That is not because
+   * the module cannot reach one — `ProfileRepository` is right below — but because
+   * `User` deliberately does not carry it: an entity that accumulates every field
+   * anyone wants to search on is how a forty-field user object forms. Searching by
+   * name means joining profiles here, which is a change worth making on purpose.
    */
   search(query: {
     term?: string | undefined;
@@ -54,6 +57,36 @@ export interface UserRepository {
 
   /** One row per status, for the header tiles. One query, not one per tile. */
   tallyByStatus(): Promise<{ status: UserStatus; total: number }[]>;
+}
+
+/**
+ * Display names and handles.
+ *
+ * Separate from `UserRepository` because `User` is the credential and this is
+ * presentation — see `domain/profile.ts`. Callers that need both ask both and zip
+ * the results, which keeps the entity from growing fields no access decision uses.
+ */
+export interface ProfileRepository {
+  find(userId: UserId): Promise<Profile | null>;
+
+  /**
+   * Bulk lookup, keyed by id.
+   *
+   * A map rather than an array, because every caller is joining it onto a list of
+   * users it already has — and missing ids are ordinary: most accounts never set
+   * a name, so most lookups come back partially empty by design.
+   */
+  findMany(ids: readonly UserId[]): Promise<Map<UserId, Profile>>;
+
+  /**
+   * Creates or updates the row.
+   *
+   * @throws ConcurrencyError when the stored version has moved on.
+   * @throws HandleTakenError when another account already holds the handle. The
+   *         unique index is what decides that, not a prior read — two people
+   *         claiming the same handle at once both pass any check made beforehand.
+   */
+  save(profile: Profile): Promise<void>;
 }
 
 export interface SessionRepository {
@@ -168,6 +201,7 @@ export interface AppUrls {
 
 export interface IdentityDependencies {
   users: UserRepository;
+  profiles: ProfileRepository;
   sessions: SessionRepository;
   tokens: VerificationTokenRepository;
   hasher: PasswordHasher;

@@ -66,8 +66,18 @@ export function createListUsers(deps: IdentityDependencies) {
 
     const rows = users.value;
 
+    // Fetched for the page, not for the whole result set: one extra query keyed on
+    // the ids already in hand, rather than a join that would have to be threaded
+    // through `search`, `countMatching` and `tallyByStatus` alike.
+    //
+    // Degrades to no names rather than no list. An operator can act on an email;
+    // they cannot act on a page that failed to render.
+    const named = await deps.profiles
+      .findMany(rows.map((user) => user.id))
+      .catch(() => new Map());
+
     return {
-      users: rows.map(toUserSummaryDto),
+      users: rows.map((user) => toUserSummaryDto(user, named.get(user.id))),
       total: total.status === 'fulfilled' ? total.value : rows.length,
       limit,
       offset,

@@ -2,10 +2,9 @@
 
 
 import { ActiveLink } from '@/shared/ui/primitives/active-link';
-import { ChevronsLeft, LifeBuoy, ShieldHalf, TrendingUp } from 'lucide-react';
+import { ChevronsLeft, LifeBuoy, ShieldHalf } from 'lucide-react';
 import { DASH_NAV } from '../_data/navigation';
 import { Wordmark, LogoMark } from '@/shared/ui/visuals/logo';
-import { ACCOUNT } from '../_data/data';
 import { cn } from '@/shared/lib/cn';
 
 interface SidebarProps {
@@ -105,21 +104,12 @@ export function Sidebar({ collapsed, onToggle, variant = 'rail', onNavigate }: S
         ))}
       </nav>
 
+      {/* A "Gold tier · $312k more 30-day volume unlocks Platinum" card sat here,
+          with a progress bar fixed at 62%. There are no trading tiers on this
+          platform and no volume to measure, so it promised a ladder that does not
+          exist. Removed rather than reworded: the honest version of that card is
+          nothing. */}
       <div className="shrink-0 border-t border-line p-3">
-        {showLabels ? (
-          <div className="rounded-md border border-line bg-surface p-4">
-            <p className="flex items-center gap-2 text-xs font-medium text-fg">
-              <TrendingUp className="size-3.5 text-brand-soft" />
-              {ACCOUNT.tier} tier
-            </p>
-            <p className="mt-1.5 text-2xs leading-relaxed text-fg-subtle">
-              $312k more 30-day volume unlocks Platinum and zero maker fees.
-            </p>
-            <div aria-hidden className="mt-3 h-1 overflow-hidden rounded-full bg-line">
-              <div className="h-full w-[62%] rounded-full bg-brand-soft" />
-            </div>
-          </div>
-        ) : null}
         <ActiveLink
           href="/admin"
           onClick={onNavigate}

@@ -1,0 +1,56 @@
+{
+  "__comment": [
+    "Composite indexes for live support.",
+    "",
+    "Firestore refuses a composite query with no matching index rather than running",
+    "it slowly, so a missing one is a hard failure the first time a filter is used —",
+    "not a gradual slowdown nobody notices. Declaring them here keeps that failure",
+    "out of production; the console's error also links to a one-click creation page",
+    "if one is ever missed.",
+    "",
+    "Single-field queries need nothing: the console's inbox is ordered by",
+    "lastMessageAt alone, and Firestore indexes every field on its own by default.",
+    "",
+    "Deploy with: firebase deploy --only firestore:indexes"
+  ],
+  "indexes": [
+    {
+      "__comment": "The widget, and findOpenForUser: one customer's newest thread.",
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment": "findOpenForUser, which narrows to the open one before ordering.",
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment": "The server-rendered inbox, filtered to open conversations.",
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment": "The server-rendered inbox, filtered to one operator's threads.",
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedTo", "order": "ASCENDING" },
+        { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

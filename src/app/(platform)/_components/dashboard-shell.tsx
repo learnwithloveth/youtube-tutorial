@@ -26,9 +26,16 @@ const COLLAPSE_KEY = 'novex.dash.collapsed';
  * above, on the server — the shell never checks a session itself.
  */
 export function DashboardShell({
+  name,
+  initials,
+  emailVerified,
   email,
   children,
 }: {
+  /** The signed-in account, resolved once at the identity boundary. */
+  name: string;
+  initials: string;
+  emailVerified: boolean;
   email: string;
   children: ReactNode;
 }) {
@@ -93,7 +100,13 @@ export function DashboardShell({
         </aside>
 
         <div className="flex min-w-0 flex-col">
-          <TopBar email={email} onOpenDrawer={() => setDrawer(true)} />
+          <TopBar
+            name={name}
+            initials={initials}
+            email={email}
+            emailVerified={emailVerified}
+            onOpenDrawer={() => setDrawer(true)}
+          />
           <main id="dashboard-main" className="flex-1 px-4 pb-24 pt-6 md:px-6 md:pb-10 md:pt-8">
             {children}
           </main>

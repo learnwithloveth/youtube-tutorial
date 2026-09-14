@@ -14,6 +14,7 @@ import { activity } from './activity';
 import { identity } from './auth';
 import { ledger } from './ledger';
 import { getMarkets } from './market-data';
+import { getOpenSupportCount } from './support';
 import { getLiveActivity } from './presence';
 
 /**
@@ -86,27 +87,40 @@ const ACTIVITY_DAYS = 30;
  * Degrades to zero rather than throwing: a badge is not worth a 500, and an
  * operator who sees no badge will open the queue anyway.
  */
-export const getPendingQueueCounts = cache(async (): Promise<{ approvals: number }> => {
-  const context = ledger();
-  if (context === null) return { approvals: 0 };
+export const getPendingQueueCounts = cache(
+  async (): Promise<{ approvals: number; tickets: number }> => {
+    const context = ledger();
 
-  try {
-    const [withdrawals, claims] = await Promise.all([
-      context.dependencies.withdrawals.countByStatus(),
-      context.dependencies.claims.countByStatus(),
+    // `allSettled` across two contexts: support being unconfigured, or the ledger
+    // unreachable, should cost that badge rather than the other one — and rejecting
+    // in parallel with `all` leaves the loser unattached, which Node terminates for.
+    const [ledgerCounts, tickets] = await Promise.allSettled([
+      context === null
+        ? Promise.resolve(null)
+        : Promise.all([
+            context.dependencies.withdrawals.countByStatus(),
+            context.dependencies.claims.countByStatus(),
+          ]),
+      getOpenSupportCount(),
     ]);
+
+    if (ledgerCounts.status === 'rejected') {
+      logger.warn({ event: 'console_queue_count_failed', module: 'ledger' }, ledgerCounts.reason);
+    }
 
     const pending = (rows: readonly { status: string; total: number }[]) =>
       rows.find((row) => row.status === 'pending')?.total ?? 0;
 
-    // One badge for one queue: the approvals screen decides both, so an operator
-    // reading "4" should find four things to act on when they open it.
-    return { approvals: pending(withdrawals) + pending(claims) };
-  } catch (error) {
-    logger.warn({ event: 'console_queue_count_failed', module: 'ledger' }, error);
-    return { approvals: 0 };
-  }
-});
+    const rows = ledgerCounts.status === 'fulfilled' ? ledgerCounts.value : null;
+
+    return {
+      // One badge for one queue: the approvals screen decides both withdrawals and
+      // deposits, so an operator reading "4" should find four things to act on.
+      approvals: rows === null ? 0 : pending(rows[0]) + pending(rows[1]),
+      tickets: tickets.status === 'fulfilled' ? tickets.value : 0,
+    };
+  },
+);
 
 /**
  * The whole overview, in one pass.

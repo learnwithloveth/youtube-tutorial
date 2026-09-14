@@ -38,7 +38,15 @@ export function createDescribeUsers(deps: IdentityDependencies) {
 
     const users = await deps.users.findManyByIds(unique);
 
-    return new Map(users.map((user) => [user.id, toUserSummaryDto(user)]));
+    // A second keyed read rather than a join, because `User` deliberately does not
+    // carry a display name — see `domain/profile.ts`. Failing to resolve names is
+    // not failing to resolve users: the caller asked who these ids are, and an
+    // email answers that.
+    const named = await deps.profiles
+      .findMany(users.map((user) => user.id))
+      .catch(() => new Map());
+
+    return new Map(users.map((user) => [user.id, toUserSummaryDto(user, named.get(user.id))]));
   };
 }
 

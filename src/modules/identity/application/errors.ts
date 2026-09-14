@@ -10,6 +10,8 @@
  * because it contains no secrets and no I/O.
  */
 
+import { MAX_DISPLAY_NAME } from '../domain/profile';
+
 export type IdentityError =
   | { _tag: 'EmailMalformed' }
   | { _tag: 'EmailAlreadyRegistered' }
@@ -24,7 +26,10 @@ export type IdentityError =
   | { _tag: 'RateLimited'; retryAfterSeconds: number }
   | { _tag: 'VerificationTokenInvalid' }
   | { _tag: 'VerificationTokenExpired' }
-  | { _tag: 'EmailAlreadyVerified' };
+  | { _tag: 'EmailAlreadyVerified' }
+  | { _tag: 'DisplayNameTooLong'; maximum: number }
+  | { _tag: 'HandleInvalid' }
+  | { _tag: 'HandleTaken' };
 
 export const IdentityErrors = {
   emailMalformed: (): IdentityError => ({ _tag: 'EmailMalformed' }),
@@ -61,6 +66,12 @@ export const IdentityErrors = {
   verificationTokenInvalid: (): IdentityError => ({ _tag: 'VerificationTokenInvalid' }),
   verificationTokenExpired: (): IdentityError => ({ _tag: 'VerificationTokenExpired' }),
   emailAlreadyVerified: (): IdentityError => ({ _tag: 'EmailAlreadyVerified' }),
+  displayNameTooLong: (): IdentityError => ({
+    _tag: 'DisplayNameTooLong',
+    maximum: MAX_DISPLAY_NAME,
+  }),
+  handleInvalid: (): IdentityError => ({ _tag: 'HandleInvalid' }),
+  handleTaken: (): IdentityError => ({ _tag: 'HandleTaken' }),
 } as const;
 
 /**
@@ -100,5 +111,13 @@ export function presentIdentityError(error: IdentityError): string {
       return 'That link has expired. Request a new one.';
     case 'EmailAlreadyVerified':
       return 'That address is already confirmed. You can sign in.';
+    case 'DisplayNameTooLong':
+      return `That name is longer than ${error.maximum} characters.`;
+    case 'HandleInvalid':
+      // Says the rule rather than "invalid": somebody who typed "Amara K" needs to
+      // know what to type instead, not that they were wrong.
+      return 'A handle is 3 to 24 characters, using lowercase letters, numbers and underscores.';
+    case 'HandleTaken':
+      return 'That handle is already taken.';
   }
 }

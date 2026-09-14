@@ -1,6 +1,8 @@
 import { requireUser } from '@/server/auth';
+import { getMySupportThread, support } from '@/server/support';
 
 import { DashboardShell } from './_components/dashboard-shell';
+import { SupportWidget } from './_components/support-widget';
 
 /**
  * The signed-in application.
@@ -18,6 +20,15 @@ import { DashboardShell } from './_components/dashboard-shell';
  * The check is not a substitute for authorisation inside each mutation. A layout
  * guard stops someone *browsing* here; it does nothing about a Server Action
  * invoked directly, which is why actions re-derive their own authority.
+ *
+ * ── The support widget is mounted here, with its thread already read ───────────
+ * In the layout because a customer should be able to ask a question from wherever
+ * they got stuck, not only from a page that remembered to include it.
+ *
+ * The existing thread is read on the server and passed down, so the panel opens
+ * showing the conversation instead of a spinner. The widget attaches its Firestore
+ * listener only once somebody opens it — a customer who never contacts support
+ * should not hold a realtime connection on every page of the application.
  */
 export default async function PlatformLayout({
   children,
@@ -26,5 +37,28 @@ export default async function PlatformLayout({
 }) {
   const user = await requireUser('/app');
 
-  return <DashboardShell email={user.email}>{children}</DashboardShell>;
+  // Null when no Firebase project is configured. The widget is then simply absent,
+  // which is the same way a missing database degrades the rest of the platform.
+  const configured = support() !== null;
+  const thread = configured
+    ? await getMySupportThread(user.id)
+    : { conversation: null, messages: [] };
+
+  return (
+    <DashboardShell
+      name={user.name}
+      initials={user.initials}
+      email={user.email}
+      emailVerified={user.emailVerified}
+    >
+      {children}
+      {configured ? (
+        <SupportWidget
+          userId={user.id}
+          initialConversation={thread.conversation}
+          initialMessages={thread.messages}
+        />
+      ) : null}
+    </DashboardShell>
+  );
 }

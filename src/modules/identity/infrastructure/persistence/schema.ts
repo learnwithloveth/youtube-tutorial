@@ -64,6 +64,50 @@ export const users = identitySchema.table(
   (table) => [uniqueIndex('users_email_uq').on(table.email)],
 );
 
+/**
+ * How an account holder appears: a display name and a handle.
+ *
+ * ── Its own table, not columns on `users` ─────────────────────────────────────
+ * `users` is the credential: the hash, the lockout counter, the role. It is read
+ * on every authentication and it is the row a security review looks at hardest.
+ * A display name is read on every *page render*, changes whenever somebody feels
+ * like it, and matters to nothing that decides access — so it is kept where an
+ * edit to it cannot touch the other.
+ *
+ * The row is created on demand rather than at registration. Most accounts will
+ * never set either field, and a table of empty rows is one every query has to
+ * outer-join around for nothing.
+ */
+export const profiles = identitySchema.table(
+  'profiles',
+  {
+    /** Also the primary key: exactly one profile per account, enforced by the shape. */
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+
+    displayName: text('display_name'),
+    /** Stored without the leading `@`, which is punctuation the interface adds. */
+    handle: text('handle'),
+
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Optimistic-concurrency token, matching every other table in this schema. */
+    version: integer('version').notNull().default(0),
+  },
+  (table) => [
+    /*
+     * Unique where present.
+     *
+     * A plain unique index would treat every unset handle as a value and let only
+     * one account leave it blank — which is most of them. Postgres does not count
+     * nulls as equal in a unique index, so this works as written; the index is
+     * declared explicitly because the *intent* is "no two people share a handle",
+     * and that intent is easy to break with a later `default ''`.
+     */
+    uniqueIndex('profiles_handle_uq').on(table.handle),
+  ],
+);
+
 export const sessions = identitySchema.table(
   'sessions',
   {

@@ -5,6 +5,7 @@ import { toUserId, type UserId } from '@/shared/kernel/ids';
 
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
+import type { Profile } from '../../domain/profile';
 import { Session, type SessionId } from '../../domain/session';
 import { User, type UserStatus } from '../../domain/user';
 import {
@@ -17,6 +18,7 @@ import type {
   IdentityDependencies,
   OutboundEmail,
   PasswordHasher,
+  ProfileRepository,
   SessionRepository,
   SessionSealer,
   UserRepository,
@@ -201,6 +203,26 @@ const sealer: SessionSealer = {
   },
 };
 
+/** Nobody in these tests sets a name; the port still has to be satisfiable. */
+class FakeProfiles implements ProfileRepository {
+  readonly store = new Map<UserId, Profile>();
+
+  async find(userId: UserId) {
+    return this.store.get(userId) ?? null;
+  }
+  async findMany(ids: readonly UserId[]) {
+    return new Map(
+      ids.flatMap((id) => {
+        const profile = this.store.get(id);
+        return profile ? ([[id, profile]] as [UserId, Profile][]) : [];
+      }),
+    );
+  }
+  async save(profile: Profile) {
+    this.store.set(profile.userId, profile);
+  }
+}
+
 function makeDeps(now = NOW) {
   const users = new FakeUsers();
   const sessions = new FakeSessions();
@@ -210,6 +232,7 @@ function makeDeps(now = NOW) {
 
   const deps: IdentityDependencies = {
     users,
+    profiles: new FakeProfiles(),
     sessions,
     tokens,
     hasher: new FakeHasher(),

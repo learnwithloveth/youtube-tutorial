@@ -427,7 +427,7 @@ interface AdminContextValue {
  * fixture stops being consulted. The ones absent from it are still fixtures on
  * both sides, which is at least self-consistent.
  */
-export type QueueCounts = Partial<Record<'approvals', number>>;
+export type QueueCounts = Partial<Record<'approvals' | 'tickets', number>>;
 
 const AdminContext = createContext<AdminContextValue | null>(null);
 
@@ -450,9 +450,15 @@ export function AdminProvider({
   // literal from the server on every render, so memoising against the object
   // itself would rebuild the context each time and defeat the memo entirely.
   const countedApprovals = counted.approvals;
+  const countedTickets = counted.tickets;
   const value = useMemo(
-    () => ({ state, run, actor, counted: { approvals: countedApprovals } }),
-    [state, run, actor, countedApprovals],
+    () => ({
+      state,
+      run,
+      actor,
+      counted: { approvals: countedApprovals, tickets: countedTickets },
+    }),
+    [state, run, actor, countedApprovals, countedTickets],
   );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
@@ -477,7 +483,10 @@ export function useQueues() {
           : state.approvals.filter((a) => a.state === 'pending' || a.state === 'escalated').length,
       awaitingSecond: state.approvals.filter((a) => a.state === 'pending' && a.firstApprover).length,
       kyc: state.kycCases.filter((c) => c.state === 'unassigned' || c.state === 'in_review').length,
-      tickets: state.tickets.filter((t) => t.state !== 'resolved').length,
+      tickets:
+        counted.tickets !== undefined
+          ? counted.tickets
+          : state.tickets.filter((t) => t.state !== 'resolved').length,
       surveillance: state.surveillance.filter((s) => s.state === 'open').length,
       payouts: state.payouts.filter((p) => p.state !== 'approved').length,
       listings: state.listings.filter((l) => l.status === 'review').length,

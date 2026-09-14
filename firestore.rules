@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// =============================================================================
+// Firestore security rules for Novex live support.
+//
+// ── These govern reads, and forbid every write ───────────────────────────────
+// Nothing in this application writes to Firestore from a browser. Every message,
+// every claim and every resolution goes through a Next.js route handler holding
+// admin credentials, which re-derives the session through `src/server/auth.ts`.
+//
+// That is the point of `allow write: if false` below, and it is not laziness. The
+// alternative — letting the widget write directly — would mean expressing "who may
+// say what" a second time, in this file, kept in step with the application's own
+// authorisation by nothing but discipline. The first divergence between the two is
+// a customer posting into somebody else's thread.
+//
+// So these rules have one job: stop the direct *read* channel being used to read
+// somebody else's conversation. That channel exists because it is the socket a
+// serverless deployment cannot hold, and it is the only reason Firestore is here.
+//
+// ── The identity comes from a custom token ──────────────────────────────────
+// Nobody signs in to Firebase. `POST /api/support/session` proves who the caller
+// is the ordinary way and then mints a token whose `uid` is this application's own
+// `UserId` and whose `support_role` claim says customer or operator. Which is what
+// makes `request.auth.uid == resource.data.userId` mean anything at all.
+//
+// ── Deploy with ─────────────────────────────────────────────────────────────
+//   firebase deploy --only firestore:rules,firestore:indexes
+// or paste this into Firestore → Rules in the console.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOperator() {
+      return signedIn() && request.auth.token.support_role == 'operator';
+    }
+
+    function ownsIt() {
+      // `resource.data`, not a `get()` of the parent. A rule that fetched the
+      // conversation to check a message's owner would bill one extra document read
+      // per message, on every load of a thread — which is why `userId` is
+      // denormalised onto every message document.
+      return signedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isOperator() || ownsIt();
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if isOperator() || ownsIt();
+        allow write: if false;
+      }
+    }
+
+    // Push registrations. Written by the server when a browser asks for
+    // notifications; never read or written by a client, because a client that could
+    // list this collection could enumerate every operator's device token.
+    match /supportDevices/{token} {
+      allow read, write: if false;
+    }
+
+    // Everything else in the project is closed. A rule file whose last match is
+    // permissive is the standard way a Firestore database ends up world-readable.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

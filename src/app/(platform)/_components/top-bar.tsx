@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowDownToLine, Bell, ChevronDown, LogOut, Menu, Search, Settings, ShieldCheck, User,
 } from 'lucide-react';
-import { ACCOUNT, NOTIFICATIONS } from '../_data/data';
+import { NOTIFICATIONS } from '../_data/data';
 import { ThemeToggle } from '../../(marketing)/_components/theme-toggle';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
 import { LogoMark } from '@/shared/ui/visuals/logo';
@@ -59,10 +59,17 @@ function Popover({
 }
 
 export function TopBar({
+  name,
+  initials,
   email,
+  emailVerified,
   onOpenDrawer,
 }: {
+  /** Already resolved by the identity boundary — see `displayNameFor`. */
+  name: string;
+  initials: string;
   email: string;
+  emailVerified: boolean;
   onOpenDrawer: () => void;
 }) {
   const [bell, setBell] = useState(false);
@@ -175,25 +182,35 @@ export function TopBar({
             >
               <span
                 aria-hidden
-                className="grid size-7 place-items-center rounded-full text-xs font-semibold text-white"
-                style={{ background: `linear-gradient(140deg, ${ACCOUNT.hue}, color-mix(in oklab, ${ACCOUNT.hue} 40%, #05060b))` }}
+                className="grid size-7 place-items-center rounded-full bg-brand/20 text-xs font-semibold text-brand-soft"
               >
-                {ACCOUNT.initials}
+                {initials}
               </span>
               <ChevronDown className={cn('size-3.5 text-fg-subtle transition-transform', account && 'rotate-180')} />
-              <span className="sr-only">Account menu for {ACCOUNT.name}</span>
+              <span className="sr-only">Account menu for {name}</span>
             </button>
 
             <Popover open={account} onClose={closeAccount} labelledBy="account-button" className="w-64">
               <div className="border-b border-line px-4 py-3.5">
-                <p className="text-sm font-medium text-fg">{ACCOUNT.name}</p>
-                {/* The one real value on this menu: the account you signed in as.
-                    Name, tier and avatar are demo persona — see _console/data. */}
+                {/* All three lines are the signed-in account now. This menu used to
+                    show a demo persona's name and a "Verified · Gold" badge above
+                    the one real value on it. */}
+                <p className="truncate text-sm font-medium text-fg">{name}</p>
                 <p className="truncate text-xs text-fg-subtle">{email}</p>
-                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-2xs text-up">
-                  <ShieldCheck className="size-3" />
-                  Verified · {ACCOUNT.tier}
-                </p>
+                {emailVerified ? (
+                  <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-2xs text-up">
+                    <ShieldCheck className="size-3" />
+                    Email confirmed
+                  </p>
+                ) : (
+                  <Link
+                    href="/verify-email"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-warn/40 px-2 py-0.5 text-2xs text-warn"
+                  >
+                    <ShieldCheck className="size-3" />
+                    Confirm your email
+                  </Link>
+                )}
               </div>
               <ul className="p-1.5">
                 {[

@@ -7,6 +7,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
+import { Profile } from '../../domain/profile';
 import { Session, type SessionId } from '../../domain/session';
 import { User, type UserStatus } from '../../domain/user';
 import {
@@ -14,11 +15,12 @@ import {
   type VerificationPurpose,
 } from '../../domain/verification-token';
 import type {
+  ProfileRepository,
   SessionRepository,
   UserRepository,
   VerificationTokenRepository,
 } from '../../application/ports';
-import { sessions, users, verificationTokens } from './schema';
+import { profiles, sessions, users, verificationTokens } from './schema';
 
 /** Raised when another writer changed the row first. */
 export class ConcurrencyError extends Error {
@@ -58,6 +60,115 @@ function sessionToDomain(row: SessionRow): Session {
     revokedAt: row.revokedAt,
     userAgentHash: row.userAgentHash,
     ipHash: row.ipHash,
+  });
+}
+
+/**
+ * Another account already holds the handle.
+ *
+ * Its own error because the caller's response differs: a concurrency failure is
+ * retried, this is shown to the person typing. Raised from the unique index rather
+ * than from a prior read — two people claiming the same handle at the same moment
+ * both pass any check made beforehand, and only the index can arbitrate.
+ */
+export class HandleTakenError extends Error {
+  readonly _tag = 'HandleTakenError';
+
+  constructor(readonly handle: string) {
+    super(`Handle already taken: ${handle}`);
+    this.name = 'HandleTakenError';
+  }
+}
+
+export class DrizzleProfileRepository implements ProfileRepository {
+  constructor(private readonly db: Database) {}
+
+  async find(userId: UserId): Promise<Profile | null> {
+    const rows = await this.db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .limit(1);
+
+    const row = rows[0];
+    return row === undefined ? null : profileToDomain(row);
+  }
+
+  async findMany(ids: readonly UserId[]): Promise<Map<UserId, Profile>> {
+    if (ids.length === 0) return new Map();
+
+    const rows = await this.db
+      .select()
+      .from(profiles)
+      .where(inArray(profiles.userId, [...ids]));
+
+    return new Map(rows.map((row) => [row.userId as UserId, profileToDomain(row)]));
+  }
+
+  async save(profile: Profile): Promise<void> {
+    const snapshot = profile.snapshot();
+
+    try {
+      // Upsert, because the row is created on demand: most accounts never set
+      // either field, and a table of empty rows is one every read outer-joins
+      // around for nothing. The `where` on the update is the optimistic guard —
+      // a stale version matches no row and the insert path cannot have run.
+      const updated = await this.db
+        .insert(profiles)
+        .values({
+          userId: snapshot.userId,
+          displayName: snapshot.displayName,
+          handle: snapshot.handle,
+          updatedAt: snapshot.updatedAt,
+          version: snapshot.version + 1,
+        })
+        .onConflictDoUpdate({
+          target: profiles.userId,
+          set: {
+            displayName: snapshot.displayName,
+            handle: snapshot.handle,
+            updatedAt: snapshot.updatedAt,
+            version: snapshot.version + 1,
+          },
+          where: eq(profiles.version, snapshot.version),
+        })
+        .returning({ userId: profiles.userId });
+
+      if (updated.length === 0) throw new ConcurrencyError('Profile', snapshot.userId);
+    } catch (error) {
+      // Postgres 23505 is a unique violation. The only unique index on this table
+      // is the handle, so there is nothing else this can mean.
+      if (snapshot.handle !== null && isUniqueViolation(error)) {
+        throw new HandleTakenError(snapshot.handle);
+      }
+      throw error;
+    }
+  }
+}
+
+/** Postgres `unique_violation`, however the driver chose to wrap it. */
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  if (code === '23505') return true;
+
+  // The Neon HTTP driver nests the original under `cause` on some paths, and
+  // reports others only in the message. Checked in that order so a genuine crash
+  // is not mistaken for a taken handle by a coincidental substring.
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause !== undefined && cause !== error && isUniqueViolation(cause)) return true;
+
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' && message.includes('profiles_handle_uq');
+}
+
+function profileToDomain(row: typeof profiles.$inferSelect): Profile {
+  return Profile.rehydrate({
+    userId: row.userId as UserId,
+    displayName: row.displayName,
+    handle: row.handle,
+    updatedAt: row.updatedAt,
+    version: row.version,
   });
 }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { getSessions, requireUser } from '@/server/auth';
+import { getWalletFor } from '@/server/ledger';
 
 import { ActiveSessions } from './_components/active-sessions';
 import { SettingsShell } from './_components/settings-shell';
@@ -9,18 +10,20 @@ import { SettingsShell } from './_components/settings-shell';
  * Settings.
  *
  * ── A Server Component wrapping a client shell ─────────────────────────────────
- * The page reads the session list on the server and passes it down as a rendered
- * slot; the shell is interactive (tabs, toggles, a clipboard) and hydrates. The
- * same arrangement the navbar uses, and for the same reason: the data needs the
- * server and the chrome needs the browser.
+ * The page reads the account, its limit and its sessions on the server; the shell
+ * is interactive — tabs and switches — and hydrates. The same arrangement the
+ * navbar uses, and for the same reason: the data needs the server and the chrome
+ * needs the browser.
  *
- * ── What is real here, and what is not ─────────────────────────────────────────
- * The session list is real — live rows from `identity.sessions`, with a working
- * "sign out everywhere" that revokes them server-side. The precise-location control
- * on this page is real. The rest of the tabs — API keys, limits, notification
- * preferences, the profile form — are still fixtures, because each needs a context
- * this application has not built. They are left visibly as they were rather than
- * wired to something that looks real and is not.
+ * ── What is real here ──────────────────────────────────────────────────────────
+ * All of it, now. The profile is the signed-in account's own row, editable and
+ * saved. The daily limit is the ledger's, checked against the same number a
+ * withdrawal is refused by. The session list is live rows from `identity.sessions`
+ * with a working "sign out everywhere". Precise location feeds the presence
+ * context, and the notification switch registers this device with Cloud Messaging.
+ *
+ * The API keys and trading-controls tabs are gone rather than mocked — see the
+ * shell for what was removed and why.
  */
 
 export const dynamic = 'force-dynamic';
@@ -31,8 +34,22 @@ export const metadata: Metadata = {
 };
 
 export default async function SettingsPage() {
-  await requireUser('/app/settings');
-  const sessions = await getSessions();
+  const user = await requireUser('/app/settings');
 
-  return <SettingsShell sessions={<ActiveSessions sessions={sessions} />} />;
+  // Both reads are independent and neither is allowed to fail the page: a session
+  // list that cannot be read is an empty panel, and a wallet that cannot be read
+  // is a limit the page says it could not fetch — not a limit of zero.
+  const [sessions, wallet] = await Promise.allSettled([getSessions(), getWalletFor(user.id)]);
+
+  return (
+    <SettingsShell
+      user={user}
+      limits={
+        wallet.status === 'fulfilled' && !wallet.value.degraded ? wallet.value.limits : null
+      }
+      sessions={
+        <ActiveSessions sessions={sessions.status === 'fulfilled' ? sessions.value : []} />
+      }
+    />
+  );
 }
