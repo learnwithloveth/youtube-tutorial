@@ -3,6 +3,8 @@ import type { IdGenerator, UserId } from '@/shared/kernel/ids';
 
 import type { LedgerAsset } from '../domain/asset';
 import type { AccountId, AccountOwner, LedgerAccount } from '../domain/account';
+import type { DepositClaim } from '../domain/deposit-claim';
+import type { ProofContentType } from '../domain/proof-image';
 import type { Transfer, TransferKind } from '../domain/transfer';
 import type { Withdrawal, WithdrawalStatus } from '../domain/withdrawal';
 
@@ -113,9 +115,45 @@ export interface AssetRegistry {
   list(): readonly LedgerAsset[];
 }
 
+/**
+ * Where proof images live.
+ *
+ * ── A port because the storage will move ───────────────────────────────────────
+ * The first adapter keeps bytes in Postgres, which needs no credentials and is
+ * transactional with the claim — the proof and the claim cannot diverge. It is
+ * also the wrong home at volume: this project's database tier is 512 MB in total,
+ * and a few hundred screenshots is a meaningful fraction of it.
+ *
+ * Object storage with presigned uploads is where this ends up. Keeping it behind a
+ * port means that is an adapter and a line in `module.ts`, and the use cases, the
+ * schema of the claim, and the console never learn that anything changed.
+ */
+export interface ProofStorage {
+  /**
+   * Stores validated bytes and returns their key.
+   *
+   * Takes a content type the *caller has already sniffed*, not one the client
+   * declared. An adapter must not re-derive it from a filename.
+   */
+  put(bytes: Uint8Array, contentType: ProofContentType): Promise<string>;
+  get(proofId: string): Promise<{ bytes: Uint8Array; contentType: ProofContentType } | null>;
+  /** Removes a proof. Used when a claim fails to save after its proof was stored. */
+  remove(proofId: string): Promise<void>;
+}
+
+export interface DepositClaimRepository {
+  save(claim: DepositClaim): Promise<void>;
+  find(id: string): Promise<DepositClaim | null>;
+  listForUser(userId: UserId, limit: number): Promise<DepositClaim[]>;
+  /** The operator queue: claims awaiting a decision, oldest first. */
+  listPending(limit: number): Promise<DepositClaim[]>;
+}
+
 export interface LedgerDependencies {
   accounts: LedgerRepository;
   withdrawals: WithdrawalRepository;
+  claims: DepositClaimRepository;
+  proofs: ProofStorage;
   prices: PriceOracle;
   assets: AssetRegistry;
   ids: IdGenerator;

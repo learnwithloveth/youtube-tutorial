@@ -1,7 +1,16 @@
 'use client';
 
 import { useActionState, useMemo, useState } from 'react';
-import { ArrowUpFromLine, Check, Copy, Info, ShieldCheck, TriangleAlert } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Check,
+  Copy,
+  Info,
+  ShieldCheck,
+  TriangleAlert,
+  Upload,
+} from 'lucide-react';
 
 import type { AssetOptionDto, BalanceDto } from '@/modules/ledger';
 import { cn } from '@/shared/lib/cn';
@@ -9,7 +18,8 @@ import { Button } from '@/shared/ui/primitives/button';
 import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
 
 import { requestWithdrawalAction } from '../_lib/actions';
-import { IDLE_WITHDRAWAL_STATE } from '../_lib/form-state';
+import { submitDepositAction } from '../_lib/deposit-actions';
+import { IDLE_DEPOSIT_STATE, IDLE_WITHDRAWAL_STATE } from '../_lib/form-state';
 
 /**
  * The deposit / withdraw panel.
@@ -128,6 +138,13 @@ export function WithdrawForm({
             copied={copied}
             onCopy={copy}
           />
+          {deposit !== null ? (
+            <ProofForm
+              assetCode={assetCode}
+              networkId={network?.id ?? ''}
+              networkLabel={network?.label ?? ''}
+            />
+          ) : null}
         </div>
       ) : (
         <form action={submit} className="space-y-5">
@@ -364,5 +381,142 @@ function NetworkChooser({
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Telling us the transfer happened, with evidence.
+ *
+ * ── The button is disabled until a file is attached ────────────────────────────
+ * Which is what the customer asked for, and it is the right shape for the reason
+ * behind it: without proof there is nothing for an operator to check, so a claim
+ * with no screenshot is a request to be given money. Disabling is better than
+ * failing on submit here — the rule is knowable before the click, so the interface
+ * should say so rather than let someone fill in a form and be refused.
+ *
+ * It is not a control. The server re-checks everything, sniffs the file from its
+ * bytes, and refuses anything that is not an image. This only saves a round trip.
+ */
+function ProofForm({
+  assetCode,
+  networkId,
+  networkLabel,
+}: {
+  assetCode: string;
+  networkId: string;
+  networkLabel: string;
+}) {
+  const [state, submit, pending] = useActionState(submitDepositAction, IDLE_DEPOSIT_STATE);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+
+  const ready = fileName !== null && amount.trim().length > 0 && reference.trim().length > 0;
+
+  return (
+    <form action={submit} className="space-y-4 border-t border-line pt-5">
+      <input type="hidden" name="asset" value={assetCode} />
+      <input type="hidden" name="network" value={networkId} />
+
+      <div>
+        <p className="text-sm text-fg">Already sent it?</p>
+        <p className="mt-0.5 text-2xs leading-relaxed text-fg-subtle">
+          Tell us the amount and the transaction, and attach a screenshot. An operator
+          checks it against the chain before your balance moves.
+        </p>
+      </div>
+
+      <label className="block">
+        <span className="mb-2 block text-xs text-fg-subtle">Amount sent</span>
+        <input
+          name="amount"
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          inputMode="decimal"
+          autoComplete="off"
+          placeholder="0.00"
+          className="h-11 w-full rounded-lg border border-line bg-surface px-4 font-mono text-sm text-fg placeholder:text-fg-subtle focus:border-line-strong focus:outline-none"
+        />
+      </label>
+
+      <label className="block">
+        <span className="mb-2 block text-xs text-fg-subtle">
+          Transaction hash or bank reference
+        </span>
+        <input
+          name="reference"
+          value={reference}
+          onChange={(event) => setReference(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={`Your ${networkLabel} transaction`}
+          className="h-11 w-full rounded-lg border border-line bg-surface px-4 font-mono text-sm text-fg placeholder:text-fg-subtle focus:border-line-strong focus:outline-none"
+        />
+      </label>
+
+      <div>
+        <span className="mb-2 block text-xs text-fg-subtle">Screenshot of the transfer</span>
+        <label
+          className={cn(
+            'flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-4 py-3.5 transition-colors',
+            fileName !== null
+              ? 'border-up/50 bg-up/8'
+              : 'border-line hover:border-line-strong',
+          )}
+        >
+          <input
+            type="file"
+            name="proof"
+            // A hint to the file picker, not a control. The server decides what the
+            // file is from its bytes and ignores both the extension and the type
+            // the browser attaches.
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => setFileName(event.target.files?.[0]?.name ?? null)}
+            className="sr-only"
+          />
+          {fileName !== null ? (
+            <Check className="size-4 shrink-0 text-up" />
+          ) : (
+            <Upload className="size-4 shrink-0 text-fg-subtle" />
+          )}
+          <span className="min-w-0 flex-1 truncate text-xs text-fg">
+            {fileName ?? 'Choose a PNG, JPEG or WebP screenshot'}
+          </span>
+          <span className="shrink-0 text-2xs text-fg-subtle">
+            {fileName === null ? 'Browse' : 'Change'}
+          </span>
+        </label>
+      </div>
+
+      {state.message ? (
+        <p
+          role="status"
+          className={cn(
+            'flex items-start gap-2 rounded-lg border px-4 py-3 text-xs leading-relaxed',
+            state.status === 'error'
+              ? 'border-down/35 bg-down/8 text-fg'
+              : 'border-up/35 bg-up/8 text-fg',
+          )}
+        >
+          {state.status === 'error' ? (
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-down" />
+          ) : (
+            <Check className="mt-0.5 size-3.5 shrink-0 text-up" />
+          )}
+          {state.message}
+        </p>
+      ) : null}
+
+      <Button type="submit" disabled={!ready || pending} className="w-full">
+        <ArrowDownToLine className="size-4" />
+        {pending ? 'Submitting…' : 'Submit deposit for review'}
+      </Button>
+
+      {!ready ? (
+        <p className="text-center text-2xs text-fg-subtle">
+          Add the amount, the reference and a screenshot to continue.
+        </p>
+      ) : null}
+    </form>
   );
 }

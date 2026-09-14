@@ -1,4 +1,5 @@
 import {
+  customType,
   index,
   integer,
   numeric,
@@ -219,7 +220,96 @@ export const withdrawalApprovals = ledgerSchema.table(
   ],
 );
 
+/**
+ * Customer claims that funds arrived, awaiting an operator's confirmation.
+ *
+ * Separate from `transfers` because a claim is mostly *not* a movement: it is an
+ * assertion with evidence that may be refused, and only the approved ones ever
+ * produce entries. `transfer_id` points at the movement once there is one.
+ */
+export const depositClaims = ledgerSchema.table(
+  'deposit_claims',
+  {
+    id: text('id').primaryKey(),
+    /** Opaque `UserId`. No foreign key to identity — see any module schema. */
+    userId: text('user_id').notNull(),
+
+    asset: text('asset').notNull(),
+    network: text('network').notNull(),
+    scale: integer('scale').notNull(),
+
+    /** What the customer says they sent. */
+    claimedAmount: numeric('claimed_amount', { precision: 48, scale: 36 }).notNull(),
+    /**
+     * What an operator verified arrived. Null until approved.
+     *
+     * Kept beside the claim rather than overwriting it: the gap between the two is
+     * exactly what a dispute is about, and one column would record the answer over
+     * the question.
+     */
+    creditedAmount: numeric('credited_amount', { precision: 48, scale: 36 }),
+
+    /** The customer's transaction hash or bank reference. Checked against the proof. */
+    reference: text('reference').notNull(),
+    /** Key of the stored proof image. Never a filename the customer chose. */
+    proofId: text('proof_id').notNull(),
+
+    status: text('status', { enum: ['pending', 'approved', 'rejected'] })
+      .notNull()
+      .default('pending'),
+
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedBy: text('decided_by'),
+    /** Required on a rejection: the customer is shown it. */
+    reason: text('reason'),
+    /** The transfer that credited the funds, once approved. */
+    transferId: text('transfer_id'),
+
+    version: integer('version').notNull().default(0),
+  },
+  (table) => [
+    index('deposit_claims_status_idx').on(table.status, table.submittedAt),
+    index('deposit_claims_user_idx').on(table.userId, table.submittedAt),
+  ],
+);
+
+/**
+ * Proof images, as bytes.
+ *
+ * ── This table is the one to move first ────────────────────────────────────────
+ * Postgres is a deliberate starting point, not the destination. It needs no
+ * credentials and lands in the same database as the claim, so the two cannot
+ * diverge. It is also the wrong home at volume: this project's tier is 512 MB in
+ * total, and a `bytea` column inflates every backup and every branch with data
+ * that is written once and read a handful of times.
+ *
+ * The rule of thumb is a few hundred proofs. Past that, `ProofStorage` gets an
+ * object-storage adapter and this table is dropped — which is the whole reason it
+ * sits behind a port rather than being read directly by the console.
+ *
+ * Its own table rather than a column on the claim, so that `select * from
+ * deposit_claims` — which an operator will run — does not drag megabytes of image
+ * across the wire.
+ */
+export const depositProofs = ledgerSchema.table('deposit_proofs', {
+  id: text('id').primaryKey(),
+  /** Sniffed from the bytes, never taken from the upload's declared type. */
+  contentType: text('content_type', {
+    enum: ['image/png', 'image/jpeg', 'image/webp'],
+  }).notNull(),
+  bytes: customType<{ data: Uint8Array; driverData: Buffer }>({
+    dataType: () => 'bytea',
+    toDriver: (value) => Buffer.from(value),
+    fromDriver: (value) => new Uint8Array(value),
+  })('bytes').notNull(),
+  byteLength: integer('byte_length').notNull(),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type AccountRow = typeof accounts.$inferSelect;
+export type DepositClaimRow = typeof depositClaims.$inferSelect;
+export type DepositProofRow = typeof depositProofs.$inferSelect;
 export type TransferRow = typeof transfers.$inferSelect;
 export type EntryRow = typeof entries.$inferSelect;
 export type WithdrawalRow = typeof withdrawals.$inferSelect;

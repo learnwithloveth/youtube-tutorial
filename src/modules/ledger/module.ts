@@ -10,17 +10,27 @@ import {
   type DecideWithdrawal,
 } from './application/use-cases/decide-withdrawal';
 import {
+  createDecideDepositClaim,
+  type DecideDepositClaim,
+} from './application/use-cases/decide-deposit-claim';
+import {
   createRecordDeposit,
   type RecordDeposit,
 } from './application/use-cases/record-deposit';
+import {
+  createSubmitDepositClaim,
+  type SubmitDepositClaim,
+} from './application/use-cases/submit-deposit-claim';
 import {
   createRequestWithdrawal,
   type RequestWithdrawal,
 } from './application/use-cases/request-withdrawal';
 import { CatalogueAssetRegistry } from './infrastructure/catalogue/assets';
 import {
+  DrizzleDepositClaimRepository,
   DrizzleLedgerRepository,
   DrizzleWithdrawalRepository,
+  PostgresProofStorage,
 } from './infrastructure/persistence/repositories';
 
 /**
@@ -41,6 +51,10 @@ export interface LedgerModule {
   readonly requestWithdrawal: RequestWithdrawal;
   readonly decideWithdrawal: DecideWithdrawal;
   readonly recordDeposit: RecordDeposit;
+  /** A customer submits evidence that funds arrived. Credits nothing. */
+  readonly submitDepositClaim: SubmitDepositClaim;
+  /** An operator confirms or refuses that evidence. This is what credits. */
+  readonly decideDepositClaim: DecideDepositClaim;
   /** Passed to the module's queries, which are free functions over these ports. */
   readonly dependencies: LedgerDependencies;
 }
@@ -57,6 +71,10 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
   const dependencies: LedgerDependencies = {
     accounts: new DrizzleLedgerRepository(options.db),
     withdrawals: new DrizzleWithdrawalRepository(options.db),
+    claims: new DrizzleDepositClaimRepository(options.db),
+    // Postgres for now; see `PostgresProofStorage` for when this becomes an
+    // object-storage adapter and why the port exists.
+    proofs: new PostgresProofStorage(options.db),
     prices: options.prices,
     assets: new CatalogueAssetRegistry(),
     ids: options.ids ?? systemIdGenerator,
@@ -67,6 +85,8 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     requestWithdrawal: createRequestWithdrawal(dependencies),
     decideWithdrawal: createDecideWithdrawal(dependencies),
     recordDeposit: createRecordDeposit(dependencies),
+    submitDepositClaim: createSubmitDepositClaim(dependencies),
+    decideDepositClaim: createDecideDepositClaim(dependencies),
     dependencies,
   };
 }

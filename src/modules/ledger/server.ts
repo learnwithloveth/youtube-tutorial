@@ -23,5 +23,7 @@ export { getStatement } from './application/queries/statement';
 export type { RequestWithdrawalCommand } from './application/use-cases/request-withdrawal';
 export type { DecideWithdrawalCommand } from './application/use-cases/decide-withdrawal';
 export type { RecordDepositCommand } from './application/use-cases/record-deposit';
+export type { SubmitDepositClaimCommand } from './application/use-cases/submit-deposit-claim';
+export type { DecideDepositClaimCommand } from './application/use-cases/decide-deposit-claim';
 
 export { LEDGER_ASSETS } from './infrastructure/catalogue/assets';

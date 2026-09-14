@@ -57,6 +57,13 @@
       "when": 1789384857293,
       "tag": "0007_typical_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789391140016,
+      "tag": "0008_dapper_korg",
+      "breakpoints": true
     }
   ]
 }

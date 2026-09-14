@@ -156,3 +156,109 @@ export function withdrawableAssets() {
     })),
   }));
 }
+
+/**
+ * Deposit claims awaiting an operator.
+ *
+ * Deduplicated per request so the console's counter and its list cost one read.
+ */
+export const getPendingDepositClaims = cache(async () => {
+  const context = ledger();
+  if (context === null) return [];
+
+  try {
+    const claims = await context.dependencies.claims.listPending(100);
+    return claims.map(toClaimView);
+  } catch (error) {
+    logger.error({ event: 'deposit_queue_read_failed', module: 'ledger' }, error);
+    return [];
+  }
+});
+
+/** One customer's own claims, for the wallet. */
+export async function getDepositClaimsFor(userId: UserId) {
+  const context = ledger();
+  if (context === null) return [];
+
+  try {
+    const claims = await context.dependencies.claims.listForUser(userId, 20);
+    return claims.map(toClaimView);
+  } catch (error) {
+    logger.warn({ event: 'deposit_claims_read_failed', module: 'ledger', userId }, error);
+    return [];
+  }
+}
+
+export interface DepositClaimView {
+  readonly id: string;
+  readonly userId: string;
+  readonly asset: string;
+  readonly network: string;
+  readonly claimedAmount: string;
+  readonly creditedAmount: string | null;
+  readonly reference: string;
+  readonly status: 'pending' | 'approved' | 'rejected';
+  readonly submittedAt: string;
+  readonly decidedAt: string | null;
+  readonly reason: string | null;
+}
+
+/**
+ * The claim, without its proof.
+ *
+ * `proofId` is deliberately absent: the image is fetched by its own authorised
+ * route, keyed on the *claim* id, so a proof key never travels to a browser and
+ * cannot be pasted into an unauthenticated request.
+ */
+function toClaimView(claim: {
+  snapshot(): {
+    id: string;
+    userId: string;
+    asset: string;
+    network: string;
+    claimedAmount: { toDecimalString(): string };
+    creditedAmount: { toDecimalString(): string } | null;
+    reference: string;
+    status: 'pending' | 'approved' | 'rejected';
+    submittedAt: Date;
+    decidedAt: Date | null;
+    reason: string | null;
+  };
+}): DepositClaimView {
+  const s = claim.snapshot();
+  return {
+    id: s.id,
+    userId: s.userId,
+    asset: s.asset,
+    network: s.network,
+    claimedAmount: s.claimedAmount.toDecimalString(),
+    creditedAmount: s.creditedAmount?.toDecimalString() ?? null,
+    reference: s.reference,
+    status: s.status,
+    submittedAt: s.submittedAt.toISOString(),
+    decidedAt: s.decidedAt?.toISOString() ?? null,
+    reason: s.reason,
+  };
+}
+
+/**
+ * The bytes of one claim's proof, for a caller that has already proved it may see
+ * them.
+ *
+ * Keyed on the claim, not the proof: the route that serves an image checks who is
+ * asking against the claim's owner, and that check needs the claim in hand.
+ */
+export async function getDepositProof(
+  claimId: string,
+): Promise<{ bytes: Uint8Array; contentType: string; ownerId: string } | null> {
+  const context = ledger();
+  if (context === null) return null;
+
+  const claim = await context.dependencies.claims.find(claimId);
+  if (claim === null) return null;
+
+  const proof = await context.dependencies.proofs.get(claim.proofId);
+  if (proof === null) return null;
+
+  return { bytes: proof.bytes, contentType: proof.contentType, ownerId: claim.userId };
+}

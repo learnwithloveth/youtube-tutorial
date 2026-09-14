@@ -15,14 +15,20 @@ import type { LedgerAsset } from '../../domain/asset';
 import type { Transfer } from '../../domain/transfer';
 import type { Withdrawal, WithdrawalStatus } from '../../domain/withdrawal';
 import { CatalogueAssetRegistry } from '../../infrastructure/catalogue/assets';
+import type { DepositClaim } from '../../domain/deposit-claim';
+import type { ProofContentType } from '../../domain/proof-image';
 import type {
+  DepositClaimRepository,
   LedgerDependencies,
   LedgerRepository,
   PriceOracle,
+  ProofStorage,
   WithdrawalRepository,
 } from '../ports';
 import { createDecideWithdrawal } from '../use-cases/decide-withdrawal';
+import { createDecideDepositClaim } from '../use-cases/decide-deposit-claim';
 import { createRecordDeposit } from '../use-cases/record-deposit';
+import { createSubmitDepositClaim } from '../use-cases/submit-deposit-claim';
 import { createRequestWithdrawal } from '../use-cases/request-withdrawal';
 
 /**
@@ -145,6 +151,40 @@ class FakeWithdrawals implements WithdrawalRepository {
   }
 }
 
+class FakeClaims implements DepositClaimRepository {
+  readonly store = new Map<string, DepositClaim>();
+
+  async save(claim: DepositClaim) {
+    this.store.set(claim.id, claim);
+  }
+  async find(id: string) {
+    return this.store.get(id) ?? null;
+  }
+  async listForUser(userId: UserId, limit: number) {
+    return [...this.store.values()].filter((c) => c.userId === userId).slice(0, limit);
+  }
+  async listPending(limit: number) {
+    return [...this.store.values()].filter((c) => c.status === 'pending').slice(0, limit);
+  }
+}
+
+class FakeProofs implements ProofStorage {
+  readonly store = new Map<string, { bytes: Uint8Array; contentType: ProofContentType }>();
+  private counter = 0;
+
+  async put(bytes: Uint8Array, contentType: ProofContentType) {
+    const id = `proof-${this.counter++}`;
+    this.store.set(id, { bytes, contentType });
+    return id;
+  }
+  async get(id: string) {
+    return this.store.get(id) ?? null;
+  }
+  async remove(id: string) {
+    this.store.delete(id);
+  }
+}
+
 /** $100,000 a bitcoin, so the arithmetic in the assertions stays readable. */
 const priceOracle: PriceOracle = {
   async valueInUsd(amount: Money) {
@@ -160,9 +200,14 @@ function build(prices: PriceOracle = priceOracle) {
   const accounts = new FakeLedger();
   const withdrawals = new FakeWithdrawals();
 
+  const claims = new FakeClaims();
+  const proofs = new FakeProofs();
+
   const deps: LedgerDependencies = {
     accounts,
     withdrawals,
+    claims,
+    proofs,
     prices,
     assets: new CatalogueAssetRegistry(),
     ids: sequentialIdGenerator(),
@@ -173,7 +218,11 @@ function build(prices: PriceOracle = priceOracle) {
     deps,
     accounts,
     withdrawals,
+    claims,
+    proofs,
     deposit: createRecordDeposit(deps),
+    submitClaim: createSubmitDepositClaim(deps),
+    decideClaim: createDecideDepositClaim(deps),
     request: createRequestWithdrawal(deps),
     decide: createDecideWithdrawal(deps),
   };
@@ -506,5 +555,178 @@ describe('deciding a withdrawal', () => {
 
     expect(again.ok).toBe(false);
     if (!again.ok) expect(again.error.kind).toBe('withdrawal-already-decided');
+  });
+});
+
+describe('deposit claims', () => {
+  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+  function screenshot(): Uint8Array {
+    const bytes = new Uint8Array(512);
+    bytes.set(PNG, 0);
+    return bytes;
+  }
+
+  function claim(overrides: Record<string, unknown> = {}) {
+    return {
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '0.25',
+      reference: '0xdeadbeefcafe',
+      proof: screenshot(),
+      ...overrides,
+    } as Parameters<ReturnType<typeof createSubmitDepositClaim>>[0];
+  }
+
+  it('stores the proof and credits nothing', async () => {
+    const ctx = build();
+
+    const result = await ctx.submitClaim(claim());
+    expect(result.ok).toBe(true);
+
+    expect(ctx.proofs.store.size).toBe(1);
+    // The whole point: a claim is evidence submitted, not money credited.
+    expect(ctx.accounts.posted).toHaveLength(0);
+
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+    expect(alice).toBeNull();
+  });
+
+  /* A claim with no proof is a request to be given money. */
+  it('refuses a file that is not an image, whatever it is called', async () => {
+    const ctx = build();
+    const html = new TextEncoder().encode(`<html>${'x'.repeat(200)}</html>`);
+
+    const result = await ctx.submitClaim(claim({ proof: html }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('proof-invalid');
+    expect(ctx.proofs.store.size).toBe(0);
+  });
+
+  it('refuses a claim with no transaction reference', async () => {
+    const ctx = build();
+    const result = await ctx.submitClaim(claim({ reference: '   ' }));
+
+    expect(result.ok).toBe(false);
+    // Nothing stored: a rejected claim should not leave an orphan image behind.
+    expect(ctx.proofs.store.size).toBe(0);
+  });
+
+  it('credits the balance on approval and the books balance', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(claim());
+    if (!submitted.ok) throw new Error('setup failed');
+
+    const decided = await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+    });
+
+    expect(decided.ok).toBe(true);
+    if (decided.ok) expect(decided.value.credited).toBe('0.25000000');
+
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+    const custody = await ctx.accounts.find(accountIdFor(platformOwner('custody'), 'BTC'));
+
+    expect(alice?.balance.toDecimalString()).toBe('0.25000000');
+    expect(custody?.balance.toDecimalString()).toBe('-0.25000000');
+    expectBooksBalance(ctx.accounts);
+  });
+
+  /* People mistype and networks take fees. The ledger credits what arrived, and
+     both numbers are kept so a dispute can be read afterwards. */
+  it('credits the amount the operator verified, not the amount claimed', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(claim({ amount: '0.5' }));
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+      creditedAmount: '0.4998',
+    });
+
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+    expect(alice?.balance.toDecimalString()).toBe('0.49980000');
+
+    const stored = await ctx.claims.find(submitted.value.claimId);
+    // The claim survives intact beside the credit — that gap is what a dispute is.
+    expect(stored?.claimedAmount.toDecimalString()).toBe('0.50000000');
+    expect(stored?.creditedAmount?.toDecimalString()).toBe('0.49980000');
+  });
+
+  it('moves nothing on rejection and records why', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(claim());
+    if (!submitted.ok) throw new Error('setup failed');
+
+    const decided = await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'reject',
+      reason: 'No matching transaction on chain',
+    });
+
+    expect(decided.ok).toBe(true);
+    expect(ctx.accounts.posted).toHaveLength(0);
+
+    const stored = await ctx.claims.find(submitted.value.claimId);
+    expect(stored?.status).toBe('rejected');
+    expect(stored?.reason).toBe('No matching transaction on chain');
+  });
+
+  it('refuses a rejection with no reason', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(claim());
+    if (!submitted.ok) throw new Error('setup failed');
+
+    const decided = await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'reject',
+    });
+
+    expect(decided.ok).toBe(false);
+  });
+
+  /* Crediting is the cheaper fraud — it needs no counterparty and only surfaces
+     when custody is next reconciled. */
+  it('refuses an operator approving their own deposit', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(claim());
+    if (!submitted.ok) throw new Error('setup failed');
+
+    const decided = await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: ALICE,
+      decision: 'approve',
+    });
+
+    expect(decided.ok).toBe(false);
+    if (!decided.ok) expect(decided.error.kind).toBe('approval-refused');
+    expect(ctx.accounts.posted).toHaveLength(0);
+  });
+
+  it('refuses a second decision on a decided claim', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(claim());
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+    });
+    const again = await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: CAROL,
+      decision: 'approve',
+    });
+
+    expect(again.ok).toBe(false);
   });
 });

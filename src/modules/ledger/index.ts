@@ -26,6 +26,9 @@ export type { Tier, TierLimits } from './domain/limits';
 export { limitsFor, tierFor } from './domain/limits';
 
 export type { WithdrawalStatus } from './domain/withdrawal';
+export type { DepositClaimStatus } from './domain/deposit-claim';
+export type { ProofContentType } from './domain/proof-image';
+export { MAX_PROOF_BYTES } from './domain/proof-image';
 
 /*
  * The queries are NOT re-exported here. They log, and the logger is `server-only`

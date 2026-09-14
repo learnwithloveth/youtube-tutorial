@@ -18,18 +18,25 @@ import {
 import type { LedgerAsset } from '../../domain/asset';
 import { Transfer } from '../../domain/transfer';
 import { Withdrawal, type WithdrawalStatus } from '../../domain/withdrawal';
+import { DepositClaim } from '../../domain/deposit-claim';
+import type { ProofContentType } from '../../domain/proof-image';
 import type {
+  DepositClaimRepository,
   LedgerRepository,
+  ProofStorage,
   StatementEntry,
   WithdrawalRepository,
 } from '../../application/ports';
 import {
   accounts,
+  depositClaims,
+  depositProofs,
   entries,
   transfers,
   withdrawalApprovals,
   withdrawals,
   type AccountRow,
+  type DepositClaimRow,
   type WithdrawalRow,
 } from './schema';
 
@@ -417,3 +424,164 @@ function toWithdrawal(
 }
 
 export { Transfer };
+
+/**
+ * Deposit claims, stored in Postgres.
+ *
+ * The proof is not joined here on purpose: a claim row is small and read in lists,
+ * and dragging a two-megabyte image along for every row in the operator queue
+ * would make the queue unusable. Proofs are fetched one at a time, by the route
+ * that actually displays one.
+ */
+export class DrizzleDepositClaimRepository implements DepositClaimRepository {
+  constructor(private readonly db: Database) {}
+
+  async save(claim: DepositClaim): Promise<void> {
+    const snapshot = claim.snapshot();
+
+    await this.db
+      .insert(depositClaims)
+      .values({
+        id: snapshot.id,
+        userId: snapshot.userId,
+        asset: snapshot.asset,
+        network: snapshot.network,
+        scale: snapshot.claimedAmount.scale,
+        claimedAmount: snapshot.claimedAmount.toDecimalString(),
+        creditedAmount: snapshot.creditedAmount?.toDecimalString() ?? null,
+        reference: snapshot.reference,
+        proofId: snapshot.proofId,
+        status: snapshot.status,
+        submittedAt: snapshot.submittedAt,
+        decidedAt: snapshot.decidedAt,
+        decidedBy: snapshot.decidedBy,
+        reason: snapshot.reason,
+        transferId: snapshot.transferId,
+      })
+      .onConflictDoUpdate({
+        target: depositClaims.id,
+        // Only the decision fields move. The claimed amount, the reference and the
+        // proof are what the customer submitted; an update path that could rewrite
+        // them would let an operator approve something other than what was claimed.
+        set: {
+          creditedAmount: sql`excluded.credited_amount`,
+          status: sql`excluded.status`,
+          decidedAt: sql`excluded.decided_at`,
+          decidedBy: sql`excluded.decided_by`,
+          reason: sql`excluded.reason`,
+          transferId: sql`excluded.transfer_id`,
+          version: sql`${depositClaims.version} + 1`,
+        },
+      });
+  }
+
+  async find(id: string): Promise<DepositClaim | null> {
+    const rows = await this.db
+      .select()
+      .from(depositClaims)
+      .where(eq(depositClaims.id, id))
+      .limit(1);
+
+    const row = rows[0];
+    return row === undefined ? null : toClaim(row);
+  }
+
+  async listForUser(userId: UserId, limit: number): Promise<DepositClaim[]> {
+    const rows = await this.db
+      .select()
+      .from(depositClaims)
+      .where(eq(depositClaims.userId, userId))
+      .orderBy(desc(depositClaims.submittedAt))
+      .limit(limit);
+
+    return rows.map(toClaim);
+  }
+
+  async listPending(limit: number): Promise<DepositClaim[]> {
+    const rows = await this.db
+      .select()
+      .from(depositClaims)
+      .where(eq(depositClaims.status, 'pending'))
+      // Oldest first: a customer waiting on funds notices the wait, not the size.
+      .orderBy(asc(depositClaims.submittedAt))
+      .limit(limit);
+
+    return rows.map(toClaim);
+  }
+}
+
+function toClaim(row: DepositClaimRow): DepositClaim {
+  return DepositClaim.rehydrate({
+    id: row.id,
+    userId: row.userId as UserId,
+    asset: row.asset,
+    network: row.network,
+    claimedAmount: Money.fromDecimalString(row.claimedAmount, row.asset, row.scale),
+    creditedAmount:
+      row.creditedAmount === null
+        ? null
+        : Money.fromDecimalString(row.creditedAmount, row.asset, row.scale),
+    reference: row.reference,
+    proofId: row.proofId,
+    status: row.status,
+    submittedAt: row.submittedAt,
+    decidedAt: row.decidedAt,
+    decidedBy: (row.decidedBy as UserId | null) ?? null,
+    reason: row.reason,
+    transferId: row.transferId,
+  });
+}
+
+/**
+ * Proof images, as bytes in Postgres.
+ *
+ * ── The adapter this design expects to replace ─────────────────────────────────
+ * It needs no credentials and lands in the same database as the claim, so a proof
+ * and the claim that references it cannot diverge. That is genuinely worth having
+ * while the volume is small.
+ *
+ * It is also the wrong home past a few hundred proofs: this project's database
+ * tier is 512 MB in total, a `bytea` column inflates every backup and every
+ * branch, and the bytes travel through the application on every read rather than
+ * going browser-to-storage. When that starts to bite, `ProofStorage` gets an
+ * object-storage adapter and nothing above this line changes — which is the whole
+ * reason the port exists.
+ */
+export class PostgresProofStorage implements ProofStorage {
+  constructor(private readonly db: Database) {}
+
+  async put(bytes: Uint8Array, contentType: ProofContentType): Promise<string> {
+    // A random key, never anything derived from the upload. A customer-supplied
+    // filename in a storage key is a path-traversal waiting for the adapter that
+    // writes to a filesystem.
+    const id = crypto.randomUUID();
+
+    await this.db.insert(depositProofs).values({
+      id,
+      contentType,
+      bytes,
+      byteLength: bytes.byteLength,
+    });
+
+    return id;
+  }
+
+  async get(
+    proofId: string,
+  ): Promise<{ bytes: Uint8Array; contentType: ProofContentType } | null> {
+    const rows = await this.db
+      .select()
+      .from(depositProofs)
+      .where(eq(depositProofs.id, proofId))
+      .limit(1);
+
+    const row = rows[0];
+    if (row === undefined) return null;
+
+    return { bytes: row.bytes, contentType: row.contentType };
+  }
+
+  async remove(proofId: string): Promise<void> {
+    await this.db.delete(depositProofs).where(eq(depositProofs.id, proofId));
+  }
+}

@@ -32,6 +32,9 @@ export type LedgerError =
    */
   | { readonly kind: 'valuation-unavailable'; readonly asset: string }
   | { readonly kind: 'withdrawal-not-found'; readonly id: string }
+  | { readonly kind: 'deposit-claim-not-found'; readonly id: string }
+  /** The uploaded proof is not an image we will store. Carries the reason shown. */
+  | { readonly kind: 'proof-invalid'; readonly reason: string }
   | { readonly kind: 'withdrawal-already-decided'; readonly status: string }
   | { readonly kind: 'approval-refused'; readonly reason: string };
 
@@ -67,6 +70,8 @@ export const LedgerErrors = {
     asset,
   }),
   withdrawalNotFound: (id: string): LedgerError => ({ kind: 'withdrawal-not-found', id }),
+  depositClaimNotFound: (id: string): LedgerError => ({ kind: 'deposit-claim-not-found', id }),
+  proofInvalid: (reason: string): LedgerError => ({ kind: 'proof-invalid', reason }),
   withdrawalAlreadyDecided: (status: string): LedgerError => ({
     kind: 'withdrawal-already-decided',
     status,
@@ -101,6 +106,10 @@ export function presentLedgerError(error: LedgerError): string {
       return `We cannot price ${error.asset} right now, so we cannot check your daily limit. Withdrawals reopen when pricing is restored.`;
     case 'withdrawal-not-found':
       return 'That withdrawal no longer exists.';
+    case 'deposit-claim-not-found':
+      return 'That deposit no longer exists.';
+    case 'proof-invalid':
+      return error.reason;
     case 'withdrawal-already-decided':
       return `This withdrawal was already ${error.status}.`;
     case 'approval-refused':

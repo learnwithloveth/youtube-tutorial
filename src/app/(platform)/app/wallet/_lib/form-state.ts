@@ -1,5 +1,5 @@
 /**
- * The withdrawal form's state.
+ * Form state for the wallet's two write paths.
  *
  * Its own directive-free module because `actions.ts` carries `'use server'`, and a
  * `'use server'` file may export only async functions — a type or a constant there
@@ -17,3 +17,10 @@ export const IDLE_WITHDRAWAL_STATE: WithdrawalFormState = {
   message: null,
   withdrawalId: null,
 };
+
+export interface DepositFormState {
+  readonly status: 'idle' | 'submitted' | 'error';
+  readonly message: string | null;
+}
+
+export const IDLE_DEPOSIT_STATE: DepositFormState = { status: 'idle', message: null };

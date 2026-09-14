@@ -1,9 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BadgeCheck, Clock, ShieldAlert, TriangleAlert, Users } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  BadgeCheck,
+  Clock,
+  ShieldAlert,
+  TriangleAlert,
+  Users,
+} from 'lucide-react';
 
 import type { UserSummaryDto } from '@/modules/identity';
-import { getApprovalQueue } from '@/server/ledger';
+import { getApprovalQueue, getPendingDepositClaims } from '@/server/ledger';
 import { identity } from '@/server/auth';
 import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
@@ -15,6 +23,7 @@ import { AdminPageHeader, EmptyState } from '../../_components/admin-ui';
 import { Panel } from '../../../_console/components/page-header';
 import { usd } from '../../../(platform)/app/_lib/format-usd';
 import { DecisionForm } from './_components/decision-form';
+import { DepositDecision } from './_components/deposit-decision';
 
 /**
  * Withdrawals waiting on a decision.
@@ -44,11 +53,17 @@ export const metadata: Metadata = {
 };
 
 export default async function ApprovalsPage() {
-  const queue = await getApprovalQueue();
+  const [queue, deposits] = await Promise.all([
+    getApprovalQueue(),
+    getPendingDepositClaims(),
+  ]);
 
   // The ledger holds an opaque `UserId` and never reads `identity.users`. The join
   // happens here, above both, which is the same arrangement the live board uses.
-  const accounts = await describeRequesters(queue.withdrawals.map((w) => w.userId));
+  const accounts = await describeRequesters([
+    ...queue.withdrawals.map((w) => w.userId),
+    ...deposits.map((d) => d.userId),
+  ]);
 
   return (
     <>
@@ -102,6 +117,101 @@ export default async function ApprovalsPage() {
           icon={<ShieldAlert className="size-4" />}
         />
       </div>
+
+      {deposits.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-fg">
+            <ArrowDownToLine className="size-4 text-up" />
+            Deposits awaiting confirmation
+            <span className="rounded-full bg-surface-strong px-2 py-0.5 text-2xs tabular-nums text-fg-muted">
+              {deposits.length}
+            </span>
+          </h2>
+
+          <div className="space-y-3">
+            {deposits.map((claim) => {
+              const account = accounts.get(claim.userId);
+
+              return (
+                <Panel key={claim.id}>
+                  <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr_1fr]">
+                    <div className="min-w-0">
+                      <p className="font-mono text-lg font-semibold text-fg">
+                        {claim.claimedAmount} {claim.asset}
+                      </p>
+                      <p className="mt-0.5 text-2xs text-fg-subtle">claimed by the customer</p>
+
+                      <dl className="mt-4 space-y-2.5 text-xs">
+                        <Field label="Account">
+                          {account ? (
+                            <Link
+                              href={`/admin/users/${account.id}`}
+                              className="truncate text-brand-soft hover:underline"
+                            >
+                              {account.email}
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-fg-subtle">
+                              {claim.userId.slice(0, 8)}
+                            </span>
+                          )}
+                        </Field>
+                        <Field label="Network">{claim.network}</Field>
+                        <Field label="Submitted">{formatDate(claim.submittedAt)}</Field>
+                        <Field label="Reference" wide>
+                          <span className="font-mono break-all">{claim.reference}</span>
+                        </Field>
+                      </dl>
+
+                      <p className="mt-3 flex items-start gap-2 text-2xs leading-relaxed text-fg-subtle">
+                        <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warn" />
+                        Check the reference on chain before crediting. The screenshot is
+                        the customer&rsquo;s claim, not evidence on its own.
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-2 text-2xs uppercase tracking-[0.12em] text-fg-subtle">
+                        Proof
+                      </p>
+                      {/* Served by an authorised route that re-checks who is asking.
+                          The proof key never reaches the browser — the URL is keyed
+                          on the claim. */}
+                      <a
+                        href={`/api/deposits/${claim.id}/proof`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="block overflow-hidden rounded-lg border border-line transition-colors hover:border-line-strong"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element --
+                            next/image would proxy this through the optimiser, which
+                            caches by URL and would leave a customer's bank screenshot
+                            in a shared cache. A plain img keeps it on the no-store
+                            route that authorises every request. */}
+                        <img
+                          src={`/api/deposits/${claim.id}/proof`}
+                          alt={`Deposit proof for ${claim.reference}`}
+                          className="max-h-64 w-full bg-surface object-contain"
+                        />
+                      </a>
+                      <p className="mt-1.5 text-2xs text-fg-subtle">Opens full size</p>
+                    </div>
+
+                    <div className="lg:border-l lg:border-line lg:pl-5">
+                      <DepositDecision claim={claim} />
+                    </div>
+                  </div>
+                </Panel>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <h2 className="mb-3 flex items-center gap-2 font-display text-base font-semibold text-fg">
+        <ArrowUpFromLine className="size-4 text-down" />
+        Withdrawals awaiting a decision
+      </h2>
 
       {queue.withdrawals.length === 0 && !queue.degraded ? (
         <EmptyState
