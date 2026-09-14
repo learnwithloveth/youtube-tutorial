@@ -26,6 +26,19 @@ import type { AssetRegistry } from '../../application/ports';
  * the form, where a person can still fix them.
  */
 
+/**
+ * A Tron base58 address.
+ *
+ * Always begins `T` and is 34 characters. The alphabet excludes `0`, `O`, `I` and
+ * `l`, which is the point of base58 — the characters a person cannot tell apart
+ * when reading an address aloud or off a screen are simply not in it.
+ *
+ * Mainnet and testnet share this format, so unlike bitcoin there is no structural
+ * guard against pasting a testnet address here. That is one reason the demo
+ * addresses are labelled in the UI rather than trusted to be obviously wrong.
+ */
+const TRON_ADDRESS = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+
 const ASSETS: readonly LedgerAsset[] = [
   {
     code: 'BTC',
@@ -104,6 +117,49 @@ const ASSETS: readonly LedgerAsset[] = [
         fee: '0.100000',
         eta: 'Instant',
         addressPattern: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+      },
+    ],
+  },
+  {
+    code: 'USDT',
+    name: 'Tether',
+    // Six, because that is what the contract declares on both chains. Tether
+    // happens to use the same precision on Ethereum and Tron; that is luck rather
+    // than a rule, and an asset whose scale differed by network could not be one
+    // row here at all.
+    scale: 6,
+    minimumWithdrawal: '10.000000',
+    networks: [
+      {
+        id: 'ethereum',
+        label: 'Ethereum (ERC-20)',
+        fee: '6.000000',
+        eta: '~3 min',
+        addressPattern: /^0x[0-9a-fA-F]{40}$/,
+      },
+      {
+        id: 'tron',
+        label: 'Tron (TRC-20)',
+        // A fraction of the Ethereum fee, which is why most USDT settles here.
+        fee: '1.000000',
+        eta: '~1 min',
+        addressPattern: TRON_ADDRESS,
+      },
+    ],
+  },
+  {
+    code: 'TRX',
+    name: 'TRON',
+    // TRON calls the smallest unit a SUN: 10^-6 TRX.
+    scale: 6,
+    minimumWithdrawal: '10.000000',
+    networks: [
+      {
+        id: 'tron',
+        label: 'Tron',
+        fee: '1.100000',
+        eta: '~1 min',
+        addressPattern: TRON_ADDRESS,
       },
     ],
   },

@@ -56,6 +56,7 @@ const CATALOGUE: readonly CatalogueEntry[] = [
   { symbol: 'LDO', slug: 'ldo', name: 'Lido DAO', glyph: '◇', hue: '#00A3FF', category: 'DeFi', blurb: 'Liquid staking for a third of all staked ether.', feedId: 'lido-dao', priceScale: 4, yieldBp: null },
   { symbol: 'INJ', slug: 'inj', name: 'Injective', glyph: '◭', hue: '#00D2FF', category: 'DeFi', blurb: 'A finance-native L1 with an on-chain central limit order book.', feedId: 'injective-protocol', priceScale: 2, yieldBp: 860 },
   { symbol: 'NEAR', slug: 'near', name: 'NEAR', glyph: '◎', hue: '#00EC97', category: 'AI', blurb: 'Chain abstraction and sharded execution for consumer apps.', feedId: 'near', priceScale: 2, yieldBp: 810 },
+  { symbol: 'TRX', slug: 'trx', name: 'TRON', glyph: '◮', hue: '#EB0029', category: 'Payments', blurb: 'A high-throughput chain that settles most stablecoin transfer volume.', feedId: 'tron', priceScale: 6, yieldBp: 420 },
   { symbol: 'USDT', slug: 'usdt', name: 'Tether', glyph: '₮', hue: '#26A17B', category: 'Stablecoin', blurb: 'The most liquid dollar proxy in digital assets.', feedId: 'tether', priceScale: 4, yieldBp: 480 },
 ];
 

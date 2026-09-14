@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Clock, TriangleAlert, Wallet2 } from 'lucide-react';
 
 import { requireUser } from '@/server/auth';
+import { depositAddressesFor } from '@/server/deposit-addresses';
 import { getWalletFor, withdrawableAssets } from '@/server/ledger';
 import { getInstruments } from '@/server/market-data';
 import { formatClock, formatDate } from '@/shared/lib/format';
@@ -44,25 +45,29 @@ export const metadata: Metadata = {
 };
 
 /**
- * Platform deposit addresses.
+ * Deposit addresses for every asset-network pair we custody.
  *
- * Read from configuration rather than hard-coded, and absent by default. An address
- * that is not ours is a customer's funds sent nowhere, so the panel shows a warning
- * rather than a plausible-looking string when none is set.
+ * Keyed `ASSET:NETWORK` because the pair is what identifies an address: USDT on
+ * Ethereum and USDT on Tron are different chains and not interchangeable. Resolved
+ * on the server, so an address is never assembled in the browser.
  */
-function depositAddresses(): Record<string, string> {
-  const configured: Record<string, string | undefined> = {
-    BTC: process.env.DEPOSIT_ADDRESS_BTC,
-    ETH: process.env.DEPOSIT_ADDRESS_ETH,
-    USDC: process.env.DEPOSIT_ADDRESS_USDC,
-    SOL: process.env.DEPOSIT_ADDRESS_SOL,
-  };
+function depositAddresses(
+  assets: readonly { code: string; networks: readonly { id: string }[] }[],
+): Record<string, { address: string; demo: boolean }> {
+  const found: Record<string, { address: string; demo: boolean }> = {};
 
-  return Object.fromEntries(
-    Object.entries(configured).filter((entry): entry is [string, string] =>
-      typeof entry[1] === 'string' && entry[1].length > 0,
-    ),
-  );
+  for (const asset of assets) {
+    const byNetwork = depositAddressesFor(
+      asset.code,
+      asset.networks.map((network) => network.id),
+    );
+
+    for (const [network, entry] of Object.entries(byNetwork)) {
+      found[`${asset.code}:${network}`] = { address: entry.address, demo: entry.demo };
+    }
+  }
+
+  return found;
 }
 
 export default async function WalletPage() {
@@ -151,7 +156,7 @@ export default async function WalletPage() {
           <WithdrawForm
             assets={assets}
             balances={wallet.balances}
-            depositAddresses={depositAddresses()}
+            depositAddresses={depositAddresses(assets)}
           />
         </Panel>
 

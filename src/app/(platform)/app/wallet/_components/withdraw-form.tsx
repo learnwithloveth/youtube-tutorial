@@ -34,7 +34,8 @@ export function WithdrawForm({
 }: {
   assets: readonly AssetOptionDto[];
   balances: readonly BalanceDto[];
-  depositAddresses: Readonly<Record<string, string>>;
+  /** Keyed `ASSET:NETWORK` — the pair, because the same token on two chains is two addresses. */
+  depositAddresses: Readonly<Record<string, { address: string; demo: boolean }>>;
 }) {
   const [mode, setMode] = useState<'deposit' | 'withdraw'>('withdraw');
   const [assetCode, setAssetCode] = useState(assets[0]?.code ?? 'BTC');
@@ -54,7 +55,7 @@ export function WithdrawForm({
     ?? asset?.networks[0];
 
   const balance = balances.find((candidate) => candidate.asset === assetCode);
-  const address = depositAddresses[assetCode] ?? '';
+  const deposit = depositAddresses[`${assetCode}:${network?.id ?? ''}`] ?? null;
 
   const chooseAsset = (code: string) => {
     setAssetCode(code);
@@ -66,7 +67,8 @@ export function WithdrawForm({
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(address);
+      if (deposit === null) return;
+      await navigator.clipboard.writeText(deposit.address);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -109,42 +111,35 @@ export function WithdrawForm({
       </div>
 
       {mode === 'deposit' ? (
-        <DepositPanel address={address} assetCode={assetCode} copied={copied} onCopy={copy} />
+        <div className="space-y-5">
+          {/* The network chooser is not optional on the deposit side. Sending USDT
+              over Tron to an Ethereum address destroys it, so the chain has to be
+              an explicit choice before an address is even shown. */}
+          <NetworkChooser
+            networks={asset?.networks ?? []}
+            selected={network?.id ?? ''}
+            onSelect={setNetworkId}
+            assetCode={assetCode}
+          />
+          <DepositPanel
+            deposit={deposit}
+            assetCode={assetCode}
+            networkLabel={network?.label ?? ''}
+            copied={copied}
+            onCopy={copy}
+          />
+        </div>
       ) : (
         <form action={submit} className="space-y-5">
           <input type="hidden" name="asset" value={assetCode} />
 
-          <div>
-            <p className="mb-2 text-xs text-fg-subtle">Network</p>
-            <div className="space-y-2">
-              {asset?.networks.map((option) => (
-                <label
-                  key={option.id}
-                  className={cn(
-                    'flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors',
-                    option.id === network?.id
-                      ? 'border-brand-soft/60 bg-brand/12'
-                      : 'border-line hover:border-line-strong',
-                  )}
-                >
-                  <span className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      name="network"
-                      value={option.id}
-                      checked={option.id === network?.id}
-                      onChange={() => setNetworkId(option.id)}
-                      className="sr-only"
-                    />
-                    <span className="text-sm text-fg">{option.label}</span>
-                  </span>
-                  <span className="text-2xs text-fg-subtle">
-                    {option.fee} {assetCode} · {option.eta}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <NetworkChooser
+            networks={asset?.networks ?? []}
+            selected={network?.id ?? ''}
+            onSelect={setNetworkId}
+            assetCode={assetCode}
+            withFormField
+          />
 
           <label className="block">
             <span className="mb-2 block text-xs text-fg-subtle">Destination address</span>
@@ -234,25 +229,27 @@ export function WithdrawForm({
  * string, because an address that is not ours is a customer's funds sent nowhere.
  */
 function DepositPanel({
-  address,
+  deposit,
   assetCode,
+  networkLabel,
   copied,
   onCopy,
 }: {
-  address: string;
+  deposit: { address: string; demo: boolean } | null;
   assetCode: string;
+  networkLabel: string;
   copied: boolean;
   onCopy: () => void;
 }) {
-  if (address.length === 0) {
+  if (deposit === null) {
     return (
       <div className="rounded-lg border border-warn/35 bg-warn/8 px-4 py-3.5">
         <p className="flex items-start gap-2 text-xs leading-relaxed text-fg">
           <Info className="mt-0.5 size-3.5 shrink-0 text-warn" />
           <span>
-            No {assetCode} deposit address is configured for this environment. Contact
-            support before sending anything — funds sent to an address we do not
-            control cannot be recovered.
+            No {assetCode} deposit address is configured for {networkLabel || 'this network'}.
+            Contact support before sending anything &mdash; funds sent to an address we
+            do not control cannot be recovered.
           </span>
         </p>
       </div>
@@ -261,10 +258,32 @@ function DepositPanel({
 
   return (
     <div className="space-y-3">
+      {deposit.demo ? (
+        // Loud, above the address, and impossible to scroll past. A demo address
+        // that looks like a real one is the single most expensive thing this page
+        // could get wrong.
+        <div className="rounded-lg border border-down/40 bg-down/10 px-4 py-3">
+          <p className="flex items-start gap-2 text-xs font-medium leading-relaxed text-fg">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
+            <span>
+              Demo address &mdash; do not send real funds.{' '}
+              <span className="font-normal text-fg-muted">
+                This environment is configured with placeholder addresses. Anything
+                sent here is unrecoverable.
+              </span>
+            </span>
+          </p>
+        </div>
+      ) : null}
+
       <div>
-        <p className="mb-2 text-xs text-fg-subtle">Your {assetCode} deposit address</p>
+        <p className="mb-2 text-xs text-fg-subtle">
+          Your {assetCode} address on {networkLabel}
+        </p>
         <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-3">
-          <code className="min-w-0 flex-1 break-all font-mono text-xs text-fg">{address}</code>
+          <code className="min-w-0 flex-1 break-all font-mono text-xs text-fg">
+            {deposit.address}
+          </code>
           <button
             type="button"
             onClick={onCopy}
@@ -278,10 +297,72 @@ function DepositPanel({
 
       <p className="flex items-start gap-2 text-2xs leading-relaxed text-fg-subtle">
         <Info className="mt-0.5 size-3.5 shrink-0" />
-        Send only {assetCode} to this address. Deposits are credited once an operator
-        confirms them against the transaction on chain, which is why they are not
-        instant.
+        Send only {assetCode} over {networkLabel} to this address. The same token on
+        another chain is a different address, and sending across the wrong one
+        destroys it. Deposits are credited once an operator confirms the transaction
+        on chain, which is why they are not instant.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The network picker, shared by both sides of the panel.
+ *
+ * On the withdraw side it carries the form field; on the deposit side it is pure
+ * selection. One component either way, because the mistake it exists to prevent is
+ * the same on both: choosing a chain the address does not belong to.
+ */
+function NetworkChooser({
+  networks,
+  selected,
+  onSelect,
+  assetCode,
+  withFormField = false,
+}: {
+  networks: readonly AssetOptionDto['networks'][number][];
+  selected: string;
+  onSelect: (id: string) => void;
+  assetCode: string;
+  withFormField?: boolean;
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-xs text-fg-subtle">Network</p>
+      <div className="space-y-2">
+        {networks.map((option) => (
+          <label
+            key={option.id}
+            className={cn(
+              'flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors',
+              option.id === selected
+                ? 'border-brand-soft/60 bg-brand/12'
+                : 'border-line hover:border-line-strong',
+            )}
+          >
+            <span className="flex items-center gap-3">
+              <input
+                type="radio"
+                // Only the withdraw side posts; the deposit side selects without
+                // contributing a field to the form.
+                {...(withFormField ? { name: 'network' } : {})}
+                value={option.id}
+                checked={option.id === selected}
+                onChange={() => onSelect(option.id)}
+                className="sr-only"
+              />
+              <span className="text-sm text-fg">{option.label}</span>
+            </span>
+            {withFormField ? (
+              <span className="text-2xs text-fg-subtle">
+                {option.fee} {assetCode} · {option.eta}
+              </span>
+            ) : (
+              <span className="text-2xs text-fg-subtle">{option.eta}</span>
+            )}
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
