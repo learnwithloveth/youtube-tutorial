@@ -20,6 +20,7 @@ export { getWallet } from './application/queries/wallet';
 export { listPendingApprovals } from './application/queries/pending-approvals';
 export { getStatement } from './application/queries/statement';
 export { listTransactions } from './application/queries/transactions';
+export { getOperationsSummary } from './application/queries/operations-summary';
 
 export type { RequestWithdrawalCommand } from './application/use-cases/request-withdrawal';
 export type { DecideWithdrawalCommand } from './application/use-cases/decide-withdrawal';

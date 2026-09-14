@@ -56,6 +56,22 @@ export interface ActivityRepository {
   ): Promise<{ path: string; views: number; totalSeconds: number }[]>;
 
   /**
+   * Platform-wide counts, one bucket per UTC day.
+   *
+   * Aggregated in the database for the same reason `topPathsForUser` is: a month
+   * of platform-wide events is a lot of rows to page into memory so a chart can
+   * draw thirty points.
+   *
+   * UTC rather than a viewer's timezone, because the buckets have to agree with
+   * the ledger's daily windows — a console where "today" means one thing on the
+   * chart and another in the limits is a console nobody can reconcile.
+   */
+  tallyByDay(query: {
+    since: Date;
+    kinds?: readonly ActivityKind[] | undefined;
+  }): Promise<{ day: string; total: number }[]>;
+
+  /**
    * Deletes events past the retention window for their kind.
    *
    * Takes both cut-offs because the two kinds are kept for different lengths —

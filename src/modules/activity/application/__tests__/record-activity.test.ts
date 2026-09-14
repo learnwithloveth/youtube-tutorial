@@ -57,6 +57,21 @@ class FakeEvents implements ActivityRepository {
     }
     return [...byKind.entries()].map(([kind, entry]) => ({ kind, ...entry }));
   }
+  async tallyByDay(query: { since: Date; kinds?: readonly ActivityKind[] | undefined }) {
+    const counted = new Map<string, number>();
+    for (const event of this.store) {
+      if (event.occurredAt < query.since) continue;
+      if (query.kinds !== undefined && query.kinds.length > 0 && !query.kinds.includes(event.kind)) {
+        continue;
+      }
+      const day = event.occurredAt.toISOString().slice(0, 10);
+      counted.set(day, (counted.get(day) ?? 0) + 1);
+    }
+    return [...counted.entries()]
+      .map(([day, total]) => ({ day, total }))
+      .sort((a, b) => a.day.localeCompare(b.day));
+  }
+
   async topPathsForUser(userId: UserId, limit: number) {
     const byPath = new Map<string, { views: number; totalSeconds: number }>();
     for (const event of this.scoped(userId, ['page-view'])) {
@@ -200,6 +215,7 @@ describe('getUserActivity', () => {
       countForUser: refuse,
       summariseUser: refuse,
       topPathsForUser: refuse,
+      tallyByDay: refuse,
       deleteExpired: refuse,
     };
 

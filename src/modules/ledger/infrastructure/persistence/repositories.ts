@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, asc, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
@@ -20,9 +20,10 @@ import {
 import type { LedgerAsset } from '../../domain/asset';
 import { Transfer } from '../../domain/transfer';
 import { Withdrawal, type WithdrawalStatus } from '../../domain/withdrawal';
-import { DepositClaim } from '../../domain/deposit-claim';
+import { DepositClaim, type DepositClaimStatus } from '../../domain/deposit-claim';
 import type { ProofContentType } from '../../domain/proof-image';
 import type {
+  DecisionTally,
   DepositClaimRepository,
   FeedPageQuery,
   LedgerRepository,
@@ -269,6 +270,42 @@ function feedScope(
   return clauses.length === 0 ? undefined : and(...clauses);
 }
 
+/**
+ * Decisions per UTC day, from a table that records when it was decided.
+ *
+ * Shared by both queues because the shape is identical and the risk of writing it
+ * twice is that one of them buckets by the server's timezone. `at time zone 'UTC'`
+ * has to come *before* the truncation: `decided_at` is a `timestamptz`, so
+ * grouping it directly buckets by wherever the database happens to run, and a
+ * region change would silently move every boundary.
+ */
+async function tallyDecisions(
+  db: Database,
+  table: typeof withdrawals | typeof depositClaims,
+  since: Date,
+): Promise<DecisionTally[]> {
+  const day = sql<string>`to_char(${table.decidedAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+
+  const rows = await db
+    .select({ day, status: table.status, total: count() })
+    .from(table)
+    .where(and(isNotNull(table.decidedAt), gte(table.decidedAt, since)))
+    .groupBy(day, table.status)
+    .orderBy(day);
+
+  const byDay = new Map<string, { day: string; approved: number; rejected: number }>();
+  for (const row of rows) {
+    const entry = byDay.get(row.day) ?? { day: row.day, approved: 0, rejected: 0 };
+    // `pending` cannot appear — the `decided_at is not null` filter excludes it —
+    // but the column's type says it can, so the switch stays exhaustive.
+    if (row.status === 'approved') entry.approved += row.total;
+    else if (row.status === 'rejected') entry.rejected += row.total;
+    byDay.set(row.day, entry);
+  }
+
+  return [...byDay.values()];
+}
+
 function toAccount(row: AccountRow): LedgerAccount {
   const owner: AccountOwner =
     row.ownerKind === 'user'
@@ -419,6 +456,21 @@ export class DrizzleWithdrawalRepository implements WithdrawalRepository {
       .groupBy(withdrawals.status);
 
     return rows.map((row) => ({ status: row.status, total: row.total }));
+  }
+
+  async tallyDecisionsByDay(since: Date): Promise<DecisionTally[]> {
+    return tallyDecisions(this.db, withdrawals, since);
+  }
+
+  async listRecentlyDecided(limit: number): Promise<Withdrawal[]> {
+    const rows = await this.db
+      .select()
+      .from(withdrawals)
+      .where(isNotNull(withdrawals.decidedAt))
+      .orderBy(desc(withdrawals.decidedAt), desc(withdrawals.id))
+      .limit(limit);
+
+    return this.hydrate(rows);
   }
 
   /** Loads signatures for a page of withdrawals in one query, not one per row. */
@@ -572,6 +624,30 @@ export class DrizzleDepositClaimRepository implements DepositClaimRepository {
       )
       .orderBy(desc(depositClaims.submittedAt), desc(depositClaims.id))
       .limit(query.limit);
+
+    return rows.map(toClaim);
+  }
+
+  async countByStatus(): Promise<{ status: DepositClaimStatus; total: number }[]> {
+    const rows = await this.db
+      .select({ status: depositClaims.status, total: count() })
+      .from(depositClaims)
+      .groupBy(depositClaims.status);
+
+    return rows.map((row) => ({ status: row.status, total: row.total }));
+  }
+
+  async tallyDecisionsByDay(since: Date): Promise<DecisionTally[]> {
+    return tallyDecisions(this.db, depositClaims, since);
+  }
+
+  async listRecentlyDecided(limit: number): Promise<DepositClaim[]> {
+    const rows = await this.db
+      .select()
+      .from(depositClaims)
+      .where(isNotNull(depositClaims.decidedAt))
+      .orderBy(desc(depositClaims.decidedAt), desc(depositClaims.id))
+      .limit(limit);
 
     return rows.map(toClaim);
   }

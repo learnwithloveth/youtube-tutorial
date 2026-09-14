@@ -408,11 +408,36 @@ interface AdminContextValue {
   /** Dispatch with the acting administrator already attached. */
   run: (command: AdminCommand) => void;
   actor: string;
+  /** Counts read from the database, overriding the fixture for those queues. */
+  counted: QueueCounts;
 }
+
+/**
+ * Real queue sizes, supplied by the server layout.
+ *
+ * ── Why this exists at all ─────────────────────────────────────────────────────
+ * The rest of this store is a reducer over fixtures, and most screens it feeds are
+ * still fixtures. Approvals is not: that queue is backed by the ledger, and the
+ * command centre and the approvals page both read it for real. A badge still
+ * counting the fixture would have said twenty-two on the rail while the page next
+ * to it said two — and the guarantee in `navigation.ts`, that a badge cannot drift
+ * from the data, would have been exactly backwards.
+ *
+ * So a queue moves into this type when the module behind it becomes real, and its
+ * fixture stops being consulted. The ones absent from it are still fixtures on
+ * both sides, which is at least self-consistent.
+ */
+export type QueueCounts = Partial<Record<'approvals', number>>;
 
 const AdminContext = createContext<AdminContextValue | null>(null);
 
-export function AdminProvider({ children }: { children: ReactNode }) {
+export function AdminProvider({
+  children,
+  counted = {},
+}: {
+  children: ReactNode;
+  counted?: QueueCounts;
+}) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const actor = ACTING_ADMIN.name;
 
@@ -421,7 +446,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     [actor],
   );
 
-  const value = useMemo(() => ({ state, run, actor }), [state, run, actor]);
+  // Depended on by value, not by identity: `counted` arrives as a fresh object
+  // literal from the server on every render, so memoising against the object
+  // itself would rebuild the context each time and defeat the memo entirely.
+  const countedApprovals = counted.approvals;
+  const value = useMemo(
+    () => ({ state, run, actor, counted: { approvals: countedApprovals } }),
+    [state, run, actor, countedApprovals],
+  );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 
@@ -433,10 +465,16 @@ export function useAdmin(): AdminContextValue {
 
 /** Queue sizes the rail badges and the command centre both read. */
 export function useQueues() {
-  const { state } = useAdmin();
+  const { state, counted } = useAdmin();
   return useMemo(
     () => ({
-      approvals: state.approvals.filter((a) => a.state === 'pending' || a.state === 'escalated').length,
+      // The real count whenever the server supplied one. Zero is a legitimate
+      // answer and must win over the fixture, so this tests for `undefined`
+      // rather than falling back with `??` on a falsy number.
+      approvals:
+        counted.approvals !== undefined
+          ? counted.approvals
+          : state.approvals.filter((a) => a.state === 'pending' || a.state === 'escalated').length,
       awaitingSecond: state.approvals.filter((a) => a.state === 'pending' && a.firstApprover).length,
       kyc: state.kycCases.filter((c) => c.state === 'unassigned' || c.state === 'in_review').length,
       tickets: state.tickets.filter((t) => t.state !== 'resolved').length,
@@ -445,6 +483,6 @@ export function useQueues() {
       listings: state.listings.filter((l) => l.status === 'review').length,
       incidents: state.incidents.filter((i) => i.state !== 'resolved').length,
     }),
-    [state],
+    [state, counted],
   );
 }

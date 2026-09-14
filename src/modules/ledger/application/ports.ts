@@ -3,7 +3,7 @@ import type { IdGenerator, UserId } from '@/shared/kernel/ids';
 
 import type { LedgerAsset } from '../domain/asset';
 import type { AccountId, AccountOwner, LedgerAccount } from '../domain/account';
-import type { DepositClaim } from '../domain/deposit-claim';
+import type { DepositClaim, DepositClaimStatus } from '../domain/deposit-claim';
 import type { ProofContentType } from '../domain/proof-image';
 import type { Transfer, TransferKind } from '../domain/transfer';
 import type { Withdrawal, WithdrawalStatus } from '../domain/withdrawal';
@@ -98,6 +98,14 @@ export interface FeedCursor {
   readonly id: string;
 }
 
+/** One UTC day's decisions, split by what was decided. */
+export interface DecisionTally {
+  /** `YYYY-MM-DD`, UTC — the same buckets the daily withdrawal limit uses. */
+  readonly day: string;
+  readonly approved: number;
+  readonly rejected: number;
+}
+
 /** One page of a time-ordered feed, newest first. */
 export interface FeedPageQuery {
   readonly limit: number;
@@ -132,6 +140,19 @@ export interface WithdrawalRepository {
    */
   usedSince(userId: UserId, since: Date): Promise<Money>;
   countByStatus(): Promise<{ status: WithdrawalStatus; total: number }[]>;
+
+  /**
+   * Decisions per day since an instant, counted in the database.
+   *
+   * By `decided_at`, not `requested_at` — the console's question is how much work
+   * operators cleared, and a request made on Monday and approved on Thursday is
+   * Thursday's work. Aggregated in SQL because the answer is a handful of numbers
+   * and the input is every decision ever made.
+   */
+  tallyDecisionsByDay(since: Date): Promise<DecisionTally[]>;
+
+  /** The most recently decided requests, newest first — the console's audit list. */
+  listRecentlyDecided(limit: number): Promise<Withdrawal[]>;
 }
 
 /**
@@ -189,6 +210,12 @@ export interface DepositClaimRepository {
   listPending(limit: number): Promise<DepositClaim[]>;
   /** The console's feed — see `WithdrawalRepository.listPage`. */
   listPage(query: FeedPageQuery): Promise<DepositClaim[]>;
+
+  countByStatus(): Promise<{ status: DepositClaimStatus; total: number }[]>;
+  /** See `WithdrawalRepository.tallyDecisionsByDay`. */
+  tallyDecisionsByDay(since: Date): Promise<DecisionTally[]>;
+  /** See `WithdrawalRepository.listRecentlyDecided`. */
+  listRecentlyDecided(limit: number): Promise<DepositClaim[]>;
 }
 
 export interface LedgerDependencies {

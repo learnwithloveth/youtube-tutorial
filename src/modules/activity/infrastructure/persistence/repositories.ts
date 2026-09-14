@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, count, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -93,6 +93,31 @@ export class DrizzleActivityRepository implements ActivityRepository {
       total: row.total,
       lastAt: new Date(row.lastAt),
     }));
+  }
+
+  async tallyByDay(query: {
+    since: Date;
+    kinds?: readonly ActivityKind[] | undefined;
+  }): Promise<{ day: string; total: number }[]> {
+    // `at time zone 'UTC'` before truncating, not after: `occurred_at` is a
+    // `timestamptz`, so grouping it without converting buckets by the *server's*
+    // zone — which would silently move the boundaries when the deployment region
+    // changes, and nothing in the output would say so.
+    const day = sql<string>`to_char(${events.occurredAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+
+    const clauses = [gte(events.occurredAt, query.since)];
+    if (query.kinds !== undefined && query.kinds.length > 0) {
+      clauses.push(inArray(events.kind, [...query.kinds]));
+    }
+
+    const rows = await this.db
+      .select({ day, total: count() })
+      .from(events)
+      .where(and(...clauses))
+      .groupBy(day)
+      .orderBy(day);
+
+    return rows.map((row) => ({ day: row.day, total: row.total }));
   }
 
   async topPathsForUser(

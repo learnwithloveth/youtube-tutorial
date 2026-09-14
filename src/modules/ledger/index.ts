@@ -41,6 +41,12 @@ export type {
   StatementOptions,
 } from './application/queries/statement';
 export type {
+  DecisionAction,
+  DecisionDto,
+  OperationsSummaryDto,
+} from './application/queries/operations-summary';
+export type { DecisionTally } from './application/ports';
+export type {
   TransactionDto,
   TransactionFeedOptions,
   TransactionKind,

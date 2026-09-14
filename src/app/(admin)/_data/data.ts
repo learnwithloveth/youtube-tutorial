@@ -1,6 +1,6 @@
 import { ASSETS } from '../../_console/data/assets';
 import { cycle, hashSeed, pick, seededRandom } from '../../_console/data/simulation';
-import { NOW, buildSeries } from '../../_console/data/series';
+import { NOW } from '../../_console/data/series';
 import type {
   AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident, KycCase,
   Listing, Payout, Risk, SupportMessage, SurveillanceAlert, Ticket, TreasuryWallet, Validator,
@@ -368,14 +368,17 @@ export const SEED_AUDIT: AuditEntry[] = [
   { id: 'aud_6', at: new Date(NOW - 8 * HOUR).toISOString(), actor: 'System', action: 'reserves.published', target: 'Merkle root 0x9f2c…80cb', detail: 'Daily proof-of-reserves attestation published. Ratio 104.2%.', severity: 'notice' },
 ];
 
-/* --- Platform-level series for the command centre ------------------------ */
-export const PLATFORM_VOLUME = buildSeries('admin-volume', 30, 41_200_000_000, 0.18);
-export const PLATFORM_USERS = buildSeries('admin-users', 30, 41_206_884, 0.04);
-
-export const APPROVAL_THROUGHPUT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => {
-  const rand = seededRandom(hashSeed(`throughput-${i}`));
-  return { label, value: Math.round(180 + rand() * 260) };
-});
+/* --- Platform-level series for the command centre ------------------------
+ *
+ * Deleted, not merely unused: `PLATFORM_VOLUME` (a $41.2B seeded random walk),
+ * `PLATFORM_USERS` (41.2 million of them) and `APPROVAL_THROUGHPUT`. The command
+ * centre counts all three from the database now, and a constant named
+ * PLATFORM_VOLUME left sitting here is an invitation to wire it back into a screen
+ * where a reader would take it for a measurement.
+ *
+ * `SERVICE_HEALTH` below survives because `/admin/system` still renders it, and
+ * that page is still a fixture end to end.
+ * ------------------------------------------------------------------------ */
 
 export const SERVICE_HEALTH = [
   { name: 'Matching engine', uptime: 99.997, latencyMs: 0.9, status: 'operational' as const },

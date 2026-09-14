@@ -9,13 +9,14 @@ import { formatPercent } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { DonutChart, type DonutSlice } from '@/shared/ui/charts/donut-chart';
+import type { DonutSlice } from '@/shared/ui/charts/donut-chart';
 import { AssetMark } from '@/shared/ui/visuals/asset-mark';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { usd } from '../_lib/format-usd';
+import { AllocationDonut } from './_components/allocation-donut';
 
 /**
  * The portfolio: what is held, and how it is distributed.
@@ -149,11 +150,10 @@ export default async function PortfolioPage() {
               </p>
             ) : (
               <div className="flex justify-center">
-                <DonutChart
+                {/* Wrapped, because `formatValue` is a function and this page is
+                    a Server Component — see `allocation-donut.tsx`. */}
+                <AllocationDonut
                   slices={slices}
-                  size={220}
-                  formatValue={(value) => usd(value.toFixed(2))}
-                  centerLabel="Priced value"
                   centerValue={usd(pricedTotal.toFixed(2))}
                 />
               </div>

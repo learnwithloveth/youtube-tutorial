@@ -33,3 +33,8 @@ export {
  * documents. It lives in `./server`.
  */
 export type { UserActivityOptions } from './application/queries/user-activity';
+export type {
+  ActivityDayDto,
+  PlatformActivityDto,
+  PlatformActivityOptions,
+} from './application/queries/platform-activity';

@@ -15,9 +15,10 @@ import type { LedgerAsset } from '../../domain/asset';
 import type { Transfer } from '../../domain/transfer';
 import type { Withdrawal, WithdrawalStatus } from '../../domain/withdrawal';
 import { CatalogueAssetRegistry } from '../../infrastructure/catalogue/assets';
-import type { DepositClaim } from '../../domain/deposit-claim';
+import type { DepositClaim, DepositClaimStatus } from '../../domain/deposit-claim';
 import type { ProofContentType } from '../../domain/proof-image';
 import type {
+  DecisionTally,
   DepositClaimRepository,
   FeedPageQuery,
   LedgerDependencies,
@@ -146,6 +147,26 @@ function feedPage<T extends { id: string; userId: UserId; status: string }>(
     .slice(0, query.limit);
 }
 
+/** The in-memory equivalent of `tallyDecisions`, over anything with a decision. */
+function decisionsByDay(
+  rows: readonly { status: string }[],
+  decidedAt: (row: never) => Date | null,
+  since: Date,
+): DecisionTally[] {
+  const byDay = new Map<string, { day: string; approved: number; rejected: number }>();
+  for (const row of rows) {
+    const at = decidedAt(row as never);
+    if (at === null || at < since) continue;
+
+    const day = at.toISOString().slice(0, 10);
+    const entry = byDay.get(day) ?? { day, approved: 0, rejected: 0 };
+    if (row.status === 'approved') entry.approved += 1;
+    else if (row.status === 'rejected') entry.rejected += 1;
+    byDay.set(day, entry);
+  }
+  return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+
 class FakeWithdrawals implements WithdrawalRepository {
   readonly store = new Map<string, Withdrawal>();
 
@@ -163,6 +184,15 @@ class FakeWithdrawals implements WithdrawalRepository {
   }
   async listPage(query: FeedPageQuery) {
     return feedPage([...this.store.values()], (w) => w.requestedAt, query);
+  }
+  async tallyDecisionsByDay(since: Date) {
+    return decisionsByDay([...this.store.values()], (w: Withdrawal) => w.decidedAt, since);
+  }
+  async listRecentlyDecided(limit: number) {
+    return [...this.store.values()]
+      .filter((w) => w.decidedAt !== null)
+      .sort((a, b) => (b.decidedAt?.getTime() ?? 0) - (a.decidedAt?.getTime() ?? 0))
+      .slice(0, limit);
   }
   async usedSince(userId: UserId, since: Date) {
     return [...this.store.values()]
@@ -201,6 +231,22 @@ class FakeClaims implements DepositClaimRepository {
   }
   async listPage(query: FeedPageQuery) {
     return feedPage([...this.store.values()], (c) => c.submittedAt, query);
+  }
+  async countByStatus() {
+    const counts = new Map<DepositClaimStatus, number>();
+    for (const claim of this.store.values()) {
+      counts.set(claim.status, (counts.get(claim.status) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([status, total]) => ({ status, total }));
+  }
+  async tallyDecisionsByDay(since: Date) {
+    return decisionsByDay([...this.store.values()], (c: DepositClaim) => c.decidedAt, since);
+  }
+  async listRecentlyDecided(limit: number) {
+    return [...this.store.values()]
+      .filter((c) => c.decidedAt !== null)
+      .sort((a, b) => (b.decidedAt?.getTime() ?? 0) - (a.decidedAt?.getTime() ?? 0))
+      .slice(0, limit);
   }
 }
 

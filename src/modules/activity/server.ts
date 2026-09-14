@@ -16,4 +16,5 @@ export type { ActivityModule, RegisterActivityOptions } from './module';
 export { registerActivity } from './module';
 
 export { getUserActivity } from './application/queries/user-activity';
+export { getPlatformActivity } from './application/queries/platform-activity';
 export type { RecordActivityCommand } from './application/use-cases/record-activity';
