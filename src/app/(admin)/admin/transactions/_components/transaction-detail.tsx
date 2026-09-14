@@ -1,8 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, ImageOff, Loader2, X } from 'lucide-react';
+import {
+  BadgeCheck,
+  Copy,
+  ExternalLink,
+  ImageOff,
+  Loader2,
+  Mail,
+  Printer,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 
 import type { TransactionDto } from '@/modules/ledger';
 import type { TransactionAccountDto } from '@/server/transactions';
@@ -11,6 +21,8 @@ import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 
 import { usd } from '../../../../(platform)/app/_lib/format-usd';
+import { sendReceiptAction } from '../_lib/actions';
+import { IDLE_RECEIPT_FORM } from '../_lib/form-state';
 
 /**
  * Everything recorded about one transaction.
@@ -96,6 +108,8 @@ export function TransactionDetail({
             <span className="sr-only">Close</span>
           </button>
         </header>
+
+        <Actions transaction={transaction} account={account} />
 
         <div className="space-y-6 px-5 py-5">
           <dl className="space-y-2">
@@ -324,4 +338,119 @@ function Field({
 
 function Divider() {
   return <div className="h-px bg-line" />;
+}
+
+/**
+ * What an operator can do with one transaction.
+ *
+ * ── Deciding is not here, on purpose ──────────────────────────────────────────
+ * A pending transaction links to the approvals queue rather than growing approve
+ * and reject buttons of its own. Two places that move money are two places that
+ * drift, and the queue already carries the things this panel does not: the frozen
+ * valuation, the dual-control signature count, and the reason field a rejection
+ * requires. A second set of buttons would eventually be the ones missing a rule.
+ */
+function Actions({
+  transaction,
+  account,
+}: {
+  transaction: TransactionDto;
+  account: TransactionAccountDto | undefined;
+}) {
+  const [state, submit, pending] = useActionState(sendReceiptAction, IDLE_RECEIPT_FORM);
+  const [copied, setCopied] = useState(false);
+
+  const decided = transaction.status !== 'pending';
+  const receiptHref = `/receipts/${transaction.kind}/${transaction.recordId}`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(transaction.recordId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard is unavailable in some embedded contexts */
+    }
+  };
+
+  return (
+    <div className="border-b border-line px-5 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* A new tab, not a route change: the panel and the operator's place in the
+            feed survive, and the print dialog opens on a page with no chrome. */}
+        <a
+          href={decided ? receiptHref : undefined}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-disabled={!decided}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs font-medium transition-colors',
+            decided
+              ? 'text-fg-muted hover:border-line-strong hover:text-fg'
+              : 'pointer-events-none opacity-40',
+          )}
+        >
+          <Printer className="size-3.5" />
+          Receipt
+        </a>
+
+        <form action={submit} className="inline">
+          <input type="hidden" name="kind" value={transaction.kind} />
+          <input type="hidden" name="recordId" value={transaction.recordId} />
+          <input type="hidden" name="userId" value={transaction.userId} />
+          <button
+            type="submit"
+            // Refused for a pending transaction by the use case as well. Disabled
+            // here so nobody discovers the rule by being told off — a receipt for
+            // something nobody has confirmed would tell a customer their money
+            // arrived when an operator has not yet agreed that it did.
+            disabled={!decided || pending}
+            title={decided ? undefined : 'A receipt is issued once this has a decision'}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+          >
+            {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Mail className="size-3.5" />}
+            Email {account ? 'customer' : 'receipt'}
+          </button>
+        </form>
+
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
+        >
+          {copied ? <BadgeCheck className="size-3.5 text-up" /> : <Copy className="size-3.5" />}
+          {copied ? 'Copied' : 'Copy id'}
+        </button>
+
+        {!decided ? (
+          <Link
+            href="/admin/approvals"
+            className="inline-flex items-center gap-1.5 rounded-md border border-warn/40 bg-warn/10 px-3 py-1.5 text-xs font-medium text-warn transition-colors hover:border-warn/70"
+          >
+            Decide in approvals
+            <ExternalLink className="size-3" />
+          </Link>
+        ) : null}
+      </div>
+
+      {state.message !== null ? (
+        <p
+          role="status"
+          className={cn(
+            'mt-2 flex items-start gap-2 rounded-md border px-3 py-2 text-2xs leading-relaxed',
+            state.status === 'error'
+              ? 'border-down/35 bg-down/8 text-fg'
+              : 'border-up/35 bg-up/8 text-fg',
+          )}
+        >
+          {state.status === 'error' ? (
+            <TriangleAlert className="mt-0.5 size-3 shrink-0 text-down" />
+          ) : (
+            <BadgeCheck className="mt-0.5 size-3 shrink-0 text-up" />
+          )}
+          {state.message}
+        </p>
+      ) : null}
+    </div>
+  );
 }

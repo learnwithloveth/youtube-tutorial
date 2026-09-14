@@ -72,6 +72,7 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'deposit-recorded': 'Deposit credited',
   'admin-suspended': 'Console access suspended',
   'admin-reinstated': 'Console access restored',
+  'receipt-sent': 'Receipt emailed',
 };
 
 export default async function AuditPage() {

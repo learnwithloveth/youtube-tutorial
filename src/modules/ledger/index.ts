@@ -47,6 +47,7 @@ export type {
 } from './application/queries/operations-summary';
 export type { DecisionTally } from './application/ports';
 export type { TreasuryDto, TreasuryLineDto } from './application/queries/treasury';
+export type { ReceiptDto, ReceiptLineDto } from './application/queries/receipt';
 export type {
   TransactionDto,
   TransactionFeedOptions,

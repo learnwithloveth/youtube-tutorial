@@ -4,7 +4,12 @@ import type { Database } from '@/platform/db/client';
 import { systemClock, type Clock } from '@/shared/kernel/clock';
 import { systemIdGenerator, type IdGenerator } from '@/shared/kernel/ids';
 
-import type { LedgerDependencies, PriceOracle } from './application/ports';
+import type {
+  CustomerDirectory,
+  LedgerDependencies,
+  PriceOracle,
+  ReceiptSender,
+} from './application/ports';
 import {
   createDecideWithdrawal,
   type DecideWithdrawal,
@@ -25,6 +30,7 @@ import {
   createRequestWithdrawal,
   type RequestWithdrawal,
 } from './application/use-cases/request-withdrawal';
+import { createSendReceipt, type SendReceipt } from './application/use-cases/send-receipt';
 import { CatalogueAssetRegistry } from './infrastructure/catalogue/assets';
 import {
   DrizzleDepositClaimRepository,
@@ -55,6 +61,8 @@ export interface LedgerModule {
   readonly submitDepositClaim: SubmitDepositClaim;
   /** An operator confirms or refuses that evidence. This is what credits. */
   readonly decideDepositClaim: DecideDepositClaim;
+  /** Emails a customer the record of a decided movement. */
+  readonly sendReceipt: SendReceipt;
   /** Passed to the module's queries, which are free functions over these ports. */
   readonly dependencies: LedgerDependencies;
 }
@@ -63,6 +71,9 @@ export interface RegisterLedgerOptions {
   db: Database;
   /** Supplied by the composition root; the ledger never reaches for a feed itself. */
   prices: PriceOracle;
+  /** Both optional: a deployment without mail still runs, and says so on the page. */
+  receipts?: ReceiptSender | undefined;
+  directory?: CustomerDirectory | undefined;
   ids?: IdGenerator;
   clock?: Clock;
 }
@@ -76,6 +87,8 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     // object-storage adapter and why the port exists.
     proofs: new PostgresProofStorage(options.db),
     prices: options.prices,
+    receipts: options.receipts,
+    directory: options.directory,
     assets: new CatalogueAssetRegistry(),
     ids: options.ids ?? systemIdGenerator,
     clock: options.clock ?? systemClock,
@@ -87,6 +100,7 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     recordDeposit: createRecordDeposit(dependencies),
     submitDepositClaim: createSubmitDepositClaim(dependencies),
     decideDepositClaim: createDecideDepositClaim(dependencies),
+    sendReceipt: createSendReceipt(dependencies),
     dependencies,
   };
 }

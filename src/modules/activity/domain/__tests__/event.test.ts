@@ -112,6 +112,7 @@ describe('retention', () => {
       'deposit-recorded',
       'admin-suspended',
       'admin-reinstated',
+      'receipt-sent',
     ];
     expect(new Set([...SECURITY_KINDS, 'page-view'])).toEqual(new Set(all));
   });

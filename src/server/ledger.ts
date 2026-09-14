@@ -3,7 +3,9 @@ import 'server-only';
 import { cache } from 'react';
 
 import type { ApprovalQueueDto, StatementDto, StatementOptions, WalletDto } from '@/modules/ledger';
+import type { CustomerDirectory, ReceiptSender } from '@/modules/ledger/server';
 import {
+  getReceipt,
   getStatement,
   getTreasury,
   getWallet,
@@ -15,10 +17,12 @@ import {
 } from '@/modules/ledger/server';
 import { valueOf } from '@/modules/market-data';
 import { db } from '@/platform/db/client';
+import { mailTransport } from '@/platform/email/transport';
 import { logger } from '@/platform/observability/logger';
 import { Money } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { identity } from './auth';
 import { getMarkets } from './market-data';
 
 /**
@@ -43,7 +47,12 @@ export const ledger = cache((): LedgerModule | null => {
   const handle = db();
   if (!handle) return null;
 
-  return registerLedger({ db: handle, prices: marketPriceOracle });
+  return registerLedger({
+    db: handle,
+    prices: marketPriceOracle,
+    receipts: smtpReceiptSender,
+    directory: identityDirectory,
+  });
 });
 
 /**
@@ -81,6 +90,51 @@ const marketPriceOracle: PriceOracle = {
     } catch (error) {
       logger.warn({ event: 'valuation_failed', module: 'ledger', asset: amount.currency }, error);
       return null;
+    }
+  },
+};
+
+/**
+ * Turns an opaque `UserId` into an address.
+ *
+ * The identity half of a cross-context join, and the reason the ledger declares a
+ * `CustomerDirectory` port rather than importing identity: the ledger knows who a
+ * movement belongs to by id and has no business knowing what an email address is.
+ *
+ * Never throws. A receipt that cannot find an address is a receipt nobody
+ * receives, which the use case reports in its own words — it is not a reason for
+ * the page that asked to fail.
+ */
+const identityDirectory: CustomerDirectory = {
+  async emailFor(userId): Promise<string | null> {
+    try {
+      const found = await identity().describeUsers([userId]);
+      return found.get(userId)?.email ?? null;
+    } catch (error) {
+      logger.warn({ event: 'receipt_directory_failed', module: 'identity', userId }, error);
+      return null;
+    }
+  },
+};
+
+/**
+ * Sends over the platform's pooled SMTP connection.
+ *
+ * Reports failure as a value rather than throwing, because the alternative is an
+ * operator clicking "email receipt" and getting a stack trace for a mail server
+ * that is merely slow. The use case turns the reason into something readable.
+ */
+const smtpReceiptSender: ReceiptSender = {
+  async send(message) {
+    try {
+      await mailTransport().send(message);
+      return { sent: true };
+    } catch (error) {
+      logger.warn({ event: 'receipt_send_failed', module: 'ledger' }, error);
+      return {
+        sent: false,
+        reason: error instanceof Error ? error.message : 'The mail server refused it.',
+      };
     }
   },
 };
@@ -285,3 +339,22 @@ export const getPlatformTreasury = cache(async () => {
 
   return getTreasury(context.dependencies);
 });
+
+/**
+ * One transaction's receipt.
+ *
+ * `asCustomer` is the authority check, not a filter: a customer asking for a
+ * record that is not theirs gets the same answer as one asking for a record that
+ * does not exist. Passing it down rather than checking at the page means the
+ * emailed copy is scoped by the identical rule.
+ */
+export async function getReceiptFor(
+  kind: 'deposit' | 'withdrawal',
+  recordId: string,
+  asCustomer?: UserId | undefined,
+) {
+  const context = ledger();
+  if (context === null) return null;
+
+  return getReceipt(context.dependencies, kind, recordId, asCustomer);
+}

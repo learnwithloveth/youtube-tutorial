@@ -293,11 +293,13 @@ function Row({
 
   return (
     <tr
-      // The whole row is the control, but the *button* is in the first cell. A
-      // `<tr onClick>` is unreachable by keyboard and announces nothing; a button
-      // inside it is a real control with a real accessible name.
+      // Clicking anywhere on the row opens it, and the *button* in the first cell
+      // is still the accessible control. Both, not either: a `<tr onClick>` alone
+      // is unreachable by keyboard and announces nothing, while a button alone
+      // makes four of the five columns dead space — which is what they were.
+      onClick={onSelect}
       className={cn(
-        'border-t border-line transition-colors hover:bg-surface',
+        'cursor-pointer border-t border-line transition-colors hover:bg-surface',
         selected && 'bg-surface',
       )}
     >

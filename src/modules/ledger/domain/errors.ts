@@ -36,7 +36,13 @@ export type LedgerError =
   /** The uploaded proof is not an image we will store. Carries the reason shown. */
   | { readonly kind: 'proof-invalid'; readonly reason: string }
   | { readonly kind: 'withdrawal-already-decided'; readonly status: string }
-  | { readonly kind: 'approval-refused'; readonly reason: string };
+  | { readonly kind: 'approval-refused'; readonly reason: string }
+  /* Receipts. Four conditions, because an operator's next move differs for each:
+     configure a mail server, wait for a decision, fix the account, or retry. */
+  | { readonly kind: 'receipts-unavailable' }
+  | { readonly kind: 'receipt-not-yet-available' }
+  | { readonly kind: 'receipt-no-address' }
+  | { readonly kind: 'receipt-send-failed'; readonly reason: string };
 
 export const LedgerErrors = {
   assetNotSupported: (asset: string): LedgerError => ({ kind: 'asset-not-supported', asset }),
@@ -77,6 +83,10 @@ export const LedgerErrors = {
     status,
   }),
   approvalRefused: (reason: string): LedgerError => ({ kind: 'approval-refused', reason }),
+  receiptsUnavailable: (): LedgerError => ({ kind: 'receipts-unavailable' }),
+  receiptNotYetAvailable: (): LedgerError => ({ kind: 'receipt-not-yet-available' }),
+  receiptNoAddress: (): LedgerError => ({ kind: 'receipt-no-address' }),
+  receiptSendFailed: (reason: string): LedgerError => ({ kind: 'receipt-send-failed', reason }),
 } as const;
 
 /**
@@ -114,5 +124,15 @@ export function presentLedgerError(error: LedgerError): string {
       return `This withdrawal was already ${error.status}.`;
     case 'approval-refused':
       return error.reason;
+    case 'receipts-unavailable':
+      return 'No mail transport is configured, so receipts cannot be sent.';
+    case 'receipt-not-yet-available':
+      // The distinction the claim/credit split exists to preserve: a receipt for
+      // something nobody has confirmed would tell a customer their money arrived.
+      return 'This is still awaiting a decision. A receipt is issued once it has one.';
+    case 'receipt-no-address':
+      return 'That account has no address on file to send to.';
+    case 'receipt-send-failed':
+      return `The receipt could not be sent. ${error.reason}`;
   }
 }

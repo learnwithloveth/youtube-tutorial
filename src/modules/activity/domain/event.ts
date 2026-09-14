@@ -62,7 +62,11 @@ export type ActivityKind =
    * not be on the screen where that question gets asked. The actor is in the detail.
    */
   | 'admin-suspended'
-  | 'admin-reinstated';
+  | 'admin-reinstated'
+  /* A customer was emailed the record of a movement. Filed against their account
+     because "what happened to this account" includes being written to about it,
+     and a dispute starts with whether anything was ever sent. */
+  | 'receipt-sent';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -78,6 +82,7 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'deposit-recorded',
   'admin-suspended',
   'admin-reinstated',
+  'receipt-sent',
 ];
 
 export function isSecurityKind(kind: ActivityKind): boolean {

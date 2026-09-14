@@ -22,11 +22,14 @@ export { getStatement } from './application/queries/statement';
 export { listTransactions } from './application/queries/transactions';
 export { getOperationsSummary } from './application/queries/operations-summary';
 export { getTreasury } from './application/queries/treasury';
+export { getReceipt } from './application/queries/receipt';
 
 export type { RequestWithdrawalCommand } from './application/use-cases/request-withdrawal';
 export type { DecideWithdrawalCommand } from './application/use-cases/decide-withdrawal';
 export type { RecordDepositCommand } from './application/use-cases/record-deposit';
 export type { SubmitDepositClaimCommand } from './application/use-cases/submit-deposit-claim';
 export type { DecideDepositClaimCommand } from './application/use-cases/decide-deposit-claim';
+export type { SendReceiptCommand } from './application/use-cases/send-receipt';
+export type { CustomerDirectory, ReceiptSender } from './application/ports';
 
 export { LEDGER_ASSETS } from './infrastructure/catalogue/assets';

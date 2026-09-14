@@ -218,6 +218,47 @@ export interface DepositClaimRepository {
   listRecentlyDecided(limit: number): Promise<DepositClaim[]>;
 }
 
+/**
+ * Sends a customer their receipt.
+ *
+ * ── The ledger declares its own, rather than reusing identity's ───────────────
+ * Identity has an `EmailSender` and it is not this. Its port takes an
+ * `EmailAddress` value object — identity's vocabulary — so reusing it would mean
+ * the ledger importing another context's domain to send a message about money.
+ *
+ * The address arrives as a plain string because the ledger does not know what an
+ * email address *is*; the composition root resolves an opaque `UserId` into one
+ * and hands it over. The two ports meet on the same pooled SMTP connection in
+ * `platform/email`, which is where a shared resource belongs.
+ *
+ * ── Best-effort, like every other notification in this system ─────────────────
+ * A failed send is a receipt nobody received, not a transaction that did not
+ * happen — so an adapter reports it rather than throwing, and the caller tells the
+ * operator it did not go.
+ */
+export interface ReceiptSender {
+  send(input: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+  }): Promise<{ sent: boolean; reason?: string }>;
+}
+
+/**
+ * Turns a `UserId` into an address.
+ *
+ * A port, because the ledger must not import identity. The adapter is wired in the
+ * composition root above both — the same arrangement `PriceOracle` uses to reach
+ * market-data.
+ *
+ * Returns null when the account cannot be resolved, which the caller reports
+ * rather than treating as a send failure: the two need different words.
+ */
+export interface CustomerDirectory {
+  emailFor(userId: UserId): Promise<string | null>;
+}
+
 export interface LedgerDependencies {
   accounts: LedgerRepository;
   withdrawals: WithdrawalRepository;
@@ -225,6 +266,9 @@ export interface LedgerDependencies {
   proofs: ProofStorage;
   prices: PriceOracle;
   assets: AssetRegistry;
+  /** Optional: a deployment with no mail transport still runs, and says so. */
+  receipts?: ReceiptSender | undefined;
+  directory?: CustomerDirectory | undefined;
   ids: IdGenerator;
   clock: Clock;
 }

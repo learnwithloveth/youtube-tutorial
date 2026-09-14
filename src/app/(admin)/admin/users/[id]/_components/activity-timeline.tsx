@@ -11,6 +11,7 @@ import {
   LogOut,
   MailCheck,
   MapPin,
+  Receipt,
   Send,
   UserPlus,
   Wifi,
@@ -52,6 +53,7 @@ const KIND_META: Record<
   // happened to, with the operator who did it in the detail line.
   'admin-suspended': { label: 'Console access suspended', icon: ShieldOff, tone: 'warn' },
   'admin-reinstated': { label: 'Console access restored', icon: ShieldCheck, tone: 'up' },
+  'receipt-sent': { label: 'Receipt emailed', icon: Receipt, tone: 'neutral' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {
