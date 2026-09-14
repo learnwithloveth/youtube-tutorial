@@ -99,6 +99,13 @@
       "when": 1789418104060,
       "tag": "0013_boring_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789420054717,
+      "tag": "0014_cool_prowler",
+      "breakpoints": true
     }
   ]
 }

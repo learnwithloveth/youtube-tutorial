@@ -30,6 +30,7 @@ export function DashboardShell({
   initials,
   emailVerified,
   email,
+  notice,
   children,
 }: {
   /** The signed-in account, resolved once at the identity boundary. */
@@ -37,6 +38,16 @@ export function DashboardShell({
   initials: string;
   emailVerified: boolean;
   email: string;
+  /**
+   * Platform notices, rendered by the server layout above.
+   *
+   * Passed in as a slot rather than imported: this shell is a Client Component
+   * and the banner is an async Server Component that reads the database. A
+   * Server Component cannot be imported into a client module, but it can be
+   * handed to one as a prop — which keeps the query on the server and ships no
+   * extra JavaScript for a notice that is usually absent.
+   */
+  notice?: ReactNode;
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -107,6 +118,7 @@ export function DashboardShell({
             emailVerified={emailVerified}
             onOpenDrawer={() => setDrawer(true)}
           />
+          {notice}
           <main id="dashboard-main" className="flex-1 px-4 pb-24 pt-6 md:px-6 md:pb-10 md:pt-8">
             {children}
           </main>

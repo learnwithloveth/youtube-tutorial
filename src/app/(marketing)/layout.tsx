@@ -2,6 +2,7 @@ import { getCurrentUser } from '@/server/auth';
 import { AmbientBackdrop } from '@/shared/ui/visuals/ambient-backdrop';
 
 import { AccountMenu } from '../_components/account-menu';
+import { AnnouncementBanner } from '../_components/announcement-banner';
 import { VerificationBanner } from '../_components/verification-banner';
 
 import { Footer } from './_components/footer';
@@ -32,6 +33,10 @@ export default async function MarketingLayout({ children }: { children: React.Re
       >
         Skip to content
       </a>
+      {/* Above the verification prompt: a platform notice outranks a personal
+          one, and both being present is the reason the order had to be chosen
+          rather than left to whichever was added last. */}
+      <AnnouncementBanner surface="banner" />
       {user && !user.emailVerified ? <VerificationBanner email={user.email} /> : null}
       <Navbar account={<AccountMenu />} mobileAccount={<MobileAccountMenu />} />
       <main id="main" className="flex-1">

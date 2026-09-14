@@ -8,6 +8,7 @@ import { Reveal, StaggerGroup, StaggerItem } from '@/shared/ui/motion/reveal';
 import { buildUptimeBars } from './_lib/uptime-bars';
 import type { Metadata } from 'next';
 
+import { getSurfaceAnnouncements } from '@/server/announcements';
 import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 
@@ -90,7 +91,8 @@ export const metadata: Metadata = {
   description: 'Live service health, uptime history and the incident log for the Novex platform.',
 };
 
-export default function StatusPage() {
+export default async function StatusPage() {
+  const notices = await getSurfaceAnnouncements('status');
 
   const allGreen = SERVICES.every((s) => s.health === 'operational');
 
@@ -153,6 +155,52 @@ export default function StatusPage() {
           </StaggerGroup>
         </div>
       </Section>
+
+      {/* Real notices, written in the console and published to this surface.
+          Above the incident log because a current notice is why somebody opened
+          this page, and the log is what they read afterwards. */}
+      {notices.length === 0 ? null : (
+        <Section>
+          <div className="shell">
+            <SectionHeading
+              eyebrow="Notices"
+              title="What we are telling customers right now"
+              body="Published from the operations console. Each one comes down on its own schedule."
+            />
+
+            <div className="mx-auto mt-14 max-w-3xl space-y-4">
+              {notices.map((notice) => (
+                <Reveal key={notice.id}>
+                  <Card className="p-7">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Badge
+                        tone={
+                          notice.tone === 'critical'
+                            ? 'down'
+                            : notice.tone === 'warning'
+                              ? 'warn'
+                              : 'accent'
+                        }
+                        className="capitalize"
+                      >
+                        {notice.tone}
+                      </Badge>
+                      <span className="ml-auto text-xs text-fg-subtle">
+                        {notice.publishAt === null ? null : formatDate(notice.publishAt)}
+                      </span>
+                    </div>
+
+                    <h3 className="mt-5 font-display text-xl font-semibold text-fg">
+                      {notice.title}
+                    </h3>
+                    <p className="mt-3 leading-relaxed text-fg-muted">{notice.body}</p>
+                  </Card>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </Section>
+      )}
 
       <Section tone="sunken">
         <div className="shell">

@@ -1,6 +1,8 @@
 import { requireUser } from '@/server/auth';
 import { getMySupportThread, support } from '@/server/support';
 
+import { AnnouncementBanner } from '../_components/announcement-banner';
+
 import { DashboardShell } from './_components/dashboard-shell';
 import { SupportWidget } from './_components/support-widget';
 
@@ -50,6 +52,15 @@ export default async function PlatformLayout({
       initials={user.initials}
       email={user.email}
       emailVerified={user.emailVerified}
+      // Both surfaces, because a customer on an app page should see a site-wide
+      // notice as well as one written for signed-in people. The `in-app` surface
+      // is what a notice uses when it is *only* meant for them.
+      notice={
+        <>
+          <AnnouncementBanner surface="banner" />
+          <AnnouncementBanner surface="in-app" />
+        </>
+      }
     >
       {children}
       {configured ? (

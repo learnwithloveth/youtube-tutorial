@@ -1,113 +1,112 @@
-'use client';
+import type { Metadata } from 'next';
+import { TriangleAlert } from 'lucide-react';
 
-import { useState } from 'react';
-import { Megaphone, Plus, Send, Undo2 } from 'lucide-react';
-import { AdminPageHeader, ConfirmButton, QuietButton } from '../../_components/admin-ui';
-import { Panel, PanelHeader } from '../../../_console/components/page-header';
+import { requireAdmin } from '@/server/auth';
+import { getAnnouncementConsole } from '@/server/announcements';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { Badge } from '@/shared/ui/primitives/badge';
-import { SelectField, TextAreaField, TextField } from '@/shared/ui/primitives/field';
-import { useAdmin } from '../../_data/store';
-import { dateTimeLabel } from '../../../_console/data/format';
 
-export default function AnnouncementsPage() {
+import { AdminPageHeader, EmptyState } from '../../_components/admin-ui';
+import { AnnouncementsBoard } from './_components/announcements-board';
 
-  const { state, run } = useAdmin();
-  const [composing, setComposing] = useState(false);
+/**
+ * Announcements.
+ *
+ * ── Publishing now reaches a customer ─────────────────────────────────────────
+ * The screen this replaced wrote to an in-memory reducer: "Publish" moved a badge
+ * and a reload undid it, and the tile headed "Live on customer surfaces" counted
+ * fixtures against no surface at all. Every notice here is an
+ * `announcements.announcements` row, and the site banner, the app shell and
+ * `/status` each read it back on render.
+ *
+ * ── What went with the fixtures ───────────────────────────────────────────────
+ * "Banner impressions — 4.1M, +12% this week" is gone. Nothing counts an
+ * impression in this system, and a number that large on an operations screen is
+ * read as a measurement. The fourth tile is the one figure worth knowing instead:
+ * how many notices are actually in front of customers right now.
+ *
+ * The "Email" surface is gone too, and `domain/announcement.ts` explains why at
+ * the point where somebody would add it back — mailing every customer needs an
+ * unsubscribe mechanism, a queue and a throttle, none of which exist.
+ *
+ * ── Scheduling needs no scheduler ─────────────────────────────────────────────
+ * A notice is live when its `publishAt` has passed, worked out on every read. So a
+ * scheduled one appears at its moment whether or not any job ran — see
+ * `Announcement.isLiveAt`. The board shows the stored status *and* whether a
+ * customer can see it, because those differ for exactly the minutes that matter.
+ */
 
-  const published = state.announcements.filter((a) => a.state === 'published');
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Announcements',
+  robots: { index: false, follow: false },
+};
+
+export default async function AnnouncementsPage() {
+  await requireAdmin('/admin/announcements');
+  const board = await getAnnouncementConsole();
 
   return (
     <>
       <AdminPageHeader
         title="Announcements"
-        description="What customers see on the banner, the status page and in their inbox."
-        actions={
-          <QuietButton onClick={() => setComposing((v) => !v)}>
-            <Plus className="size-3.5" />
-            {composing ? 'Close composer' : 'New announcement'}
-          </QuietButton>
-        }
+        description="What customers see on the site banner, inside the app and on the status page. Publishing is immediate."
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Published" value={String(published.length)} delta={{ value: 'Live on customer surfaces', direction: 'flat', period: '' }} />
-        <StatTile label="Scheduled" value={String(state.announcements.filter((a) => a.state === 'scheduled').length)} delta={{ value: 'Queued to go out', direction: 'flat', period: '' }} />
-        <StatTile label="Drafts" value={String(state.announcements.filter((a) => a.state === 'draft').length)} delta={{ value: 'Not visible yet', direction: 'flat', period: '' }} />
-        <StatTile label="Banner impressions" value="4.1M" delta={{ value: '+12%', direction: 'up', period: 'this week' }} />
-      </div>
-
-      {composing ? (
-        <Panel className="mb-4">
-          <PanelHeader title="Compose" subtitle="Publishing writes to the customer surface immediately" />
-          <form className="grid gap-4 lg:grid-cols-2" onSubmit={(e) => e.preventDefault()}>
-            <TextField label="Title" placeholder="Fee schedule update" wrapperClassName="lg:col-span-2" />
-            <SelectField
-              label="Surface"
-              options={[
-                { value: 'banner', label: 'Site banner' },
-                { value: 'status', label: 'Status page' },
-                { value: 'email', label: 'Email' },
-                { value: 'inapp', label: 'In-app' },
-              ]}
-            />
-            <SelectField
-              label="Audience"
-              options={[
-                { value: 'all', label: 'Everyone' },
-                { value: 'verified', label: 'Verified accounts' },
-                { value: 'prime', label: 'Prime tier' },
-                { value: 'eea', label: 'EEA customers' },
-              ]}
-            />
-            <div className="lg:col-span-2">
-              <TextAreaField label="Body" placeholder="Keep it to what changes and when." />
-            </div>
-            <div className="flex gap-2 lg:col-span-2">
-              <ConfirmButton tone="brand">Save as draft</ConfirmButton>
-              <QuietButton onClick={() => setComposing(false)}>Cancel</QuietButton>
-            </div>
-          </form>
-        </Panel>
+      {board.unavailable ? (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-bg-elev px-4 py-3">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
+          <p className="text-xs leading-relaxed text-fg-muted">
+            No database is configured on this deployment, so nothing can be published.
+          </p>
+        </div>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {state.announcements.map((item) => (
-          <Panel key={item.id}>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Badge tone="neutral">{item.surface}</Badge>
-              <Badge tone={item.state === 'published' ? 'up' : item.state === 'scheduled' ? 'accent' : 'neutral'} className="capitalize">
-                {item.state}
-              </Badge>
-              <span className="ml-auto text-2xs text-fg-subtle">{dateTimeLabel(item.updatedAt)}</span>
-            </div>
-            <h2 className="flex items-start gap-2 font-display text-base font-semibold text-fg">
-              <Megaphone className="mt-0.5 size-4 shrink-0 text-brand-soft" />
-              {item.title}
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-fg-muted">{item.body}</p>
-            <p className="mt-3 text-2xs text-fg-subtle">Author: {item.author}</p>
-            <div className="mt-4 flex gap-2 border-t border-line pt-4">
-              {item.state !== 'published' ? (
-                <ConfirmButton onClick={() => run({ type: 'announcement/setState', id: item.id, state: 'published' })}>
-                  <Send className="size-3.5" />
-                  Publish
-                </ConfirmButton>
-              ) : (
-                <QuietButton onClick={() => run({ type: 'announcement/setState', id: item.id, state: 'draft' })}>
-                  <Undo2 className="size-3.5" />
-                  Unpublish
-                </QuietButton>
-              )}
-              {item.state === 'draft' ? (
-                <QuietButton onClick={() => run({ type: 'announcement/setState', id: item.id, state: 'scheduled' })}>
-                  Schedule
-                </QuietButton>
-              ) : null}
-            </div>
-          </Panel>
-        ))}
+      {board.degraded ? (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-down/35 bg-down/8 px-4 py-3">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
+          <p className="text-xs leading-relaxed text-fg-muted">
+            Announcements could not be read. This is an empty page, not an empty
+            board — anything already published is still on the site.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          label="Live now"
+          value={String(board.live)}
+          delta={{ value: 'In front of customers', direction: 'flat', period: '' }}
+        />
+        <StatTile
+          label="Scheduled"
+          value={String(board.scheduled)}
+          delta={{ value: 'Appear on their own', direction: 'flat', period: '' }}
+        />
+        <StatTile
+          label="Drafts"
+          value={String(board.drafts)}
+          delta={{ value: 'Nobody can see these', direction: 'flat', period: '' }}
+        />
+        <StatTile
+          label="Written"
+          value={String(board.items.length)}
+          delta={{ value: 'Excluding archived', direction: 'flat', period: '' }}
+        />
       </div>
+
+      <AnnouncementsBoard
+        items={board.items}
+        authors={board.authors}
+        disabled={board.unavailable}
+      />
+
+      {board.items.length === 0 && !board.unavailable ? (
+        <EmptyState
+          title="Nothing written yet"
+          body="Compose one above. A draft is invisible until you publish or schedule it."
+        />
+      ) : null}
     </>
   );
 }
