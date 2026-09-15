@@ -56,7 +56,18 @@ export default async function TradeTerminalPage({
   const params = await searchParams;
   const user = await requireUser('/app/trade');
 
-  const markets = await getMarkets({ limit: 12 });
+  /*
+   * The catalogue and the customer's balances, together.
+   *
+   * Only the *instrument-specific* reads below need a chosen market; the wallet
+   * needs an account id, which the session has already resolved. Leaving it in the
+   * second group made the page wait for the catalogue before it could even start
+   * asking about balances.
+   */
+  const [markets, wallet] = await Promise.all([
+    getMarkets({ limit: 12 }),
+    getWalletFor(user.id as UserId),
+  ]);
   const selected =
     markets.find((market) => market.symbol === params.market?.toUpperCase()) ?? markets[0];
 
@@ -77,13 +88,13 @@ export default async function TradeTerminalPage({
     );
   }
 
-  // Independent reads, awaited together. Each resolves to null on failure rather
-  // than rejecting, so there is no unattached rejection to leak.
-  const [book, candles, tape, wallet] = await Promise.all([
+  // The reads that genuinely need a chosen market, awaited together. Each resolves
+  // to null on failure rather than rejecting, so there is no unattached rejection
+  // to leak.
+  const [book, candles, tape] = await Promise.all([
     getBook(selected.symbol, 20),
     getMarketCandles(selected.symbol, interval, 120),
     getTape(selected.symbol, 24),
-    getWalletFor(user.id as UserId),
   ]);
 
   const balance = wallet.balances.find((entry) => entry.asset === selected.symbol);

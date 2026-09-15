@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { getCurrentUser } from '@/server/auth';
 import { AmbientBackdrop } from '@/shared/ui/visuals/ambient-backdrop';
 
@@ -36,7 +38,9 @@ export default async function MarketingLayout({ children }: { children: React.Re
       {/* Above the verification prompt: a platform notice outranks a personal
           one, and both being present is the reason the order had to be chosen
           rather than left to whichever was added last. */}
-      <AnnouncementBanner surface="banner" />
+      <Suspense fallback={null}>
+        <AnnouncementBanner surface="banner" />
+      </Suspense>
       {user && !user.emailVerified ? <VerificationBanner email={user.email} /> : null}
       <Navbar account={<AccountMenu />} mobileAccount={<MobileAccountMenu />} />
       <main id="main" className="flex-1">

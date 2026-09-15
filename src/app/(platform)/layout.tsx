@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { requireUser } from '@/server/auth';
 import { getNotifications } from '@/server/notifications';
 import { getMySupportThread, support } from '@/server/support';
@@ -60,14 +62,25 @@ export default async function PlatformLayout({
       emailVerified={user.emailVerified}
       notifications={feed.items}
       unread={feed.unread}
-      // Both surfaces, because a customer on an app page should see a site-wide
-      // notice as well as one written for signed-in people. The `in-app` surface
-      // is what a notice uses when it is *only* meant for them.
+      /*
+       * Both surfaces, because a customer on an app page should see a site-wide
+       * notice as well as one written for signed-in people. The `in-app` surface
+       * is what a notice uses when it is *only* meant for them.
+       *
+       * Suspended, with nothing in the fallback.
+       *
+       * These are async Server Components that each read the database, and without
+       * a boundary React blocks the *entire* shell on them — so a page that usually
+       * has no notice at all still waited two round trips before anything painted.
+       * Most of the time they render null, which is also exactly the right
+       * fallback: a placeholder for a banner that is usually absent would be a
+       * layout shift on every page load.
+       */
       notice={
-        <>
+        <Suspense fallback={null}>
           <AnnouncementBanner surface="banner" />
           <AnnouncementBanner surface="in-app" />
-        </>
+        </Suspense>
       }
     >
       {children}

@@ -72,12 +72,24 @@ function depositAddresses(
 
 export default async function WalletPage() {
   const user = await requireUser('/app/wallet');
-  const wallet = await getWalletFor(user.id as UserId);
 
-  // The glyph and brand hue are editorial and belong to market-data, not to the
-  // ledger — a storage precision and a brand colour have no business in the same
-  // catalogue. The page is the layer allowed to know both, so the join is here.
-  const instruments = await getInstruments();
+  /*
+   * Awaited together, not one after the other.
+   *
+   * The glyph and brand hue are editorial and belong to market-data, not to the
+   * ledger — a storage precision and a brand colour have no business in the same
+   * catalogue. The page is the layer allowed to know both, so the join is here.
+   *
+   * The catalogue read does not depend on the wallet; it was simply written second
+   * and inherited its turn. Each of these is one round trip to a database in
+   * another region, so running them in series cost the page a whole extra one for
+   * no reason. Neither rejects — both degrade to an empty result — so there is no
+   * unattached rejection to leak.
+   */
+  const [wallet, instruments] = await Promise.all([
+    getWalletFor(user.id as UserId),
+    getInstruments(),
+  ]);
   const marks = new Map(instruments.map((i) => [i.symbol, { glyph: i.glyph, hue: i.hue }]));
 
   const assets = withdrawableAssets();
