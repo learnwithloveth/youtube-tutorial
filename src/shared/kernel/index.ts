@@ -8,7 +8,7 @@
  * context's domain does.
  */
 
-export { Money } from './money';
+export { Money, trimDecimalString } from './money';
 export type { CurrencyCode, MoneyJson } from './money';
 
 export { BasisPoints } from './basis-points';

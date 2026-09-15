@@ -1,168 +1,110 @@
-'use client';
+import type { Metadata } from 'next';
+import { Bell, TriangleAlert } from 'lucide-react';
 
-import { useState } from 'react';
-import { Bell, BellOff, Plus, Trash2 } from 'lucide-react';
-import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
-import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
+import { requireUser } from '@/server/auth';
+import { getAlertsFor, getAlertableSymbols } from '@/server/alerts';
+import { getNotifications } from '@/server/notifications';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
-import { Button } from '@/shared/ui/primitives/button';
-import { Badge } from '@/shared/ui/primitives/badge';
-import { SelectField, TextField } from '@/shared/ui/primitives/field';
-import { AssetMark } from '@/shared/ui/visuals/asset-mark';
-import { ASSET_BY_ID } from '../../../_console/data/assets';
-import { NOTIFICATIONS, PRICE_ALERTS } from '../../_data/data';
-import { moneyExact } from '../../../_console/data/format';
-import { formatPercent } from '@/shared/lib/format';
-import { cn } from '@/shared/lib/cn';
 
-export default function AlertsPage() {
+import { PageHeader } from '../../../_console/components/page-header';
+import { AlertsPanel } from './_components/alerts-panel';
+import { NotificationList } from './_components/notification-list';
 
-  const [alerts, setAlerts] = useState(PRICE_ALERTS.map((a) => ({ ...a })));
-  const active = alerts.filter((a) => a.active).length;
+/**
+ * Price alerts and the notification feed.
+ *
+ * ── What the heading used to promise ──────────────────────────────────────────
+ * "Push arrives in under 400 ms of the book crossing your level — not on the next
+ * poll." It is the next poll. There is no live book feed in this system; prices
+ * arrive when the market-data refresh runs, and that is the only moment an alert
+ * can newly be satisfied — so it is exactly where the evaluation happens. The
+ * heading now says so, and the stat tile that claimed "Median 380 ms to delivery"
+ * is gone, because nothing measures delivery.
+ *
+ * ── The alerts are real and so is the feed ────────────────────────────────────
+ * Each alert is an `alerts.price_alerts` row evaluated against live quotes on every
+ * refresh. Each notification is an `activity.events` row — the same trail the
+ * account history reads, so the bell and the history cannot disagree.
+ *
+ * ── There is no channel column ────────────────────────────────────────────────
+ * The old table offered Push, Email and Both per alert. Push exists in this
+ * codebase only for support chat and needs Firebase Authentication enabled, which
+ * it is not; nothing mails a price alert. A per-alert dropdown choosing between
+ * three channels, two of which do nothing, is a promise the customer relies on.
+ * Alerts appear in the feed, which is what works.
+ */
 
-  const toggle = (id: string) =>
-    setAlerts((current) => current.map((a) => (a.id === id ? { ...a, active: !a.active } : a)));
-  const remove = (id: string) => setAlerts((current) => current.filter((a) => a.id !== id));
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Alerts',
+  robots: { index: false, follow: false },
+};
+
+export default async function AlertsPage() {
+  const user = await requireUser('/app/alerts');
+
+  const [board, feed, symbols] = await Promise.all([
+    getAlertsFor(user.id),
+    getNotifications(user.id, { limit: 8 }),
+    getAlertableSymbols(),
+  ]);
 
   return (
     <>
       <PageHeader
         title="Alerts"
-        description="Push arrives in under 400 ms of the book crossing your level — not on the next poll."
+        description="Set a level and we will tell you when a market reaches it. Checked every time fresh prices arrive."
       />
 
+      {board.unavailable ? (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-bg-elev px-4 py-3">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
+          <p className="text-xs leading-relaxed text-fg-muted">
+            Alerts are unavailable on this deployment.
+          </p>
+        </div>
+      ) : null}
+
+      {board.degraded || feed.degraded ? (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-down/35 bg-down/8 px-4 py-3">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
+          <p className="text-xs leading-relaxed text-fg-muted">
+            {/* Said plainly: an empty page here would otherwise read as "you have
+                no alerts", and somebody would set them up a second time. */}
+            Your alerts could not be read just now. This is an empty page, not an
+            empty list — anything you set is still watching.
+          </p>
+        </div>
+      ) : null}
+
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
-        <StatTile label="Active alerts" value={String(active)} delta={{ value: `${alerts.length - active} muted`, direction: 'flat', period: '' }} icon={<Bell className="size-4" />} />
-        <StatTile label="Triggered, 30 days" value="17" delta={{ value: 'Median 380 ms', direction: 'flat', period: 'to delivery' }} />
-        <StatTile label="Unread notifications" value={String(NOTIFICATIONS.filter((n) => n.unread).length)} delta={{ value: 'Across all channels', direction: 'flat', period: '' }} />
+        <StatTile
+          label="Watching"
+          value={String(board.armed)}
+          delta={{ value: `${board.muted} muted`, direction: 'flat', period: '' }}
+          icon={<Bell className="size-4" />}
+        />
+        <StatTile
+          label="Fired, waiting to re-arm"
+          value={String(board.triggered)}
+          delta={{ value: 'Re-arm to watch again', direction: 'flat', period: '' }}
+        />
+        <StatTile
+          label="Unread notifications"
+          value={String(feed.unread)}
+          delta={{ value: 'Opening the bell clears these', direction: 'flat', period: '' }}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <Panel>
-          <PanelHeader title="Price alerts" subtitle="Fire once, then mute until you re-arm them" />
-          <TableShell caption="Price alerts" minWidth="42rem">
-            <thead>
-              <tr>
-                <Th>Asset</Th><Th>Condition</Th><Th numeric>Target</Th>
-                <Th numeric>Distance</Th><Th>Channel</Th><Th numeric>{''}</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.length === 0 ? (
-                <EmptyRow colSpan={6}>No alerts yet. Create one on the right.</EmptyRow>
-              ) : (
-                alerts.map((alert) => {
-                  const asset = ASSET_BY_ID.get(alert.symbol.toLowerCase());
-                  const distance = asset ? ((alert.target - asset.price) / asset.price) * 100 : 0;
-                  return (
-                    <Tr key={alert.id} className={cn(!alert.active && 'opacity-55')}>
-                      <Td>
-                        <span className="flex items-center gap-2.5">
-                          {asset ? <AssetMark symbol={asset.symbol} glyph={asset.glyph} hue={asset.hue} size="sm" /> : null}
-                          <span className="text-sm font-medium text-fg">{alert.symbol}</span>
-                        </span>
-                      </Td>
-                      <Td className="capitalize">Price {alert.direction}</Td>
-                      <Td numeric className="font-medium text-fg">{moneyExact(alert.target)}</Td>
-                      <Td numeric>
-                        <span className={distance >= 0 ? 'text-fg-muted' : 'text-fg-muted'}>
-                          {formatPercent(distance)}
-                        </span>
-                      </Td>
-                      <Td>
-                        <Badge tone="neutral" className="capitalize">{alert.channel}</Badge>
-                      </Td>
-                      <Td numeric>
-                        <span className="inline-flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => toggle(alert.id)}
-                            aria-label={alert.active ? `Mute ${alert.symbol} alert` : `Re-arm ${alert.symbol} alert`}
-                            className="grid size-7 place-items-center rounded-sm border border-line text-fg-muted transition-colors hover:text-fg"
-                          >
-                            {alert.active ? <Bell className="size-3" /> : <BellOff className="size-3" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => remove(alert.id)}
-                            aria-label={`Delete ${alert.symbol} alert`}
-                            className="grid size-7 place-items-center rounded-sm border border-line text-fg-muted transition-colors hover:border-down/50 hover:text-down"
-                          >
-                            <Trash2 className="size-3" />
-                          </button>
-                        </span>
-                      </Td>
-                    </Tr>
-                  );
-                })
-              )}
-            </tbody>
-          </TableShell>
-        </Panel>
-
-        <div className="space-y-4">
-          <Panel>
-            <PanelHeader title="New alert" />
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <SelectField
-                label="Asset"
-                options={[
-                  { value: 'btc', label: 'Bitcoin (BTC)' },
-                  { value: 'eth', label: 'Ethereum (ETH)' },
-                  { value: 'sol', label: 'Solana (SOL)' },
-                  { value: 'tao', label: 'Bittensor (TAO)' },
-                ]}
-              />
-              <SelectField
-                label="Condition"
-                options={[
-                  { value: 'above', label: 'Price rises above' },
-                  { value: 'below', label: 'Price falls below' },
-                ]}
-              />
-              <TextField label="Target price" defaultValue="100000" adornment={<span className="text-xs">USD</span>} />
-              <SelectField
-                label="Deliver via"
-                options={[
-                  { value: 'both', label: 'Push and email' },
-                  { value: 'push', label: 'Push only' },
-                  { value: 'email', label: 'Email only' },
-                ]}
-              />
-              <Button type="submit" size="lg" className="w-full">
-                <Plus className="size-4" />
-                Create alert
-              </Button>
-            </form>
-          </Panel>
-
-          <Panel>
-            <PanelHeader title="Recent notifications" />
-            <ul className="divide-y divide-line/60">
-              {NOTIFICATIONS.map((note) => (
-                <li key={note.id} className="flex items-start gap-3 py-3">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'mt-1.5 size-1.5 shrink-0 rounded-full',
-                      note.tone === 'up' && 'bg-up',
-                      note.tone === 'brand' && 'bg-brand-soft',
-                      note.tone === 'accent' && 'bg-accent',
-                      note.tone === 'warn' && 'bg-warn',
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className={cn('text-sm', note.unread ? 'font-medium text-fg' : 'text-fg-muted')}>
-                      {note.title}
-                    </p>
-                    <p className="text-xs text-fg-subtle">{note.body}</p>
-                  </div>
-                  <span className="shrink-0 text-2xs text-fg-subtle">{note.time}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        </div>
+        <AlertsPanel
+          alerts={board.alerts}
+          prices={board.prices}
+          symbols={symbols}
+          disabled={board.unavailable}
+        />
+        <NotificationList items={feed.items} total={feed.total} />
       </div>
     </>
   );

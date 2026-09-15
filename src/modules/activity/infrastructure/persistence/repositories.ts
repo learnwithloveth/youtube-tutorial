@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -172,12 +172,20 @@ export class DrizzleActivityRepository implements ActivityRepository {
 
   /** Bounded delete on the retention index — never a full-table sweep. */
   async deleteExpired(
-    cutoffs: { pageViews: Date; security: Date },
+    cutoffs: {
+      ephemeralKinds: readonly ActivityKind[];
+      ephemeral: Date;
+      security: Date;
+    },
     limit: number,
   ): Promise<number> {
+    // Split on the set the domain owns, not on a literal here. The earlier version
+    // compared against `'page-view'` in two places, and a kind added to the short
+    // window would have been swept by neither branch.
+    const ephemeral = [...cutoffs.ephemeralKinds];
     const expired = or(
-      and(eq(events.kind, 'page-view'), lt(events.occurredAt, cutoffs.pageViews)),
-      and(sql`${events.kind} <> 'page-view'`, lt(events.occurredAt, cutoffs.security)),
+      and(inArray(events.kind, ephemeral), lt(events.occurredAt, cutoffs.ephemeral)),
+      and(notInArray(events.kind, ephemeral), lt(events.occurredAt, cutoffs.security)),
     );
 
     const deleted = await this.db

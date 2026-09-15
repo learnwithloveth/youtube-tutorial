@@ -11,6 +11,7 @@ import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { DepositFormState } from './form-state';
+import { trimDecimalString } from '@/shared/kernel';
 
 /**
  * Submitting proof that funds were sent.
@@ -69,7 +70,9 @@ export async function submitDepositAction(
     userId: user.id as UserId,
     kind: 'deposit-recorded',
     reference: result.value.claimId,
-    detail: `claimed ${formData.get('amount')} ${formData.get('asset')}`,
+    // Trimmed like the operator's side of the same claim, so the two lines in
+    // a dispute read alike rather than one padded and one not.
+    detail: `claimed ${trimDecimalString(String(formData.get('amount') ?? ''))} ${formData.get('asset')}`,
     location: request.location,
     agent: request.agent,
     ipDigest: request.ipDigest,

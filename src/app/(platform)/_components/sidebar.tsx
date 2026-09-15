@@ -13,9 +13,17 @@ interface SidebarProps {
   /** Rendered inside the mobile drawer, where collapsing makes no sense. */
   variant?: 'rail' | 'drawer';
   onNavigate?: () => void;
+  /** Unread notifications, read on the server by the layout above. */
+  unread?: number;
 }
 
-export function Sidebar({ collapsed, onToggle, variant = 'rail', onNavigate }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  variant = 'rail',
+  onNavigate,
+  unread = 0,
+}: SidebarProps) {
   const isRail = variant === 'rail';
   const showLabels = !isRail || !collapsed;
 
@@ -85,7 +93,14 @@ export function Sidebar({ collapsed, onToggle, variant = 'rail', onNavigate }: S
                         {showLabels ? (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
-                            {item.badge ? (
+                            {/* The live count where an entry asks for it, the
+                                literal otherwise. Zero renders nothing: a badge
+                                reading "0" is a thing to check that is not there. */}
+                            {item.unreadKey && unread > 0 ? (
+                              <span className="rounded-full border border-brand-soft/40 bg-brand/12 px-1.5 py-0.5 text-2xs tabular-nums text-brand-soft">
+                                {unread}
+                              </span>
+                            ) : item.badge ? (
                               <span className="rounded-full border border-line px-1.5 py-0.5 text-2xs tabular-nums text-fg-subtle">
                                 {item.badge}
                               </span>

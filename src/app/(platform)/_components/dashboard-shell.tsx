@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useCallback, useState, type ReactNode } from 'react';
 
+import type { NotificationDto } from '@/server/notifications';
 import { cn } from '@/shared/lib/cn';
 import { useEscape, useScrollLock } from '@/shared/lib/hooks';
 
@@ -30,6 +31,8 @@ export function DashboardShell({
   initials,
   emailVerified,
   email,
+  notifications,
+  unread,
   notice,
   children,
 }: {
@@ -38,6 +41,9 @@ export function DashboardShell({
   initials: string;
   emailVerified: boolean;
   email: string;
+  /** The bell's contents, read on the server by the layout above. */
+  notifications: readonly NotificationDto[];
+  unread: number;
   /**
    * Platform notices, rendered by the server layout above.
    *
@@ -107,7 +113,7 @@ export function DashboardShell({
         )}
       >
         <aside className="sticky top-0 hidden h-dvh lg:block">
-          <Sidebar collapsed={collapsed} onToggle={toggle} />
+          <Sidebar collapsed={collapsed} onToggle={toggle} unread={unread} />
         </aside>
 
         <div className="flex min-w-0 flex-col">
@@ -116,6 +122,8 @@ export function DashboardShell({
             initials={initials}
             email={email}
             emailVerified={emailVerified}
+            notifications={notifications}
+            unread={unread}
             onOpenDrawer={() => setDrawer(true)}
           />
           {notice}
@@ -172,6 +180,7 @@ export function DashboardShell({
                 collapsed={false}
                 onToggle={toggle}
                 variant="drawer"
+                unread={unread}
                 onNavigate={() => setDrawer(false)}
               />
             </motion.div>

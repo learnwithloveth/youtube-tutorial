@@ -11,6 +11,7 @@ import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { WithdrawalFormState } from './form-state';
+import { trimDecimalString } from '@/shared/kernel';
 
 /**
  * The wallet's write boundary.
@@ -72,7 +73,7 @@ export async function requestWithdrawalAction(
     userId: user.id as UserId,
     kind: 'withdrawal-requested',
     reference: result.value.withdrawalId,
-    detail: `${result.value.amount} ${result.value.asset}`,
+    detail: `${trimDecimalString(result.value.amount)} ${result.value.asset}`,
     location: context_.location,
     agent: context_.agent,
     ipDigest: context_.ipDigest,

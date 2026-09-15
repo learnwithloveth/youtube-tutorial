@@ -3,6 +3,7 @@ import { after } from 'next/server';
 import { refreshTickers } from '@/modules/market-data';
 import { createMarketDataModule } from '@/modules/market-data/server';
 import { env } from '@/platform/env';
+import { evaluateAlerts } from '@/server/alerts';
 import { logger } from '@/platform/observability/logger';
 
 /**
@@ -60,6 +61,31 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: Date.now() - started,
       ...result.value,
     });
+  });
+
+  /*
+   * Price alerts are evaluated here, after the write, because this is the only
+   * moment a price changes — so it is the only moment an alert can newly be
+   * satisfied. Checking anywhere else is either redundant work or a delay.
+   *
+   * In `after()` so the scheduler's request is not held open for it, and wrapped
+   * so a failure is a logged line rather than a refresh that reports failure
+   * after the prices it fetched have already been stored.
+   */
+  after(async () => {
+    try {
+      const evaluated = await evaluateAlerts();
+      if (evaluated.triggered > 0) {
+        logger.info({
+          event: 'alerts_triggered',
+          module: 'alerts',
+          triggered: evaluated.triggered,
+          examined: evaluated.examined,
+        });
+      }
+    } catch (error) {
+      logger.error({ event: 'alert_evaluation_failed', module: 'alerts' }, error);
+    }
   });
 
   return json(result.value, 200);

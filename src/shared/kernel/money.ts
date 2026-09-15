@@ -164,12 +164,7 @@ export class Money {
    * a receipt's detail rows print the scale the ledger actually holds.
    */
   toTrimmedString(): string {
-    const decimal = this.toDecimalString();
-    // A scale of zero has no point to trim behind, and "1200" must survive intact.
-    if (!decimal.includes('.')) return decimal;
-
-    const trimmed = decimal.replace(/0+$/, '').replace(/\.$/, '');
-    return trimmed === '' || trimmed === '-' ? '0' : trimmed;
+    return trimDecimalString(this.toDecimalString());
   }
 
   /**
@@ -236,4 +231,27 @@ function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
   const remainder = magnitude % denominator;
   const rounded = remainder * 2n >= denominator ? quotient + 1n : quotient;
   return negative ? -rounded : rounded;
+}
+
+/**
+ * Drops trailing zeros from an exact decimal string, without touching its value.
+ *
+ * ── Why it is exported separately from `Money` ────────────────────────────────
+ * Amounts cross layers as exact decimal *strings*, so by the time a DTO reaches a
+ * page or an activity detail line the `Money` is long gone — and the alternative
+ * to this is a second regex in the presentation layer that quietly drifts from
+ * `toTrimmedString`. One implementation, used by both.
+ *
+ * ── Still exact ───────────────────────────────────────────────────────────────
+ * It only ever removes characters. The tempting `String(Number(decimal))` is a
+ * rounding function wearing a formatter's clothes: `Number('1.000000000000000001')`
+ * is `1.0000000000000002`, and an 18-decimal asset produces values past a double's
+ * precision every day.
+ */
+export function trimDecimalString(decimal: string): string {
+  // A scale of zero has no point to trim behind, and "1200" must survive intact.
+  if (!decimal.includes('.')) return decimal;
+
+  const trimmed = decimal.replace(/0+$/, '').replace(/\.$/, '');
+  return trimmed === '' || trimmed === '-' ? '0' : trimmed;
 }

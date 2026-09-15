@@ -11,6 +11,7 @@ import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { DecisionFormState } from './form-state';
+import { trimDecimalString } from '@/shared/kernel';
 
 /**
  * An operator confirms or refuses a deposit claim.
@@ -67,12 +68,14 @@ export async function decideDepositAction(
     // decision stays attributable.
     await recordActivity({
       userId: subject.userId as UserId,
-      kind: result.value.status === 'approved' ? 'deposit-recorded' : 'withdrawal-rejected',
+      kind: result.value.status === 'approved' ? 'deposit-recorded' : 'deposit-rejected',
       reference: `${claimId} by ${operator.email}`,
       detail:
         result.value.credited === null
-          ? `deposit rejected · claimed ${subject.claimedAmount} ${subject.asset}`
-          : `${result.value.credited} ${subject.asset} credited`,
+          // No longer says "deposit": the kind does that now, and a detail line
+          // repeating the noun was only ever there to correct the wrong one.
+          ? `claimed ${trimDecimalString(subject.claimedAmount)} ${subject.asset}`
+          : `${trimDecimalString(result.value.credited)} ${subject.asset} credited`,
       location: request.location,
       agent: request.agent,
       ipDigest: request.ipDigest,

@@ -11,6 +11,7 @@ import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { DecisionFormState } from './form-state';
+import { trimDecimalString } from '@/shared/kernel';
 
 /**
  * The approvals queue's write boundary.
@@ -82,7 +83,9 @@ export async function decideWithdrawalAction(
       userId: subject.userId as UserId,
       kind: result.value.status === 'approved' ? 'withdrawal-approved' : 'withdrawal-rejected',
       reference: `${withdrawalId} by ${operator.email}`,
-      detail: `${subject.amount} ${subject.asset}`,
+      // Trimmed: the DTO carries the stored scale, and an 18-decimal asset
+      // turns this line into `1.000000000000000000 ETH` in the customer's bell.
+      detail: `${trimDecimalString(subject.amount)} ${subject.asset}`,
       location: request.location,
       agent: request.agent,
       ipDigest: request.ipDigest,

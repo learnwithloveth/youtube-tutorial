@@ -3,11 +3,11 @@
 import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
 import type { ReactNode } from 'react';
 import {
-  ACTING_ADMIN, ADMIN_TEAM, ADMIN_USERS, ANNOUNCEMENTS, APPROVALS, FEATURE_FLAGS, INCIDENTS,
+  ACTING_ADMIN, ADMIN_TEAM, ADMIN_USERS, APPROVALS, FEATURE_FLAGS, INCIDENTS,
   LISTINGS, PAYOUTS, SEED_AUDIT, TICKETS,
 } from './data';
 import type {
-  AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident,
+  AdminMember, AdminUser, Approval, AuditEntry, FeatureFlag, Incident,
   Listing, Payout, SupportMessage, Ticket,
 } from './types';
 
@@ -34,7 +34,6 @@ export interface AdminState {
   payouts: Payout[];
   incidents: Incident[];
   flags: FeatureFlag[];
-  announcements: Announcement[];
   team: AdminMember[];
   audit: AuditEntry[];
 }
@@ -54,7 +53,6 @@ export type AdminAction =
   | { type: 'incident/update'; id: string; actor: string; body: string; state: Incident['state'] }
   | { type: 'flag/toggle'; id: string; actor: string }
   | { type: 'flag/rollout'; id: string; actor: string; rollout: number }
-  | { type: 'announcement/setState'; id: string; actor: string; state: Announcement['state'] }
   | { type: 'member/setStatus'; id: string; actor: string; status: AdminMember['status'] };
 
 let auditSeq = 0;
@@ -295,18 +293,6 @@ function reducer(state: AdminState, action: AdminAction): AdminState {
       };
     }
 
-    case 'announcement/setState': {
-      const target = state.announcements.find((a) => a.id === action.id);
-      return {
-        ...state,
-        announcements: patch(state.announcements, action.id, (a) => ({ ...a, state: action.state })),
-        audit: audit(state, {
-          actor: action.actor, action: `announcement.${action.state}`, target: target?.title ?? action.id,
-          detail: `Moved to ${action.state}.`, severity: action.state === 'published' ? 'notice' : 'info',
-        }),
-      };
-    }
-
     case 'member/setStatus': {
       const target = state.team.find((m) => m.id === action.id);
       return {
@@ -334,7 +320,6 @@ function initialState(): AdminState {
     payouts: PAYOUTS.map((p) => ({ ...p })),
     incidents: INCIDENTS.map((i) => ({ ...i, updates: [...i.updates] })),
     flags: FEATURE_FLAGS.map((f) => ({ ...f })),
-    announcements: ANNOUNCEMENTS.map((a) => ({ ...a })),
     team: ADMIN_TEAM.map((m) => ({ ...m })),
     audit: [...SEED_AUDIT],
   };

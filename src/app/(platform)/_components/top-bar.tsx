@@ -8,18 +8,22 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowDownToLine, Bell, ChevronDown, LogOut, Menu, Search, Settings, ShieldCheck, User,
 } from 'lucide-react';
-import { NOTIFICATIONS } from '../_data/data';
+import type { NotificationDto } from '@/server/notifications';
 import { ThemeToggle } from '../../(marketing)/_components/theme-toggle';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
 import { LogoMark } from '@/shared/ui/visuals/logo';
 import { useEscape, useOutsideClick } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
+import { formatAge } from '@/shared/lib/format';
 
-const TONE_DOT: Record<string, string> = {
+import { markNotificationsReadAction } from '../app/alerts/_lib/actions';
+
+const TONE_DOT: Record<NotificationDto['tone'], string> = {
   up: 'bg-up',
+  down: 'bg-down',
   brand: 'bg-brand-soft',
-  accent: 'bg-accent',
   warn: 'bg-warn',
+  neutral: 'bg-fg-subtle',
 };
 
 function Popover({
@@ -63,6 +67,8 @@ export function TopBar({
   initials,
   email,
   emailVerified,
+  notifications,
+  unread,
   onOpenDrawer,
 }: {
   /** Already resolved by the identity boundary — see `displayNameFor`. */
@@ -70,11 +76,19 @@ export function TopBar({
   initials: string;
   email: string;
   emailVerified: boolean;
+  /**
+   * Read on the server by the layout above.
+   *
+   * Passed down rather than fetched here: this bar renders on every page of the
+   * application, and a client fetch would mean the badge arrives after paint —
+   * a number that appears a moment later is one somebody has already looked past.
+   */
+  notifications: readonly NotificationDto[];
+  unread: number;
   onOpenDrawer: () => void;
 }) {
   const [bell, setBell] = useState(false);
   const [account, setAccount] = useState(false);
-  const unread = NOTIFICATIONS.filter((n) => n.unread).length;
 
   const closeBell = useCallback(() => setBell(false), []);
   const closeAccount = useCallback(() => setAccount(false), []);
@@ -121,7 +135,15 @@ export function TopBar({
               id="notifications-button"
               aria-expanded={bell}
               aria-haspopup="dialog"
-              onClick={() => setBell((v) => !v)}
+              onClick={() => {
+                const opening = !bell;
+                setBell(opening);
+                // Marked read on open, not on render: a badge that clears because
+                // a page loaded would clear on a page the customer never looked at.
+                // Deliberately not awaited — the popover must paint now, and the
+                // badge is server-rendered on the next navigation.
+                if (opening && unread > 0) void markNotificationsReadAction();
+              }}
               className="relative grid size-9 place-items-center rounded-full border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
             >
               <Bell className="size-4" />
@@ -138,36 +160,66 @@ export function TopBar({
             <Popover open={bell} onClose={closeBell} labelledBy="notifications-button" className="w-80">
               <p className="border-b border-line px-4 py-3 text-sm font-medium text-fg">Notifications</p>
               <ul className="max-h-80 overflow-y-auto">
-                {NOTIFICATIONS.map((note) => (
-                  <li key={note.id}>
-                    <button
-                      type="button"
-                      className="flex w-full gap-3 border-b border-line/60 px-4 py-3 text-left transition-colors last:border-0 hover:bg-surface"
+                {notifications.length === 0 ? (
+                  <li className="px-4 py-8 text-center text-xs text-fg-subtle">
+                    Nothing yet. Deposits, withdrawals, sign-ins and fired alerts
+                    appear here.
+                  </li>
+                ) : (
+                  notifications.map((note) => (
+                    <li
+                      key={note.id}
+                      className="flex gap-3 border-b border-line/60 px-4 py-3 last:border-0"
                     >
                       <span
                         aria-hidden
                         className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', TONE_DOT[note.tone])}
                       />
+                      {/* A list item, not a button. The old one was clickable and
+                          did nothing — there is nowhere for most of these to go,
+                          and a control that does not act is worse than plain text
+                          for anybody navigating by keyboard. */}
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className={cn('truncate text-sm', note.unread ? 'font-medium text-fg' : 'text-fg-muted')}>
                             {note.title}
                           </span>
-                          <span className="shrink-0 text-2xs text-fg-subtle">{note.time}</span>
+                          {/* The server measured this duration — see
+                              `NotificationDto.ageSeconds`. Reading the clock
+                              here would fail hydration. */}
+                          <span className="shrink-0 text-2xs text-fg-subtle">
+                            {formatAge(note.ageSeconds)}
+                          </span>
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-fg-subtle">{note.body}</span>
+                        {note.body === null ? null : (
+                          <span className="mt-0.5 block truncate text-xs text-fg-subtle">
+                            {note.body}
+                          </span>
+                        )}
                       </span>
-                    </button>
-                  </li>
-                ))}
+                    </li>
+                  ))
+                )}
               </ul>
-              <ActiveLink
-                href="/app/alerts"
-                onClick={closeBell}
-                className="block border-t border-line px-4 py-2.5 text-center text-xs font-medium text-brand-soft hover:bg-surface"
-              >
-                Manage alerts
-              </ActiveLink>
+              {/* Two destinations, because they are two different things: the
+                  whole feed, and the alerts that put things in it. The single
+                  "Manage alerts" link sent everybody to the wrong one. */}
+              <div className="grid grid-cols-2 border-t border-line">
+                <ActiveLink
+                  href="/app/notifications"
+                  onClick={closeBell}
+                  className="border-r border-line px-4 py-2.5 text-center text-xs font-medium text-brand-soft hover:bg-surface"
+                >
+                  See all
+                </ActiveLink>
+                <ActiveLink
+                  href="/app/alerts"
+                  onClick={closeBell}
+                  className="px-4 py-2.5 text-center text-xs font-medium text-fg-muted hover:bg-surface hover:text-fg"
+                >
+                  Manage alerts
+                </ActiveLink>
+              </div>
             </Popover>
           </div>
 

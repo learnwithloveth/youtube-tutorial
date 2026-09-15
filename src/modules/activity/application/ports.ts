@@ -95,7 +95,15 @@ export interface ActivityRepository {
    * see `retentionMsFor`. Bounded per call so one invocation cannot hold a lock
    * for an unbounded time.
    */
-  deleteExpired(cutoffs: { pageViews: Date; security: Date }, limit: number): Promise<number>;
+  deleteExpired(
+    cutoffs: {
+      /** Kinds on the short window — the domain owns the list. */
+      ephemeralKinds: readonly ActivityKind[];
+      ephemeral: Date;
+      security: Date;
+    },
+    limit: number,
+  ): Promise<number>;
 }
 
 export interface ActivityDependencies {

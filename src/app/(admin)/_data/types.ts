@@ -146,16 +146,6 @@ export interface FeatureFlag {
   enabled: boolean;
 }
 
-export interface Announcement {
-  readonly id: string;
-  readonly title: string;
-  readonly body: string;
-  readonly surface: 'Banner' | 'Status page' | 'Email' | 'In-app';
-  readonly updatedAt: string;
-  readonly author: string;
-  state: 'draft' | 'scheduled' | 'published';
-}
-
 export type AdminRole = 'Owner' | 'Compliance' | 'Support' | 'Treasury' | 'Engineer' | 'Read-only';
 
 export interface AdminMember {

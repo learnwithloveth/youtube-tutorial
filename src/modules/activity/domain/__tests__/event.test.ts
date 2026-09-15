@@ -4,8 +4,9 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import {
   ActivityEvent,
+  EPHEMERAL_KINDS,
   isSecurityKind,
-  PAGE_VIEW_RETENTION_MS,
+  SHORT_RETENTION_MS,
   retentionMsFor,
   SECURITY_KINDS,
   SECURITY_RETENTION_MS,
@@ -80,23 +81,27 @@ describe('retention', () => {
      keep. One window would force a choice between losing the first and hoarding
      the second. */
   it('keeps security events far longer than page views', () => {
-    expect(retentionMsFor('page-view')).toBe(PAGE_VIEW_RETENTION_MS);
-    expect(SECURITY_RETENTION_MS).toBeGreaterThan(PAGE_VIEW_RETENTION_MS);
+    expect(retentionMsFor('page-view')).toBe(SHORT_RETENTION_MS);
+    expect(SECURITY_RETENTION_MS).toBeGreaterThan(SHORT_RETENTION_MS);
 
     for (const kind of SECURITY_KINDS) {
       expect(retentionMsFor(kind)).toBe(SECURITY_RETENTION_MS);
     }
   });
 
-  it('classifies every kind except page-view as a security event', () => {
-    expect(isSecurityKind('page-view')).toBe(false);
+  it('classifies the ephemeral kinds out of the security set', () => {
+    for (const kind of EPHEMERAL_KINDS) {
+      expect(isSecurityKind(kind)).toBe(false);
+      expect(retentionMsFor(kind)).toBe(SHORT_RETENTION_MS);
+    }
     for (const kind of SECURITY_KINDS) {
       expect(isSecurityKind(kind)).toBe(true);
     }
   });
 
   /* Guards against a kind being added to the union and silently inheriting the
-     one-year window without anyone deciding it should. */
+     one-year window without anyone deciding it should. It has already earned
+     its keep once: `price-alert-triggered` would have been kept for a year. */
   it('covers every kind in the union', () => {
     const all: ActivityKind[] = [
       'page-view',
@@ -110,14 +115,16 @@ describe('retention', () => {
       'withdrawal-approved',
       'withdrawal-rejected',
       'deposit-recorded',
+      'deposit-rejected',
       'admin-suspended',
       'admin-reinstated',
       'receipt-sent',
       'verification-submitted',
       'verification-approved',
       'verification-rejected',
+      'price-alert-triggered',
     ];
-    expect(new Set([...SECURITY_KINDS, 'page-view'])).toEqual(new Set(all));
+    expect(new Set([...SECURITY_KINDS, ...EPHEMERAL_KINDS])).toEqual(new Set(all));
   });
 
   it('expires from when the event happened, not when it was written', () => {

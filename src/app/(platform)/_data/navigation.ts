@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeftRight, Bell, CandlestickChart, LayoutDashboard,
-  Receipt, Settings, Wallet,
+  Inbox, Receipt, Settings, Wallet,
   // Needed again by the entries commented out below. Parked here rather than
   // deleted so re-enabling one is uncommenting two lines, not hunting for the icon
   // it wanted. Same arrangement in the admin nav.
@@ -14,6 +14,8 @@ export interface DashNavItem {
   icon: LucideIcon;
   /** Rendered as a pill on the rail — a count, or a short state word. */
   badge?: string;
+  /** Badged with the live unread count, supplied by the shell. */
+  unreadKey?: boolean;
   end?: boolean;
 }
 
@@ -49,7 +51,11 @@ export const DASH_NAV: DashNavGroup[] = [
   {
     heading: 'Manage',
     items: [
-      { label: 'Alerts', href: '/app/alerts', icon: Bell, badge: '4' },
+      /* No literal badge here any more. It read "4" for every account on the
+         platform, including one with no alerts at all. The unread count is real
+         and is passed down from the layout — see `unreadKey`. */
+      { label: 'Notifications', href: '/app/notifications', icon: Inbox, unreadKey: true },
+      { label: 'Alerts', href: '/app/alerts', icon: Bell },
       { label: 'Settings', href: '/app/settings', icon: Settings },
     ],
   },

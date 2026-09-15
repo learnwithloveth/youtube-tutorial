@@ -22,7 +22,9 @@ export type {
 export type { ActivityKind, EventAgent, EventLocation } from './domain/event';
 export {
   isSecurityKind,
+  EPHEMERAL_KINDS,
   PAGE_VIEW_RETENTION_MS,
+  SHORT_RETENTION_MS,
   SECURITY_KINDS,
   SECURITY_RETENTION_MS,
 } from './domain/event';

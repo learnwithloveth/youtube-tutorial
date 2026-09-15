@@ -4,7 +4,7 @@ import { fixedClock } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { ActivityEvent, ActivityKind } from '../../domain/event';
-import { PAGE_VIEW_RETENTION_MS, SECURITY_RETENTION_MS } from '../../domain/event';
+import { SECURITY_RETENTION_MS, SHORT_RETENTION_MS } from '../../domain/event';
 import type { ActivityDependencies, ActivityRepository } from '../ports';
 import { getUserActivity } from '../queries/user-activity';
 import { createRecordActivity } from '../use-cases/record-activity';
@@ -16,7 +16,11 @@ const USER = '11111111-1111-4111-8111-111111111111' as UserId;
 class FakeEvents implements ActivityRepository {
   readonly store: ActivityEvent[] = [];
   private counter = 0;
-  lastCutoffs: { pageViews: Date; security: Date } | null = null;
+  lastCutoffs: {
+    ephemeralKinds: readonly ActivityKind[];
+    ephemeral: Date;
+    security: Date;
+  } | null = null;
 
   nextId() {
     return `e${this.counter++}`;
@@ -108,11 +112,14 @@ class FakeEvents implements ActivityRepository {
       .sort((a, b) => b.views - a.views)
       .slice(0, limit);
   }
-  async deleteExpired(cutoffs: { pageViews: Date; security: Date }, limit: number) {
+  async deleteExpired(
+    cutoffs: { ephemeralKinds: readonly ActivityKind[]; ephemeral: Date; security: Date },
+    limit: number,
+  ) {
     this.lastCutoffs = cutoffs;
     const doomed = this.store.filter((event) =>
-      event.kind === 'page-view'
-        ? event.occurredAt < cutoffs.pageViews
+      cutoffs.ephemeralKinds.includes(event.kind)
+        ? event.occurredAt < cutoffs.ephemeral
         : event.occurredAt < cutoffs.security,
     );
     for (const event of doomed.slice(0, limit)) {
@@ -282,10 +289,10 @@ describe('sweepActivity', () => {
   it('applies a different cut-off to each kind', async () => {
     const { events, deps, record } = build();
 
-    const oldPageView = new Date(NOW.getTime() - PAGE_VIEW_RETENTION_MS - 1000);
+    const oldPageView = new Date(NOW.getTime() - SHORT_RETENTION_MS - 1000);
     const oldSignIn = new Date(NOW.getTime() - SECURITY_RETENTION_MS - 1000);
-    // Past the page-view window but well inside the security one.
-    const middling = new Date(NOW.getTime() - PAGE_VIEW_RETENTION_MS - 1000);
+    // Past the short window but well inside the security one.
+    const middling = new Date(NOW.getTime() - SHORT_RETENTION_MS - 1000);
 
     await record({ userId: USER, kind: 'page-view', path: '/a', occurredAt: oldPageView });
     await record({ userId: USER, kind: 'sign-in', occurredAt: middling });
@@ -295,7 +302,7 @@ describe('sweepActivity', () => {
     const removed = await createSweepActivity(deps)();
 
     expect(removed).toBe(2);
-    // The sign-in from just past the page-view window survives; that is the whole
+    // The sign-in from just past the short window survives; that is the whole
     // reason there are two cut-offs.
     expect(events.store.map((e) => e.kind).sort()).toEqual(['page-view', 'sign-in']);
     expect(events.store.some((e) => e.occurredAt.getTime() === middling.getTime())).toBe(true);

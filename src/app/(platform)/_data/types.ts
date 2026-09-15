@@ -74,16 +74,6 @@ export interface StakePosition {
   readonly unbonding: string;
 }
 
-export interface PriceAlert {
-  readonly id: string;
-  readonly symbol: string;
-  readonly direction: 'above' | 'below';
-  readonly target: number;
-  readonly createdAt: string;
-  readonly active: boolean;
-  readonly channel: 'push' | 'email' | 'both';
-}
-
 export interface RecurringPlan {
   readonly id: string;
   readonly symbol: string;

@@ -1,4 +1,5 @@
 import { requireUser } from '@/server/auth';
+import { getNotifications } from '@/server/notifications';
 import { getMySupportThread, support } from '@/server/support';
 
 import { AnnouncementBanner } from '../_components/announcement-banner';
@@ -42,9 +43,14 @@ export default async function PlatformLayout({
   // Null when no Firebase project is configured. The widget is then simply absent,
   // which is the same way a missing database degrades the rest of the platform.
   const configured = support() !== null;
-  const thread = configured
-    ? await getMySupportThread(user.id)
-    : { conversation: null, messages: [] };
+  // In parallel: the bell and the support thread are independent reads, and a
+  // failure in either degrades to an empty one rather than to an error page.
+  const [thread, feed] = await Promise.all([
+    configured
+      ? getMySupportThread(user.id)
+      : Promise.resolve({ conversation: null, messages: [] }),
+    getNotifications(user.id),
+  ]);
 
   return (
     <DashboardShell
@@ -52,6 +58,8 @@ export default async function PlatformLayout({
       initials={user.initials}
       email={user.email}
       emailVerified={user.emailVerified}
+      notifications={feed.items}
+      unread={feed.unread}
       // Both surfaces, because a customer on an app page should see a site-wide
       // notice as well as one written for signed-in people. The `in-app` surface
       // is what a notice uses when it is *only* meant for them.

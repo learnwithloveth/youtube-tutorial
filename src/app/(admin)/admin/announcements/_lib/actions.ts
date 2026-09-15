@@ -39,8 +39,8 @@ export async function composeAnnouncementAction(
 ): Promise<ComposerFormState> {
   const operator = await requireAdmin('/admin/announcements');
 
-  const module = announcements();
-  if (module === null) {
+  const board = announcements();
+  if (board === null) {
     return { status: 'error', message: 'Announcements are unavailable.' };
   }
 
@@ -48,7 +48,7 @@ export async function composeAnnouncementAction(
   const publishAt = parseInstant(formData.get('publishAt'));
   const expiresAt = parseInstant(formData.get('expiresAt'));
 
-  const result = await module.compose({
+  const result = await board.compose({
     title: String(formData.get('title') ?? ''),
     body: String(formData.get('body') ?? ''),
     surface: String(formData.get('surface') ?? ''),
@@ -90,8 +90,8 @@ export async function moveAnnouncementAction(
 ): Promise<MoveFormState> {
   const operator = await requireAdmin('/admin/announcements');
 
-  const module = announcements();
-  if (module === null) {
+  const board = announcements();
+  if (board === null) {
     return { status: 'error', message: 'Announcements are unavailable.', id: null };
   }
 
@@ -107,7 +107,7 @@ export async function moveAnnouncementAction(
     return { status: 'error', message: 'That request was not understood.', id };
   }
 
-  const result = await module.move({
+  const result = await board.move({
     id,
     action,
     publishAt: parseInstant(formData.get('publishAt')),

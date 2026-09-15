@@ -50,10 +50,10 @@ const UNAVAILABLE: AnnouncementConsoleDto = {
 };
 
 export const getAnnouncementConsole = cache(async (): Promise<AnnouncementConsoleDto> => {
-  const module = announcements();
-  if (module === null) return UNAVAILABLE;
+  const context = announcements();
+  if (context === null) return UNAVAILABLE;
 
-  const board = await getAnnouncementBoard(module.dependencies);
+  const board = await getAnnouncementBoard(context.dependencies);
   const ids = [...new Set(board.items.map((item) => item.authorId))];
 
   return { ...board, authors: await describeAuthors(ids), unavailable: false };
@@ -69,9 +69,9 @@ export const getAnnouncementConsole = cache(async (): Promise<AnnouncementConsol
  */
 export const getSurfaceAnnouncements = cache(
   async (surface: AnnouncementSurface): Promise<readonly AnnouncementDto[]> => {
-    const module = announcements();
-    if (module === null) return [];
-    return getLiveAnnouncements(module.dependencies, surface);
+    const context = announcements();
+    if (context === null) return [];
+    return getLiveAnnouncements(context.dependencies, surface);
   },
 );
 

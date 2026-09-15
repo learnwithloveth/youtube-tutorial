@@ -53,6 +53,7 @@ function severityOf(kind: ActivityEventDto['kind']): 'critical' | 'notice' | 'in
     case 'withdrawal-requested':
     case 'withdrawal-rejected':
     case 'deposit-recorded':
+    case 'deposit-rejected':
     case 'password-reset':
       return 'notice';
     default:
@@ -72,12 +73,14 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'withdrawal-approved': 'Withdrawal approved',
   'withdrawal-rejected': 'Withdrawal rejected',
   'deposit-recorded': 'Deposit credited',
+  'deposit-rejected': 'Deposit refused',
   'admin-suspended': 'Console access suspended',
   'admin-reinstated': 'Console access restored',
   'receipt-sent': 'Receipt emailed',
   'verification-submitted': 'Submitted identity documents',
   'verification-approved': 'Identity verified',
   'verification-rejected': 'Identity verification refused',
+  'price-alert-triggered': 'Price alert fired',
 };
 
 export default async function AuditPage() {

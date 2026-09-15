@@ -1,4 +1,4 @@
-import { PAGE_VIEW_RETENTION_MS, SECURITY_RETENTION_MS } from '../../domain/event';
+import { EPHEMERAL_KINDS, SECURITY_RETENTION_MS, SHORT_RETENTION_MS } from '../../domain/event';
 import type { ActivityDependencies } from '../ports';
 
 /**
@@ -18,7 +18,8 @@ export function createSweepActivity(deps: ActivityDependencies) {
 
     return deps.events.deleteExpired(
       {
-        pageViews: new Date(now - PAGE_VIEW_RETENTION_MS),
+        ephemeralKinds: EPHEMERAL_KINDS,
+        ephemeral: new Date(now - SHORT_RETENTION_MS),
         security: new Date(now - SECURITY_RETENTION_MS),
       },
       limit,

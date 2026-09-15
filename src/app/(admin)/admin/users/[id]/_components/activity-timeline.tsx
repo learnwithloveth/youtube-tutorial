@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   ShieldOff,
   IdCard,
+  BellRing,
 } from 'lucide-react';
 
 import type { ActivityEventDto, ActivityKind, EventLocation } from '@/modules/activity';
@@ -50,6 +51,7 @@ const KIND_META: Record<
   'withdrawal-approved': { label: 'Withdrawal approved', icon: BadgeCheck, tone: 'up' },
   'withdrawal-rejected': { label: 'Withdrawal rejected', icon: Ban, tone: 'warn' },
   'deposit-recorded': { label: 'Deposit credited', icon: ArrowDownToLine, tone: 'brand' },
+  'deposit-rejected': { label: 'Deposit refused', icon: ArrowDownToLine, tone: 'warn' },
   // Passive, because that is how they are recorded — against the account it
   // happened to, with the operator who did it in the detail line.
   'admin-suspended': { label: 'Console access suspended', icon: ShieldOff, tone: 'warn' },
@@ -58,6 +60,7 @@ const KIND_META: Record<
   'verification-submitted': { label: 'Submitted identity documents', icon: IdCard, tone: 'neutral' },
   'verification-approved': { label: 'Identity verified', icon: IdCard, tone: 'up' },
   'verification-rejected': { label: 'Identity verification refused', icon: IdCard, tone: 'warn' },
+  'price-alert-triggered': { label: 'Price alert fired', icon: BellRing, tone: 'neutral' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {

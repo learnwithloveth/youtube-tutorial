@@ -54,6 +54,16 @@ export type ActivityKind =
   | 'withdrawal-rejected'
   | 'deposit-recorded'
   /*
+   * A deposit claim an operator refused.
+   *
+   * It existed only as `withdrawal-rejected` before, with the detail line
+   * carrying the word "deposit" to correct it — so the audit log and the
+   * customer's bell both announced a withdrawal that never happened. The
+   * detail is not the place to fix a wrong kind: it is not indexed, not
+   * filtered on, and not what a reader sees first.
+   */
+  | 'deposit-rejected'
+  /*
    * Console access, withdrawn or restored.
    *
    * Written against the account it happened *to*, not the operator who did it, and
@@ -73,7 +83,19 @@ export type ActivityKind =
      happened to this account", and the operator is in the detail. */
   | 'verification-submitted'
   | 'verification-approved'
-  | 'verification-rejected';
+  | 'verification-rejected'
+  /*
+   * A price alert the customer set was satisfied.
+   *
+   * The one kind here that is neither security nor money — it is a
+   * notification, and it lives in this table because the customer's feed is a
+   * view over it and a second table would mean two writes to keep in step.
+   *
+   * Kept out of `SECURITY_KINDS` for the reason `page-view` is: an audit log
+   * that fills with price alerts is one nobody reads, and the thing an audit is
+   * opened for is a rounding error next to them.
+   */
+  | 'price-alert-triggered';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -87,6 +109,7 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'withdrawal-approved',
   'withdrawal-rejected',
   'deposit-recorded',
+  'deposit-rejected',
   'admin-suspended',
   'admin-reinstated',
   'receipt-sent',
@@ -95,8 +118,18 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'verification-rejected',
 ];
 
+/**
+ * Kinds that are neither security nor money, and are not kept for a year.
+ *
+ * A page view is a browsing history. A fired price alert is a notification — the
+ * customer read it, or did not, and a year later it is neither evidence nor use.
+ * The list is explicit because the alternative, "everything except `page-view`",
+ * silently gave the one-year window to the first kind added that did not want it.
+ */
+export const EPHEMERAL_KINDS: readonly ActivityKind[] = ['page-view', 'price-alert-triggered'];
+
 export function isSecurityKind(kind: ActivityKind): boolean {
-  return kind !== 'page-view';
+  return !EPHEMERAL_KINDS.includes(kind);
 }
 
 /**
@@ -109,14 +142,17 @@ export function isSecurityKind(kind: ActivityKind): boolean {
  * immediately and is the more intrusive of the two to hold — it is a browsing
  * history.
  *
- * So security events are kept for a year and page views for thirty days. Both are
+ * So security events are kept for a year and the rest for thirty days. Both are
  * swept; neither is kept "just in case", which is how a log becomes a liability.
  */
-export const PAGE_VIEW_RETENTION_MS = 30 * 24 * 60 * 60_000;
+export const SHORT_RETENTION_MS = 30 * 24 * 60 * 60_000;
 export const SECURITY_RETENTION_MS = 365 * 24 * 60 * 60_000;
 
+/** @deprecated The short window is no longer only page views. Use `SHORT_RETENTION_MS`. */
+export const PAGE_VIEW_RETENTION_MS = SHORT_RETENTION_MS;
+
 export function retentionMsFor(kind: ActivityKind): number {
-  return kind === 'page-view' ? PAGE_VIEW_RETENTION_MS : SECURITY_RETENTION_MS;
+  return isSecurityKind(kind) ? SECURITY_RETENTION_MS : SHORT_RETENTION_MS;
 }
 
 /**

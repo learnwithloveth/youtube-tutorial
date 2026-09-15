@@ -2,7 +2,7 @@ import { ASSETS } from '../../_console/data/assets';
 import { cycle, hashSeed, pick, seededRandom } from '../../_console/data/simulation';
 import { NOW } from '../../_console/data/series';
 import type {
-  AdminMember, AdminUser, Announcement, Approval, AuditEntry, FeatureFlag, Incident,
+  AdminMember, AdminUser, Approval, AuditEntry, FeatureFlag, Incident,
   Listing, Payout, Risk, SupportMessage, Ticket, TreasuryWallet, Validator,
 } from './types';
 
@@ -279,13 +279,6 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
   { id: 'f3', key: 'kyc.instant_reverify', description: 'Skip re-verification when a document is under 90 days old.', owner: 'Compliance', rollout: 10, enabled: true },
   { id: 'f4', key: 'wallet.mpc_recovery_v3', description: 'Third recovery shard assigned to a trusted contact.', owner: 'Wallet', rollout: 0, enabled: false },
   { id: 'f5', key: 'support.ai_draft', description: 'Suggest a first-response draft to the agent.', owner: 'Support', rollout: 50, enabled: true },
-];
-
-export const ANNOUNCEMENTS: Announcement[] = [
-  { id: 'ann_1', title: 'Novex Earn is live', body: 'Stake 38 assets at up to 12.4% APY, with rewards paid daily.', surface: 'Banner', updatedAt: new Date(NOW - 3 * DAY).toISOString(), author: 'Marketing', state: 'published' },
-  { id: 'ann_2', title: 'Scheduled maintenance — staking distribution', body: 'Validator set rotation for three networks on 11 September, 02:00 UTC.', surface: 'Status page', updatedAt: new Date(NOW - DAY).toISOString(), author: 'Ops', state: 'scheduled' },
-  { id: 'ann_3', title: 'Fee schedule update', body: 'Prime tier maker rebate improves to −0.006% from 1 October.', surface: 'Email', updatedAt: new Date(NOW - 6 * HOUR).toISOString(), author: 'Marcus Vogel', state: 'draft' },
-  { id: 'ann_4', title: 'New market: ONDO-USD', body: 'Ondo lists on 4 September with a published risk review.', surface: 'In-app', updatedAt: new Date(NOW - 2 * DAY).toISOString(), author: 'Listings', state: 'published' },
 ];
 
 export const ADMIN_TEAM: AdminMember[] = [

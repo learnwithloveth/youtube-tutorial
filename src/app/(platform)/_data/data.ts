@@ -5,7 +5,7 @@ import { DAY, NOW, buildSeries } from '../../_console/data/series';
 // Re-exported so the dashboard pages keep importing them from one place.
 export { NOW, buildSeries };
 import type {
-  ApiKey, BookLevel, Candle, Fill, Holding, Order, PriceAlert, RecurringPlan,
+  ApiKey, BookLevel, Candle, Fill, Holding, Order, RecurringPlan,
   Referral, Session, StakePosition, Transaction, TxKind, TxStatus,
 } from './types';
 
@@ -194,14 +194,6 @@ export const STAKING_VALUE = STAKE_POSITIONS.reduce((s, p) => s + p.value, 0);
 export const STAKING_ANNUAL = STAKE_POSITIONS.reduce((s, p) => s + (p.value * p.apy) / 100, 0);
 export const REWARDS_SERIES = buildSeries('rewards', 90, STAKE_POSITIONS.reduce((s, p) => s + p.earnedToDate, 0), 1.9);
 
-export const PRICE_ALERTS: readonly PriceAlert[] = [
-  { id: 'al_1', symbol: 'BTC', direction: 'above', target: 100_000, createdAt: '2026-08-11', active: true, channel: 'both' },
-  { id: 'al_2', symbol: 'ETH', direction: 'below', target: 3_800, createdAt: '2026-08-19', active: true, channel: 'push' },
-  { id: 'al_3', symbol: 'SOL', direction: 'above', target: 260, createdAt: '2026-08-24', active: true, channel: 'push' },
-  { id: 'al_4', symbol: 'TAO', direction: 'below', target: 520, createdAt: '2026-07-30', active: false, channel: 'email' },
-  { id: 'al_5', symbol: 'LINK', direction: 'above', target: 32, createdAt: '2026-08-28', active: true, channel: 'both' },
-];
-
 export const RECURRING_PLANS: readonly RecurringPlan[] = [
   { id: 'rp_1', symbol: 'BTC', amount: 250, cadence: 'Weekly', nextRun: 'Friday, 06:00 UTC', invested: 18_420, averageCost: 61_204, active: true },
   { id: 'rp_2', symbol: 'ETH', amount: 500, cadence: 'Monthly', nextRun: '1 Oct, 06:00 UTC', invested: 12_000, averageCost: 2_910, active: true },
@@ -239,11 +231,3 @@ export const REFERRALS: readonly Referral[] = (() => {
 
 export const REFERRAL_EARNINGS = REFERRALS.reduce((s, r) => s + r.earned, 0);
 export const REFERRAL_VOLUME = REFERRALS.reduce((s, r) => s + r.volume, 0);
-
-export const NOTIFICATIONS = [
-  { id: 'n1', title: 'Limit order filled', body: '0.8 ETH sold at $4,480.00', time: '4m ago', unread: true, tone: 'up' as const },
-  { id: 'n2', title: 'Staking reward paid', body: '+$41.28 in SOL credited', time: '6h ago', unread: true, tone: 'brand' as const },
-  { id: 'n3', title: 'Price alert', body: 'LINK crossed above $26.00', time: '11h ago', unread: false, tone: 'accent' as const },
-  { id: 'n4', title: 'Deposit settled', body: '$5,000.00 via SEPA Instant', time: 'Yesterday', unread: false, tone: 'up' as const },
-  { id: 'n5', title: 'New device signed in', body: 'iPad Air · Lagos, NG', time: '2d ago', unread: false, tone: 'warn' as const },
-];
