@@ -1,5 +1,6 @@
 import type { UserId } from '@/shared/kernel/ids';
 
+import type { AuthProvider, ConnectedAccount } from '../domain/connected-account';
 import type { EmailAddress } from '../domain/email-address';
 import type { PasswordHash } from '../domain/password';
 import type { Session, SessionId } from '../domain/session';
@@ -124,6 +125,41 @@ export interface SessionRepository {
    */
   lastSeenFor(userIds: readonly UserId[], now: Date): Promise<Map<UserId, Date>>;
   deleteExpired(now: Date, limit: number): Promise<number>;
+
+  /**
+   * Revokes every session for a user except one.
+   *
+   * For a password change made by somebody who is signed in: the remedy is to
+   * throw out whoever else holds a session, and signing the person out of the
+   * device they are standing at achieves nothing except making them log in again.
+   * A reset from a mailed link still revokes everything — there, the one session
+   * that might be the attacker's is the one you cannot identify.
+   */
+  revokeOthersForUser(userId: UserId, keep: SessionId, now: Date): Promise<number>;
+}
+
+/**
+ * Links between local accounts and accounts at an identity provider.
+ *
+ * Separate from `UserRepository` because a link is not a credential this context
+ * owns — it is a statement that some other system vouches for this person, and the
+ * rules about it (which provider account, whose account, whether removing it would
+ * lock somebody out) are their own.
+ */
+export interface ConnectedAccountRepository {
+  find(provider: AuthProvider, providerAccountId: string): Promise<ConnectedAccount | null>;
+  /** Every provider linked to one account. Drives the security page. */
+  listForUser(userId: UserId): Promise<ConnectedAccount[]>;
+  /**
+   * Links, unless that provider account is already linked to somebody.
+   *
+   * Returns false rather than throwing on that conflict, decided by the primary
+   * key rather than by a prior read — two sign-ins racing the same Google account
+   * would both pass a check made beforehand.
+   */
+  link(account: ConnectedAccount): Promise<boolean>;
+  /** Returns false when there was nothing linked to remove. */
+  unlink(userId: UserId, provider: AuthProvider): Promise<boolean>;
 }
 
 export interface VerificationTokenRepository {
@@ -260,10 +296,46 @@ export interface DocumentStorage {
   get(documentId: string): Promise<{ bytes: Uint8Array; contentType: DocumentContentType } | null>;
 }
 
+/**
+ * What an identity provider tells us about the person who just signed in.
+ *
+ * Deliberately three fields. A use case decides whether to create an account, link
+ * to an existing one, or refuse — and none of those decisions gets better with a
+ * profile picture. `emailVerified` is the one that carries weight: it is what makes
+ * linking to an existing account safe, and a provider that says false must not be
+ * able to reach somebody else's account.
+ */
+export interface ProviderProfile {
+  readonly providerAccountId: string;
+  readonly email: string;
+  readonly emailVerified: boolean;
+}
+
+/**
+ * The browser round trip to an identity provider.
+ *
+ * A port because the exchange is network I/O against a third party, and because the
+ * use cases must be testable without one. The adapter holds the client secret and
+ * the endpoints; the application layer only ever sees a `ProviderProfile`.
+ */
+export interface OAuthClient {
+  /** Where to send the browser. The caller keeps `state`, `nonce` and the verifier. */
+  authorizationUrl(input: { state: string; nonce: string; codeChallenge: string }): string;
+  /**
+   * Trades the one-time code for the person's profile.
+   *
+   * @throws when the provider refuses the exchange, the nonce does not match, or
+   *         the response is not the shape the provider documents — all of which are
+   *         infrastructure faults or tampering, never an expected outcome.
+   */
+  exchange(input: { code: string; codeVerifier: string; nonce: string }): Promise<ProviderProfile>;
+}
+
 export interface IdentityDependencies {
   users: UserRepository;
   profiles: ProfileRepository;
   sessions: SessionRepository;
+  connectedAccounts: ConnectedAccountRepository;
   tokens: VerificationTokenRepository;
   verifications: VerificationRepository;
   documents: DocumentStorage;

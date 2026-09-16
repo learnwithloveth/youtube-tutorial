@@ -17,6 +17,7 @@ import { cn } from '@/shared/lib/cn';
 import { formatAge } from '@/shared/lib/format';
 
 import { markNotificationsReadAction } from '../app/alerts/_lib/actions';
+import { ResendVerification } from '../../_components/resend-verification';
 
 const TONE_DOT: Record<NotificationDto['tone'], string> = {
   up: 'bg-up',
@@ -255,13 +256,17 @@ export function TopBar({
                     Email confirmed
                   </p>
                 ) : (
-                  <Link
-                    href="/verify-email"
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-warn/40 px-2 py-0.5 text-2xs text-warn"
+                  // Sends the link, rather than linking to the page that consumes
+                  // one. As a link this went to `/verify-email` with no token,
+                  // which could only answer "That link did not work".
+                  <ResendVerification
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-warn/40 px-2 py-0.5 text-2xs text-warn hover:bg-warn/10"
+                    messageClassName="mt-1.5 block text-2xs"
+                    pendingLabel="Sending the link…"
                   >
                     <ShieldCheck className="size-3" />
                     Confirm your email
-                  </Link>
+                  </ResendVerification>
                 )}
               </div>
               <ul className="p-1.5">

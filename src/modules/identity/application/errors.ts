@@ -42,7 +42,14 @@ export type IdentityError =
   | { _tag: 'VerificationAlreadyApproved' }
   | { _tag: 'VerificationNotFound' }
   | { _tag: 'VerificationAlreadyDecided'; status: string }
-  | { _tag: 'VerificationReasonRequired' };
+  | { _tag: 'VerificationReasonRequired' }
+  | { _tag: 'CurrentPasswordIncorrect' }
+  | { _tag: 'PasswordUnchanged' }
+  | { _tag: 'ProviderEmailUnverified'; provider: string }
+  | { _tag: 'ProviderAccountLinkedElsewhere'; provider: string }
+  | { _tag: 'ProviderAlreadyConnected'; provider: string }
+  | { _tag: 'ProviderNotConnected'; provider: string }
+  | { _tag: 'LastSignInMethod'; provider: string };
 
 export const IdentityErrors = {
   verificationNameRequired: (): IdentityError => ({ _tag: 'VerificationNameRequired' }),
@@ -66,6 +73,25 @@ export const IdentityErrors = {
     status,
   }),
   verificationReasonRequired: (): IdentityError => ({ _tag: 'VerificationReasonRequired' }),
+  currentPasswordIncorrect: (): IdentityError => ({ _tag: 'CurrentPasswordIncorrect' }),
+  passwordUnchanged: (): IdentityError => ({ _tag: 'PasswordUnchanged' }),
+  providerEmailUnverified: (provider: string): IdentityError => ({
+    _tag: 'ProviderEmailUnverified',
+    provider,
+  }),
+  providerAccountLinkedElsewhere: (provider: string): IdentityError => ({
+    _tag: 'ProviderAccountLinkedElsewhere',
+    provider,
+  }),
+  providerAlreadyConnected: (provider: string): IdentityError => ({
+    _tag: 'ProviderAlreadyConnected',
+    provider,
+  }),
+  providerNotConnected: (provider: string): IdentityError => ({
+    _tag: 'ProviderNotConnected',
+    provider,
+  }),
+  lastSignInMethod: (provider: string): IdentityError => ({ _tag: 'LastSignInMethod', provider }),
   emailMalformed: (): IdentityError => ({ _tag: 'EmailMalformed' }),
   emailAlreadyRegistered: (): IdentityError => ({ _tag: 'EmailAlreadyRegistered' }),
   passwordTooShort: (minimum: number): IdentityError => ({ _tag: 'PasswordTooShort', minimum }),
@@ -140,6 +166,23 @@ export function presentIdentityError(error: IdentityError): string {
       return 'Your session has ended. Please sign in again.';
     case 'StepUpRequired':
       return 'Confirm your password to continue.';
+    case 'CurrentPasswordIncorrect':
+      return 'That is not your current password.';
+    case 'PasswordUnchanged':
+      return 'That is already your password. Choose a different one.';
+    case 'ProviderEmailUnverified':
+      // Why the sign-in was refused rather than what to do about it, because the
+      // remedy is on the provider's side and telling somebody to "try again" here
+      // would send them round the same loop.
+      return `${error.provider} has not confirmed the address on that account, so it cannot be used to sign in.`;
+    case 'ProviderAccountLinkedElsewhere':
+      return `That ${error.provider} account is already connected to another Novex account.`;
+    case 'ProviderAlreadyConnected':
+      return `A ${error.provider} account is already connected. Disconnect it first.`;
+    case 'ProviderNotConnected':
+      return `No ${error.provider} account is connected.`;
+    case 'LastSignInMethod':
+      return `Set a password first. Disconnecting ${error.provider} now would leave no way to sign in.`;
     case 'RateLimited':
       return `Too many attempts. Try again in ${error.retryAfterSeconds} seconds.`;
     case 'VerificationTokenInvalid':
@@ -176,7 +219,9 @@ export function presentIdentityError(error: IdentityError): string {
     case 'VerificationDocumentRejected':
       return error.why;
     case 'VerificationAlreadyPending':
-      return 'You already have a submission waiting. We will email you when it is reviewed.';
+      // Not "we will email you": nothing sends mail about a decision. It reaches
+      // the customer's notifications and their Verification tab.
+      return 'You already have a submission waiting. You will be notified when it is reviewed.';
     case 'VerificationAlreadyApproved':
       return 'Your identity is already verified.';
     case 'VerificationNotFound':

@@ -30,38 +30,56 @@ export function AuthFooterLink({
   );
 }
 
-const PROVIDERS = [
-  {
-    name: 'Google',
-    path: 'M21.35 11.1H12v3.2h5.35c-.23 1.4-1.66 4.1-5.35 4.1-3.22 0-5.85-2.66-5.85-5.95S8.78 6.5 12 6.5c1.83 0 3.06.78 3.76 1.45l2.56-2.47C16.7 3.98 14.53 3 12 3 6.98 3 2.9 7.03 2.9 12s4.08 9 9.1 9c5.25 0 8.73-3.69 8.73-8.89 0-.6-.06-1.05-.15-1.5z',
-  },
-  {
-    name: 'Apple',
-    path: 'M17.05 12.53c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.71.71 2.87.69 1.19-.02 1.94-1.07 2.66-2.14.84-1.23 1.19-2.42 1.2-2.48-.02-.01-2.3-.88-2.3-3.51zM14.86 5.8c.6-.74 1.01-1.75.9-2.77-.87.04-1.94.59-2.57 1.32-.56.65-1.05 1.7-.92 2.7.98.08 1.98-.5 2.59-1.25z',
-  },
-];
+const GOOGLE_GLYPH =
+  'M21.35 11.1H12v3.2h5.35c-.23 1.4-1.66 4.1-5.35 4.1-3.22 0-5.85-2.66-5.85-5.95S8.78 6.5 12 6.5c1.83 0 3.06.78 3.76 1.45l2.56-2.47C16.7 3.98 14.53 3 12 3 6.98 3 2.9 7.03 2.9 12s4.08 9 9.1 9c5.25 0 8.73-3.69 8.73-8.89 0-.6-.06-1.05-.15-1.5z';
 
-export function SocialAuth({ verb = 'Continue' }: { verb?: string }) {
+/**
+ * Sign in with Google — a real one.
+ *
+ * ── An anchor, not a button, and not `next/link` ──────────────────────────────
+ * It leaves the application: the href is a route handler whose entire job is to
+ * redirect to Google with a state cookie attached. A `next/link` would attempt a
+ * client-side navigation to an API route, and a `<button>` would need JavaScript to
+ * do what an ordinary link already does.
+ *
+ * ── Apple is gone, and Google disappears when unconfigured ────────────────────
+ * Both buttons used to be here with no handler at all, so clicking either did
+ * nothing. Google now works; Apple is removed rather than left as a control that
+ * looks real and is not — the same reason the API keys tab and the liveness step
+ * went. When no Google credentials are configured this renders nothing, so a
+ * deployment without them shows a password form and no dead alternative.
+ */
+export function SocialAuth({
+  verb = 'Continue',
+  enabled,
+  next,
+}: {
+  verb?: string;
+  enabled: boolean;
+  /** Same-site path to land on afterwards; the route validates it again. */
+  next?: string | undefined;
+}) {
+  if (!enabled) return null;
+
+  const href = next
+    ? `/api/auth/google/start?next=${encodeURIComponent(next)}`
+    : '/api/auth/google/start';
+
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {PROVIDERS.map((provider) => (
-          <button
-            key={provider.name}
-            type="button"
-            className={cn(
-              'flex h-12 items-center justify-center gap-2.5 rounded-md border border-line bg-surface',
-              'text-sm font-medium text-fg backdrop-blur-md transition-all duration-300',
-              'hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface-hover',
-            )}
-          >
-            <svg viewBox="0 0 24 24" className="size-4.5" fill="currentColor" aria-hidden>
-              <path d={provider.path} />
-            </svg>
-            {verb} with {provider.name}
-          </button>
-        ))}
-      </div>
+      <a
+        href={href}
+        className={cn(
+          'flex h-12 items-center justify-center gap-2.5 rounded-md border border-line bg-surface',
+          'text-sm font-medium text-fg backdrop-blur-md transition-all duration-300',
+          'hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface-hover',
+        )}
+      >
+        <svg viewBox="0 0 24 24" className="size-4.5" fill="currentColor" aria-hidden>
+          <path d={GOOGLE_GLYPH} />
+        </svg>
+        {verb} with Google
+      </a>
       <div className="my-7 flex items-center gap-4">
         <span className="h-px flex-1 bg-line" />
         <span className="text-2xs uppercase tracking-[0.18em] text-fg-subtle">or</span>

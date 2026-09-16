@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Clock,
+  IdCard,
   MailWarning,
   TriangleAlert,
   Wallet2,
@@ -13,6 +14,7 @@ import {
 import { requireUser } from '@/server/auth';
 import { getStatementFor, getWalletFor } from '@/server/ledger';
 import { getMarkets } from '@/server/market-data';
+import { getVerificationStandingFor } from '@/server/verifications';
 import { formatDate, formatPercent } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
@@ -21,6 +23,7 @@ import { AssetMark } from '@/shared/ui/visuals/asset-mark';
 import { Sparkline } from '@/shared/ui/visuals/sparkline';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { ResendVerification } from '../../_components/resend-verification';
 import { PageHeader, Panel, PanelHeader } from '../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../_console/components/table';
 import { usd } from './_lib/format-usd';
@@ -57,10 +60,11 @@ export default async function OverviewPage() {
   // Independent reads. `Promise.all` is safe here because each of these already
   // catches its own failures and resolves to a degraded value — none of them can
   // reject, so there is no unattached rejection to leak.
-  const [wallet, statement, markets] = await Promise.all([
+  const [wallet, statement, markets, verification] = await Promise.all([
     getWalletFor(user.id as UserId),
     getStatementFor(user.id as UserId, { limit: 6 }),
     getMarkets({ limit: 5 }),
+    getVerificationStandingFor(user.id),
   ]);
 
   const marks = new Map(markets.map((m) => [m.symbol, m]));
@@ -82,8 +86,51 @@ export default async function OverviewPage() {
           <p className="min-w-0 flex-1 text-sm text-fg">
             Your email address has not been confirmed yet.
           </p>
-          <Link href="/verify-email" className="text-xs font-medium text-warn hover:underline">
+          {/* A button, not a link. This used to point at `/verify-email`, which
+              consumes a token rather than issuing one, so the click navigated away
+              and no mail was ever sent. */}
+          <ResendVerification
+            className="text-xs font-medium text-warn hover:underline"
+            messageClassName="text-xs"
+          >
             Resend the link
+          </ResendVerification>
+        </div>
+      ) : null}
+
+      {/* An invitation, not a gate. Identity verification is no longer part of
+          signing up, so this is how a new account finds it. Shown only when there
+          is something to start or fix: a case under review needs nothing from
+          them, and one that could not be read is not "unverified". */}
+      {verification.state === 'unverified' || verification.state === 'rejected' ? (
+        <div
+          role="status"
+          className={cn(
+            'mb-4 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3',
+            verification.state === 'rejected'
+              ? 'border-warn/35 bg-warn/8'
+              : 'border-line bg-surface',
+          )}
+        >
+          <IdCard
+            className={cn(
+              'size-4 shrink-0',
+              verification.state === 'rejected' ? 'text-warn' : 'text-brand-soft',
+            )}
+          />
+          <p className="min-w-0 flex-1 text-sm text-fg">
+            {verification.state === 'rejected'
+              ? 'Your identity verification was not accepted.'
+              : 'You have not verified your identity yet.'}
+          </p>
+          <Link
+            href="/app/settings?tab=verification"
+            className={cn(
+              'text-xs font-medium hover:underline',
+              verification.state === 'rejected' ? 'text-warn' : 'text-brand-soft',
+            )}
+          >
+            {verification.state === 'rejected' ? 'See why' : 'Verify when you are ready'}
           </Link>
         </div>
       ) : null}

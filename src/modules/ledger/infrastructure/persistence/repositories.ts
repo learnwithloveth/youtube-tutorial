@@ -4,7 +4,7 @@ import { and, asc, count, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle
 
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
-import type { Database } from '@/platform/db/client';
+import type { Database, Transaction } from '@/platform/db/client';
 import { Money } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
@@ -109,33 +109,30 @@ export class DrizzleLedgerRepository implements LedgerRepository {
    * second matches zero rows — which becomes a `ConcurrencyError` rather than an
    * account paid out twice.
    *
-   * ── On the Neon HTTP driver ────────────────────────────────────────────────
-   * `db.batch()` here maps to the driver's `transaction()`, which submits every
-   * statement in one request and runs it as a real Postgres transaction — so this
-   * is atomic, and a failure rolls the whole thing back.
+   * ── The guard is checked inside the transaction ─────────────────────────────
+   * An update that matches zero rows is not a database error, so nothing rolls back
+   * on its own. The `ConcurrencyError` is thrown from inside `db.transaction()`, and
+   * that is what takes the transfer, its entries and every other balance back out
+   * with it. The `db.batch()` this replaced could only inspect results after
+   * commit, so two deposits racing on the shared custody account would have left
+   * the loser's transfer recorded and custody's balance unmoved — a ledger that no
+   * longer sums to zero.
    *
-   * What it is *not* is interactive: the statements are decided before any result
-   * comes back, so there is no `SELECT … FOR UPDATE`, read the row, then branch.
-   * That is exactly why concurrency is handled with optimistic versions instead.
-   * The two choices are connected — a pessimistic lock is unavailable over this
-   * transport, so the guard has to be a conditional write whose failure the caller
-   * detects afterwards.
+   * The guard stays optimistic rather than `SELECT … FOR UPDATE`. The new balances
+   * were computed from versions the caller read before calling this, so the
+   * question is whether those reads are still current — which a conditional write
+   * answers without holding a lock while the caller does its work.
    */
   async post(transfer: Transfer, updated: readonly LedgerAccount[]): Promise<void> {
-    const balanceWrites = updated.map((account) => this.updateBalance(account));
-
-    // Drizzle types a batch as a non-empty tuple, which a spread cannot satisfy.
-    // The shape is correct by construction — two inserts followed by one update per
-    // account — so the assertion is about expressing that, not about evading it.
-    const writes = [
-      this.db.insert(transfers).values({
+    await this.db.transaction(async (tx) => {
+      await tx.insert(transfers).values({
         id: transfer.id,
         kind: transfer.kind,
         reference: transfer.reference,
         occurredAt: transfer.occurredAt,
-      }),
+      });
 
-      this.db.insert(entries).values(
+      await tx.insert(entries).values(
         transfer.entries.map((entry, position) => ({
           // Derived from the transfer so a retry of the same transfer cannot write
           // its entries twice — the primary key refuses the duplicate.
@@ -146,28 +143,21 @@ export class DrizzleLedgerRepository implements LedgerRepository {
           delta: entry.delta.toDecimalString(),
           occurredAt: transfer.occurredAt,
         })),
-      ),
+      );
 
-      ...balanceWrites,
-    ] as unknown as Parameters<Database['batch']>[0];
-
-    const results = await this.db.batch(writes);
-
-    // Every balance update returns the rows it touched; zero means the version had
-    // moved on. Checked after the batch rather than before, because "read the
-    // version, then write" is exactly the race the version exists to close.
-    const balanceResults = results.slice(2) as { id: string }[][];
-    balanceResults.forEach((rows, index) => {
-      if (rows.length === 0) {
-        const account = updated[index];
-        throw new ConcurrencyError('Account', account?.id ?? 'unknown');
+      // Zero rows means the version had moved on. Detected by the write itself
+      // rather than by reading first, because "read the version, then write" is
+      // exactly the race the version exists to close.
+      for (const account of updated) {
+        const rows = await this.updateBalance(tx, account);
+        if (rows.length === 0) throw new ConcurrencyError('Account', account.id);
       }
     });
   }
 
   async saveAccounts(updated: readonly LedgerAccount[]): Promise<void> {
     for (const account of updated) {
-      const rows = await this.updateBalance(account);
+      const rows = await this.updateBalance(this.db, account);
       if (rows.length === 0) throw new ConcurrencyError('Account', account.id);
     }
   }
@@ -229,9 +219,9 @@ export class DrizzleLedgerRepository implements LedgerRepository {
     return and(...clauses);
   }
 
-  private updateBalance(account: LedgerAccount) {
+  private updateBalance(executor: Database | Transaction, account: LedgerAccount) {
     const snapshot = account.snapshot();
-    return this.db
+    return executor
       .update(accounts)
       .set({
         balance: snapshot.balance.toDecimalString(),

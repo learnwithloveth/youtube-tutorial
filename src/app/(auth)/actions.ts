@@ -9,6 +9,7 @@ import { logger } from '@/platform/observability/logger';
 import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, SESSION_COOKIE } from '@/server/auth';
 import { describeRequest } from '@/server/request-context';
+import { sessionCookieOptions } from '@/server/session-cookie';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { AuthFormState } from './_lib/form-state';
@@ -28,23 +29,11 @@ import type { AuthFormState } from './_lib/form-state';
  */
 
 /**
- * Cookie attributes.
+ * Cookie attributes live in `@/server/session-cookie`.
  *
- * `httpOnly` keeps the session out of reach of any script on the page, which is
- * what limits the damage of an XSS bug to the current page rather than the account.
- * `sameSite: 'lax'` blocks the cookie on cross-site POSTs — the CSRF class — while
- * still allowing ordinary top-level navigation back into the site from a link.
- * `secure` is conditional only so that plain-HTTP localhost works in development.
+ * Shared with the Google callback, which signs somebody in the same way this file
+ * does. Two copies of those attributes is how one of them loses `httpOnly`.
  */
-function cookieOptions(expiresAt: Date) {
-  return {
-    httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    expires: expiresAt,
-  };
-}
 
 /** Request metadata, hashed before storage by the identity module. */
 async function requestContext(): Promise<{ userAgent: string | null; ipAddress: string | null }> {
@@ -116,15 +105,17 @@ export async function signUpAction(
   (await cookies()).set(
     SESSION_COOKIE,
     result.value.sealed,
-    cookieOptions(new Date(result.value.expiresAt)),
+    sessionCookieOptions(new Date(result.value.expiresAt)),
   );
 
   await recordAuthEvent('sign-up', result.value.userId);
 
-  // The design's onboarding continues into identity verification; that screen
-  // ends at the dashboard. Outside the try/return flow on purpose: `redirect`
-  // works by throwing, so it must not sit inside anything that catches.
-  redirect('/verify-identity');
+  // Straight into the application. Identity verification used to follow here with
+  // no way past it. The account holder now starts it from Settings → Verification
+  // whenever they choose, and the overview points them there. Outside the
+  // try/return flow on purpose: `redirect` works by throwing, so it must not sit
+  // inside anything that catches.
+  redirect(DEFAULT_SIGNED_IN_PATH);
 }
 
 export async function signInAction(
@@ -147,7 +138,7 @@ export async function signInAction(
   (await cookies()).set(
     SESSION_COOKIE,
     result.value.sealed,
-    cookieOptions(new Date(result.value.expiresAt)),
+    sessionCookieOptions(new Date(result.value.expiresAt)),
   );
 
   await recordAuthEvent('sign-in', result.value.userId);

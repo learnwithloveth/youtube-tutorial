@@ -1,12 +1,37 @@
 import 'server-only';
 
-import { getVerificationQueue, type IdentityModule } from '@/modules/identity/server';
-import type { VerificationQueueDto } from '@/modules/identity';
+import { cache } from 'react';
+
+import {
+  getVerificationQueue,
+  getVerificationStanding,
+  type IdentityModule,
+} from '@/modules/identity/server';
+import type { VerificationQueueDto, VerificationStandingDto } from '@/modules/identity';
+import { hasDatabase } from '@/platform/env';
 import { logger } from '@/platform/observability/logger';
 
 import { toUserId, type UserId } from '@/shared/kernel/ids';
 
 import { identity } from './auth';
+
+/**
+ * Where one customer stands, for their settings page and the overview prompt.
+ *
+ * Callers pass the id from their own `requireUser()`, never one from a request, so
+ * a customer only ever reads their own case.
+ *
+ * Checks for a database before building the module rather than letting
+ * `identity()` throw. The overview reads this alongside the wallet in a
+ * `Promise.all` on the understanding that none of those reads can reject, and
+ * this keeps that true.
+ */
+export const getVerificationStandingFor = cache(
+  async (userId: UserId): Promise<VerificationStandingDto> => {
+    if (!hasDatabase()) return { state: 'unavailable' };
+    return getVerificationStanding(identity().dependencies, userId);
+  },
+);
 
 /**
  * The console's read side for identity verification.

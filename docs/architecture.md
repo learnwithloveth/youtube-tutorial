@@ -667,10 +667,16 @@ it*, and remains reconcilable by summing. `version` makes the update optimistic:
 two withdrawals that both read version 7 produce two conditional writes at version
 7, and only one succeeds.
 
-That choice is connected to the transport. `db.batch()` on the Neon HTTP driver is
-a real Postgres transaction, but a **non-interactive** one — there is no
-`SELECT ... FOR UPDATE`, read, then branch. A pessimistic lock is unavailable, so
-the guard has to be a conditional write whose failure the caller detects afterwards.
+The guard is checked **inside** the transaction. A conditional write that matches
+zero rows is not a database error, so nothing rolls back by itself; throwing from
+within `db.transaction()` is what takes the transfer and its entries back out along
+with it. A check made after commit would leave the losing transfer on the books
+with one side's balance unmoved.
+
+It stays optimistic rather than `SELECT ... FOR UPDATE` because the new balance was
+computed from a read the caller made earlier. What needs checking is whether that
+read is still current, and a conditional write checks exactly that without holding
+a lock while the caller works.
 
 ### A withdrawal is a request, not a command
 

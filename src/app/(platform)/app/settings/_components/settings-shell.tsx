@@ -1,18 +1,24 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Bell, ShieldCheck, SlidersHorizontal, User } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, IdCard, ShieldCheck, SlidersHorizontal, User } from 'lucide-react';
 
-import type { CurrentUserDto } from '@/modules/identity';
+import type {
+  CurrentUserDto,
+  SignInMethodsDto,
+  VerificationStandingDto,
+} from '@/modules/identity';
 import type { DailyLimitDto } from '@/modules/ledger';
 import { usePush } from '@/shared/firebase/use-push';
 import { cn } from '@/shared/lib/cn';
-import { ButtonLink } from '@/shared/ui/primitives/button-link';
 
 import { PageHeader, Panel, PanelHeader } from '../../../../_console/components/page-header';
 import { usd } from '../../_lib/format-usd';
+import { IdentityVerification } from './identity-verification';
 import { PreciseLocationControl } from './precise-location-control';
 import { ProfileForm } from './profile-form';
+import { SignInMethods } from './sign-in-methods';
 
 /**
  * Settings.
@@ -32,10 +38,16 @@ import { ProfileForm } from './profile-form';
  * Precise location asks the browser and feeds the presence context. Notifications
  * registers this device with Cloud Messaging and removes it again. Both have a
  * visible effect somewhere else in the product, which is the bar for being here.
+ *
+ * ── Identity verification is started here ──────────────────────────────────────
+ * It used to be the last step of sign-up, with no way past it. The Verification
+ * tab is now where the account holder starts it, and where they see how their
+ * case stands, including a reviewer's reason for turning it down.
  */
 
 const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
+  { id: 'verification', label: 'Verification', icon: IdCard },
   { id: 'security', label: 'Security', icon: ShieldCheck },
   { id: 'limits', label: 'Limits', icon: SlidersHorizontal },
   { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -164,13 +176,35 @@ export function SettingsShell({
   user,
   limits,
   sessions,
+  verification,
+  signInMethods,
+  googleConfigured,
+  googleNotice,
+  initialTab,
 }: {
   user: CurrentUserDto;
   /** Null when the ledger could not be read. A missing limit is not a zero limit. */
   limits: DailyLimitDto | null;
   sessions: ReactNode;
+  verification: VerificationStandingDto;
+  /** Null when the read failed. A missing answer is not "no password". */
+  signInMethods: SignInMethodsDto | null;
+  /** Whether this deployment has Google credentials at all. */
+  googleConfigured: boolean;
+  /** The `?google=` outcome the OAuth callback redirected back with. */
+  googleNotice?: string | undefined;
+  /**
+   * The tab named by `?tab=`, so another page can link straight to one.
+   *
+   * Arrives unchecked and is matched against `TABS` here, because the page cannot
+   * do it: a value imported from a `'use client'` module is only a reference on the
+   * server. Anything unrecognised opens on Profile.
+   */
+  initialTab?: string | undefined;
 }) {
-  const [tab, setTab] = useState<TabId>('profile');
+  const [tab, setTab] = useState<TabId>(
+    () => TABS.find((item) => item.id === initialTab)?.id ?? 'profile',
+  );
 
   return (
     <>
@@ -208,8 +242,16 @@ export function SettingsShell({
             </Panel>
           ) : null}
 
+          {tab === 'verification' ? <IdentityVerification standing={verification} /> : null}
+
           {tab === 'security' ? (
             <>
+              <SignInMethods
+                methods={signInMethods}
+                googleConfigured={googleConfigured}
+                notice={googleNotice}
+              />
+
               <Panel>
                 <PanelHeader
                   title="Sign-in"
@@ -222,22 +264,26 @@ export function SettingsShell({
                   <PreciseLocationControl />
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-5">
-                  {/* A link, not a button: changing a password goes through the
-                      emailed-token flow that already exists, rather than a dialog
-                      that would need a second one. */}
-                  <ButtonLink href="/forgot-password" variant="outline" size="sm">
-                    Change password
-                  </ButtonLink>
-                </div>
-
                 {/* Passkeys and a hardware key were listed here as active. Neither
-                    exists: this application authenticates with a password and a
-                    sealed session cookie. Saying so is the honest version of a
-                    security page. */}
-                <p className="mt-4 text-xs leading-relaxed text-fg-subtle">
-                  Sign-in is by password. Passkeys and hardware keys are not supported
-                  yet, and this page will say so until they are.
+                    exists. The password half is no longer the whole story either:
+                    Google sign-in is real now, which is why the line names both and
+                    the panel above shows which this account uses.
+
+                    "Change password" used to be a link to the emailed-reset flow
+                    from here. It is a form in that panel now — somebody who is
+                    signed in and knows their password should not have to go and
+                    read their mail to change it. */}
+                <p className="mt-5 border-t border-line pt-5 text-xs leading-relaxed text-fg-subtle">
+                  Sign-in is by password or Google. Passkeys and hardware keys are not
+                  supported yet, and this page will say so until they are. Forgotten your
+                  password? Sign out and use the{' '}
+                  <Link
+                    href="/forgot-password"
+                    className="text-brand-soft underline-offset-4 hover:underline"
+                  >
+                    reset link
+                  </Link>
+                  .
                 </p>
               </Panel>
 

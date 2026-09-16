@@ -48,7 +48,15 @@ export type AuthenticationFailure =
 export interface UserProps {
   id: UserId;
   email: EmailAddress;
-  passwordHash: PasswordHash;
+  /**
+   * Null for an account that has only ever signed in through a provider.
+   *
+   * Not a placeholder hash of something unguessable, which is the usual shortcut:
+   * that account would report itself as having a password, "forgot password" would
+   * hand it one, and this context would have no way to tell the two kinds of
+   * account apart — which is exactly what the security page has to show.
+   */
+  passwordHash: PasswordHash | null;
   status: UserStatus;
   role: UserRole;
   emailVerifiedAt: Date | null;
@@ -84,6 +92,34 @@ export class User {
   }
 
   /**
+   * Registration through an identity provider, with no password.
+   *
+   * The address arrives already confirmed, because the provider confirmed it — that
+   * is the whole claim a "sign in with Google" carries, and the caller must refuse
+   * a profile whose address the provider has *not* verified before reaching here.
+   * Sending our own confirmation mail afterwards would ask somebody to prove
+   * something they have just proved.
+   */
+  static registerWithProvider(input: {
+    id: UserId;
+    email: EmailAddress;
+    now: Date;
+  }): User {
+    return new User({
+      id: input.id,
+      email: input.email,
+      passwordHash: null,
+      status: 'active',
+      role: 'customer',
+      emailVerifiedAt: input.now,
+      failedAttempts: 0,
+      lockedUntil: null,
+      createdAt: input.now,
+      version: 0,
+    });
+  }
+
+  /**
    * Reconstruction from storage.
    *
    * Separate from `register` on purpose: a row written under last month's rules must
@@ -100,8 +136,13 @@ export class User {
   get email(): EmailAddress {
     return this.props.email;
   }
-  get passwordHash(): PasswordHash {
+  get passwordHash(): PasswordHash | null {
     return this.props.passwordHash;
+  }
+
+  /** Whether this account can be signed into with a password at all. */
+  get hasPassword(): boolean {
+    return this.props.passwordHash !== null;
   }
   get status(): UserStatus {
     return this.props.status;

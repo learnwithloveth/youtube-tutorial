@@ -3,7 +3,30 @@ import 'server-only';
 import type { Database } from '@/platform/db/client';
 import { systemClock, type Clock } from '@/shared/kernel/clock';
 
-import type { AppUrls, EmailSender, IdentityDependencies } from './application/ports';
+import type {
+  AppUrls,
+  EmailSender,
+  IdentityDependencies,
+  OAuthClient,
+} from './application/ports';
+import {
+  createChangePassword,
+  type ChangePassword,
+} from './application/use-cases/change-password';
+import {
+  createConnectGoogle,
+  createDisconnectGoogle,
+  type ConnectGoogle,
+  type DisconnectGoogle,
+} from './application/use-cases/google-connection';
+import {
+  createSignInWithGoogle,
+  type SignInWithGoogle,
+} from './application/use-cases/sign-in-with-google';
+import {
+  GoogleOAuthClient,
+  type GoogleOAuthConfig,
+} from './infrastructure/oauth/google-client';
 import {
   createDescribeUsers,
   type DescribeUsers,
@@ -64,6 +87,7 @@ import {
   type SmtpConfig,
 } from './infrastructure/email/smtp-sender';
 import {
+  DrizzleConnectedAccountRepository,
   DrizzleSessionRepository,
   DrizzleProfileRepository,
   DrizzleUserRepository,
@@ -114,6 +138,27 @@ export interface IdentityModule {
   readonly listAdministrators: ListAdministrators;
   /** A user's live sessions, for the security page. */
   readonly listSessions: ListSessions;
+  /** The account holder replaces their password, or sets a first one. */
+  readonly changePassword: ChangePassword;
+  /**
+   * Sign-in through Google, from a profile the adapter has already obtained.
+   *
+   * Creates the account, or links to one with the same confirmed address, or signs
+   * in the account already linked — see the use case for why the middle one is the
+   * dangerous case.
+   */
+  readonly signInWithGoogle: SignInWithGoogle;
+  /** Connects Google to the signed-in account. */
+  readonly connectGoogle: ConnectGoogle;
+  /** Removes the link, unless it is the only way in. */
+  readonly disconnectGoogle: DisconnectGoogle;
+  /**
+   * The Google client, or null when no credentials are configured.
+   *
+   * Null is what the interface reads to decide whether the button exists at all: a
+   * "Continue with Google" that cannot complete is worse than none.
+   */
+  readonly google: OAuthClient | null;
   /** A customer submits an identity document for review. */
   readonly submitVerification: SubmitVerification;
   /** An operator approves or rejects one submission. Decided once. */
@@ -137,6 +182,8 @@ export interface RegisterIdentityOptions {
   appUrl: string;
   /** Omit to fall back to logging messages instead of sending them. */
   smtp?: SmtpConfig | undefined;
+  /** Omit to run without Google sign-in, which is a supported configuration. */
+  google?: GoogleOAuthConfig | undefined;
   clock?: Clock;
 }
 
@@ -159,6 +206,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     users: new DrizzleUserRepository(options.db),
     profiles: new DrizzleProfileRepository(options.db),
     sessions: new DrizzleSessionRepository(options.db),
+    connectedAccounts: new DrizzleConnectedAccountRepository(options.db),
     tokens: new DrizzleVerificationTokenRepository(options.db),
     verifications: new DrizzleVerificationRepository(options.db),
     documents: new PostgresDocumentStorage(options.db),
@@ -187,6 +235,11 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     listUsers: createListUsers(dependencies),
     listAdministrators: createListAdministrators(dependencies),
     listSessions: createListSessions(dependencies),
+    changePassword: createChangePassword(dependencies),
+    signInWithGoogle: createSignInWithGoogle(dependencies),
+    connectGoogle: createConnectGoogle(dependencies),
+    disconnectGoogle: createDisconnectGoogle(dependencies),
+    google: options.google ? new GoogleOAuthClient(options.google) : null,
     submitVerification: createSubmitVerification(dependencies),
     decideVerification: createDecideVerification(dependencies),
     cookieName: SESSION_COOKIE_NAME,

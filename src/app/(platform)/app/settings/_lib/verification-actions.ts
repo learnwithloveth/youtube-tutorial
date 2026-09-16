@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import { MAX_DOCUMENT_BYTES, presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
 import { recordActivity } from '@/server/activity';
@@ -12,6 +14,13 @@ import type { VerifyIdentityFormState } from './form-state';
 
 /**
  * A customer submits their identity document.
+ *
+ * ── Started from Settings, not from sign-up ───────────────────────────────────
+ * This used to be a sign-up step at `/verify-identity` with no way past it. Signing
+ * up now ends in the application, and the account holder starts this from the
+ * Verification tab whenever they choose. Nothing on an account waits on the
+ * outcome today; if a withdrawal ever does, that gate belongs on the withdrawal,
+ * not on sign-up.
  *
  * ── The action re-derives its own authority ───────────────────────────────────
  * A Server Action is a public endpoint. The page that rendered this form protects
@@ -31,7 +40,7 @@ export async function submitVerificationAction(
   _previous: VerifyIdentityFormState,
   formData: FormData,
 ): Promise<VerifyIdentityFormState> {
-  const user = await requireUser('/verify-identity');
+  const user = await requireUser('/app/settings?tab=verification');
 
   const document = formData.get('document');
   if (!(document instanceof File) || document.size === 0) {
@@ -86,8 +95,15 @@ export async function submitVerificationAction(
     verificationId: result.value.verificationId,
   });
 
+  // The tab re-renders as "under review", and the overview drops its prompt.
+  revalidatePath('/app/settings');
+  revalidatePath('/app');
+
   return {
     status: 'submitted',
-    message: 'Received. A reviewer will look at it and you will be emailed either way.',
+    // "You will be emailed either way" was false: nothing sends mail about a
+    // decision. The decision is written to the activity trail, and the bell shows
+    // it as "Identity verified" or "Identity verification refused".
+    message: 'Received. A reviewer will look at it and you will be notified either way.',
   };
 }

@@ -1,30 +1,25 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { fixedClock } from '@/shared/kernel/clock';
-import { toUserId, type UserId } from '@/shared/kernel/ids';
+import { toUserId } from '@/shared/kernel/ids';
 
 import { EmailAddress } from '../../domain/email-address';
-import { PasswordHash } from '../../domain/password';
-import type { Profile } from '../../domain/profile';
 import { Session, type SessionId } from '../../domain/session';
-import { User, type UserStatus } from '../../domain/user';
+import { User } from '../../domain/user';
+import { VerificationToken } from '../../domain/verification-token';
+import type { IdentityDependencies, PasswordHasher } from '../ports';
+import { FakeConnectedAccounts } from './fake-connected-accounts';
 import {
-  VerificationToken,
-  type VerificationPurpose,
-} from '../../domain/verification-token';
-import type {
-  AppUrls,
-  EmailSender,
-  IdentityDependencies,
-  OutboundEmail,
-  PasswordHasher,
-  ProfileRepository,
-  SessionRepository,
-  SessionSealer,
-  UserRepository,
-  VerificationTokenHasher,
-  VerificationTokenRepository,
-} from '../ports';
+  fakeSealer,
+  fakeUrls,
+  FakeHasher,
+  FakeProfiles,
+  FakeSessions,
+  FakeTokenHasher,
+  FakeTokens,
+  FakeUsers,
+  RecordingEmailSender,
+} from './fake-identity';
 import { createResetPassword } from '../use-cases/reset-password';
 import {
   createConfirmEmail,
@@ -43,201 +38,9 @@ import { FakeDocuments, FakeVerifications } from './fake-verifications';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const USER_ID = toUserId('11111111-1111-4111-8111-111111111111');
 
-/** Reversible stand-in for scrypt: fast, and lets tests assert on the result. */
-class FakeHasher implements PasswordHasher {
-  async hash(plaintext: string): Promise<PasswordHash> {
-    return PasswordHash.fromEncoded(`fake$${plaintext}`);
-  }
-  async verify(plaintext: string, hash: PasswordHash): Promise<boolean> {
-    return hash.encoded === `fake$${plaintext}`;
-  }
-  needsRehash(): boolean {
-    return false;
-  }
-}
-
-class FakeTokenHasher implements VerificationTokenHasher {
-  private counter = 0;
-  generate() {
-    const token = `token-${this.counter++}`;
-    return { token, tokenHash: this.hash(token) };
-  }
-  hash(token: string): string {
-    return `sha:${token}`;
-  }
-}
-
-class FakeUsers implements UserRepository {
-  readonly store = new Map<string, User>();
-  nextId(): UserId {
-    return USER_ID;
-  }
-  async findById(id: UserId) {
-    return this.store.get(id) ?? null;
-  }
-  async findByEmail(email: EmailAddress) {
-    return [...this.store.values()].find((user) => user.email.equals(email)) ?? null;
-  }
-  async findManyByIds(ids: readonly UserId[]) {
-    // Absent ids are simply missing from the result, as the port specifies — a
-    // deleted account is an ordinary outcome for a caller holding a stale list.
-    return ids.map((id) => this.store.get(id)).filter((user): user is User => user !== undefined);
-  }
-  private matching(query: { term?: string | undefined; status?: string | undefined }) {
-    const term = query.term?.trim().toLowerCase();
-    return [...this.store.values()].filter(
-      (user) =>
-        (!term || user.email.value.toLowerCase().includes(term) || user.id === query.term) &&
-        (!query.status || user.status === query.status),
-    );
-  }
-  async search(query: {
-    term?: string | undefined;
-    status?: UserStatus | undefined;
-    limit: number;
-    offset: number;
-  }) {
-    return this.matching(query)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(query.offset, query.offset + query.limit);
-  }
-  async countMatching(query: { term?: string | undefined; status?: UserStatus | undefined }) {
-    return this.matching(query).length;
-  }
-  async tallyByStatus() {
-    const counts = new Map<UserStatus, number>();
-    for (const user of this.store.values()) {
-      counts.set(user.status, (counts.get(user.status) ?? 0) + 1);
-    }
-    return [...counts.entries()].map(([status, total]) => ({ status, total }));
-  }
-  async save(user: User) {
-    this.store.set(user.id, user);
-  }
-  async insertIfEmailFree(user: User) {
-    if (await this.findByEmail(user.email)) return false;
-    this.store.set(user.id, user);
-    return true;
-  }
-}
-
-class FakeSessions implements SessionRepository {
-  readonly store = new Map<string, Session>();
-  revokedCalls = 0;
-  private counter = 0;
-  nextId(): SessionId {
-    return `session-${this.counter++}` as SessionId;
-  }
-  async findById(id: SessionId) {
-    return this.store.get(id) ?? null;
-  }
-  async save(session: Session) {
-    this.store.set(session.id, session);
-  }
-  async revokeAllForUser(userId: UserId, now: Date) {
-    this.revokedCalls += 1;
-    let count = 0;
-    for (const session of this.store.values()) {
-      if (session.userId === userId && session.revokedAt === null) {
-        session.revoke(now);
-        count += 1;
-      }
-    }
-    return count;
-  }
-  async listActiveForUser(userId: UserId, now: Date) {
-    return [...this.store.values()].filter(
-      (session) =>
-        session.userId === userId && session.revokedAt === null && session.expiresAt > now,
-    );
-  }
-  async lastSeenFor(userIds: readonly UserId[]) {
-    return new Map(
-      userIds.flatMap((id) => {
-        const seen = [...this.store.values()]
-          .filter((session) => session.userId === id && session.revokedAt === null)
-          .map((session) => session.lastSeenAt)
-          .sort((a, b) => b.getTime() - a.getTime())[0];
-        return seen ? ([[id, seen]] as [UserId, Date][]) : [];
-      }),
-    );
-  }
-
-  async deleteExpired() {
-    return 0;
-  }
-}
-
-class FakeTokens implements VerificationTokenRepository {
-  readonly store = new Map<string, VerificationToken>();
-  private counter = 0;
-  nextId(): string {
-    return `record-${this.counter++}`;
-  }
-  async save(token: VerificationToken) {
-    this.store.set(token.tokenHash, token);
-  }
-  async findByHash(tokenHash: string) {
-    return this.store.get(tokenHash) ?? null;
-  }
-  async consumeOutstanding(userId: UserId, purpose: VerificationPurpose, now: Date) {
-    let count = 0;
-    for (const token of this.store.values()) {
-      if (token.userId === userId && token.purpose === purpose && token.consumedAt === null) {
-        token.consume(now);
-        count += 1;
-      }
-    }
-    return count;
-  }
-  async deleteExpired() {
-    return 0;
-  }
-}
-
-class RecordingEmailSender implements EmailSender {
-  readonly sent: OutboundEmail[] = [];
-  async send(message: OutboundEmail) {
-    this.sent.push(message);
-  }
-}
-
-const urls: AppUrls = {
-  verifyEmail: (token) => `https://novex.test/verify-email?token=${token}`,
-  resetPassword: (token) => `https://novex.test/reset-password?token=${token}`,
-};
-
-const sealer: SessionSealer = {
-  async seal(id) {
-    return `sealed:${id}`;
-  },
-  async unseal(sealed) {
-    return sealed.startsWith('sealed:') ? ((sealed.slice(7) as SessionId) ?? null) : null;
-  },
-};
-
-/** Nobody in these tests sets a name; the port still has to be satisfiable. */
-class FakeProfiles implements ProfileRepository {
-  readonly store = new Map<UserId, Profile>();
-
-  async find(userId: UserId) {
-    return this.store.get(userId) ?? null;
-  }
-  async findMany(ids: readonly UserId[]) {
-    return new Map(
-      ids.flatMap((id) => {
-        const profile = this.store.get(id);
-        return profile ? ([[id, profile]] as [UserId, Profile][]) : [];
-      }),
-    );
-  }
-  async save(profile: Profile) {
-    this.store.set(profile.userId, profile);
-  }
-}
 
 function makeDeps(now = NOW) {
-  const users = new FakeUsers();
+  const users = new FakeUsers({ fixedId: USER_ID });
   const sessions = new FakeSessions();
   const tokens = new FakeTokens();
   const email = new RecordingEmailSender();
@@ -247,15 +50,16 @@ function makeDeps(now = NOW) {
     users,
     profiles: new FakeProfiles(),
     sessions,
+    connectedAccounts: new FakeConnectedAccounts(),
     tokens,
     verifications: new FakeVerifications(),
     documents: new FakeDocuments(),
     hasher: new FakeHasher(),
     tokenHasher,
-    sealer,
+    sealer: fakeSealer,
     digest: { hash: (value) => `d:${value}` },
     email,
-    urls,
+    urls: fakeUrls,
     clock: fixedClock(now),
   };
 
@@ -452,7 +256,7 @@ describe('resetPassword', () => {
     expect(result.ok).toBe(true);
     const stored = context.users.store.get(USER_ID);
     expect(
-      await context.deps.hasher.verify('a-much-better-passphrase', stored!.passwordHash),
+      await context.deps.hasher.verify('a-much-better-passphrase', stored!.passwordHash!),
     ).toBe(true);
   });
 
@@ -491,9 +295,9 @@ describe('resetPassword', () => {
 
     expect(second.ok).toBe(false);
     const stored = context.users.store.get(USER_ID);
-    expect(await context.deps.hasher.verify('a-much-better-passphrase', stored!.passwordHash)).toBe(
-      true,
-    );
+    expect(
+      await context.deps.hasher.verify('a-much-better-passphrase', stored!.passwordHash!),
+    ).toBe(true);
   });
 
   it('clears a lockout, so a locked-out user can recover', async () => {

@@ -4,14 +4,16 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 
-import type { CurrentUserDto, SessionSummaryDto } from '@/modules/identity';
+import type { CurrentUserDto, SessionSummaryDto, SignInMethodsDto } from '@/modules/identity';
 import {
+  getSignInMethods,
   registerIdentity,
   SESSION_COOKIE_NAME,
   type IdentityModule,
 } from '@/modules/identity/server';
+import type { UserId } from '@/shared/kernel/ids';
 import { requireDb } from '@/platform/db/client';
-import { env, sessionSecret, smtpConfig } from '@/platform/env';
+import { env, googleOAuthConfig, sessionSecret, smtpConfig } from '@/platform/env';
 import { logger } from '@/platform/observability/logger';
 
 /**
@@ -35,11 +37,13 @@ import { logger } from '@/platform/observability/logger';
  */
 export const identity = cache((): IdentityModule => {
   const smtp = smtpConfig();
+  const google = googleOAuthConfig();
   return registerIdentity({
     db: requireDb(),
     sessionSecret: sessionSecret(),
     appUrl: env().APP_URL,
     ...(smtp ? { smtp } : {}),
+    ...(google ? { google } : {}),
   });
 });
 
@@ -123,6 +127,18 @@ export const getSessions = cache(async (): Promise<SessionSummaryDto[]> => {
     return [];
   }
 });
+
+/**
+ * How one account can be signed in: password, provider, or both.
+ *
+ * Takes the id from the caller's own `requireUser()`. This answers a question about
+ * credentials, so it answers it for exactly one account and never for an id that
+ * arrived in a request.
+ */
+export const getSignInMethodsFor = cache(
+  async (userId: UserId): Promise<SignInMethodsDto> =>
+    getSignInMethods(identity().dependencies, userId),
+);
 
 /**
  * Ends every session for the signed-in user, including this one.

@@ -121,8 +121,9 @@ reason. → [docs/architecture.md §5](docs/architecture.md)
 | --- | --- | --- |
 | `DATABASE_URL` | for auth | Postgres. Absent → no prices and no sign-up; the rest still renders. |
 | `SESSION_SECRET` | in production | ≥32 chars; seals session cookies. Development falls back to a fixed value. |
-| `APP_URL` | no | Origin used to build links in outbound mail |
+| `APP_URL` | no | Origin for links in outbound mail **and** the OAuth redirect URI |
 | `SMTP_HOST` … `SMTP_FROM` | no | Mail transport. Absent → messages are logged, not sent. |
+| `GOOGLE_CLIENT_ID` / `_SECRET` | no | Google sign-in. Absent → the button is not rendered. Redirect URI is `APP_URL` + `/api/auth/google/callback`. |
 | `MARKET_DATA_REFRESH_TOKEN` | for refresh | Bearer token for `POST /api/market-data/refresh` |
 | `MARKET_DATA_FEED_URL` | no | Defaults to the CoinGecko public API |
 | `MARKET_DATA_FEED_API_KEY` | no | Raises the upstream rate limit |
@@ -150,9 +151,14 @@ serving, correctly marked delayed.
 - **Rate limiting.** Sign-in locks an account for 15 minutes after five failed
   attempts, but nothing limits attempts per IP across accounts. Needs a shared
   counter store; the `redisdata` volume is reserved for it.
-- **Two-factor and identity verification.** `/two-factor` and `/verify-identity`
-  are the approved screens with no backend — they navigate without checking
-  anything.
-- **Passkeys and social sign-in.** Present because the design has them; not
-  wired to WebAuthn or any provider.
+- **Two-factor.** `/two-factor` is the approved screen with no backend — it
+  navigates without checking anything.
+- **Apple sign-in and passkeys.** Removed and absent respectively, rather than
+  shown as controls that do nothing. Google sign-in *is* wired up — see
+  [`docs/adr/0005-google-sign-in.md`](docs/adr/0005-google-sign-in.md).
+- **Automated identity checks.** Identity verification is a person reviewing one
+  uploaded document. The customer starts it from Settings → Verification, and it
+  is not part of sign-up. No document-authenticity, face-match or sanctions
+  screening vendor is wired in.
+- **Passkeys.** Present in the design; not wired to WebAuthn.
 - **Telemetry.** Jaeger is in the compose file and nothing exports to it yet.

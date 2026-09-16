@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import { googleOAuthConfig } from '@/platform/env';
+
 import { SignupForm } from './_components/signup-form';
 
 /**
@@ -18,6 +20,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Rendered per request, for the reason the login page gives: the Google button's
+ * presence is read from the environment, and prerendering would freeze the answer
+ * at build time.
+ */
+export const dynamic = 'force-dynamic';
+
 export default function SignupPage() {
-  return <SignupForm />;
+  // With no credentials the button is not rendered, rather than rendered and dead.
+  return <SignupForm googleEnabled={googleOAuthConfig() !== null} />;
 }

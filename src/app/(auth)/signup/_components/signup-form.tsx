@@ -28,19 +28,24 @@ const COUNTRIES = [
   { value: 'other', label: 'Somewhere else' },
 ];
 
-export function SignupForm() {
+export function SignupForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [state, formAction] = useActionState(signUpAction, IDLE_FORM_STATE);
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
 
   return (
     <div>
+      {/* Was "Then two minutes to verify, and you can trade." Identity verification
+          is no longer a step after this form: sign-up ends in the application, and
+          verification is started from Settings whenever the account holder likes.
+          It was never two minutes, because a person reviews every document, and
+          there is no order ticket to trade with — see `/app/trade`. */}
       <AuthHeading
         title="Create your account"
-        body="About forty seconds. Then two minutes to verify, and you can trade."
+        body="About forty seconds. Identity verification can wait until you are ready."
       />
 
-      <SocialAuth verb="Sign up" />
+      <SocialAuth verb="Sign up" enabled={googleEnabled} />
 
       <form action={formAction} className="space-y-5">
         <FormFeedback state={state} />

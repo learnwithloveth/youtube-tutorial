@@ -105,6 +105,18 @@ const schema = z.object({
   NEXT_PUBLIC_FIREBASE_VAPID_KEY: z.string().min(1).optional(),
 
   /**
+   * Google sign-in. Both or neither.
+   *
+   * Absent is a supported configuration: the "Continue with Google" button is then
+   * not rendered at all, rather than rendered and dead. The redirect URI is not a
+   * variable — it is `APP_URL` + `/api/auth/google/callback`, because two places to
+   * state the same origin is how the callback ends up registered at one and sent to
+   * the other.
+   */
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+
+  /**
    * SMTP transport. Absent means messages are logged instead of sent, so a clone
    * with no `docker compose up` still completes a signup and prints the link.
    */
@@ -243,6 +255,29 @@ export function firebaseServiceAccount(): {
     projectId: account.data.project_id,
     clientEmail: account.data.client_email,
     privateKey: account.data.private_key.replace(/\\n/g, '\n'),
+  };
+}
+
+/**
+ * Google OAuth settings, or null when the client is not configured.
+ *
+ * Null is what makes the sign-in button disappear rather than fail. Both halves are
+ * required together: a client id with no secret cannot complete an exchange, and
+ * finding that out at the callback — after the person has already consented — is
+ * the worst possible moment.
+ */
+export function googleOAuthConfig(): {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+} | null {
+  const config = env();
+  if (!config.GOOGLE_CLIENT_ID || !config.GOOGLE_CLIENT_SECRET) return null;
+
+  return {
+    clientId: config.GOOGLE_CLIENT_ID,
+    clientSecret: config.GOOGLE_CLIENT_SECRET,
+    redirectUri: `${config.APP_URL.replace(/\/+$/, '')}/api/auth/google/callback`,
   };
 }
 

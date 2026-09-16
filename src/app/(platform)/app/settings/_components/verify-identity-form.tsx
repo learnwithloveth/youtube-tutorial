@@ -1,7 +1,7 @@
 'use client';
 
-import { useActionState, useRef, useState } from 'react';
-import { ArrowRight, Check, IdCard, Upload } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowRight, IdCard, Upload } from 'lucide-react';
 
 import { MAX_DOCUMENT_BYTES } from '@/modules/identity';
 import { cn } from '@/shared/lib/cn';
@@ -9,12 +9,16 @@ import { COUNTRIES } from '@/shared/lib/countries';
 import { Button } from '@/shared/ui/primitives/button';
 import { SelectField, TextField } from '@/shared/ui/primitives/field';
 
-import { AuthHeading } from '../../_components/auth-shared';
-import { submitVerificationAction } from '../_lib/actions';
-import { IDLE_VERIFY_IDENTITY } from '../_lib/form-state';
+import type { VerifyIdentityFormState } from '../_lib/form-state';
 
 /**
  * Identity verification, as a form that actually submits.
+ *
+ * ── Where it lives now ────────────────────────────────────────────────────────
+ * This was the last screen of sign-up, at `/verify-identity`, with no way past it.
+ * It moved into Settings, unchanged apart from its heading, which the panel around
+ * it now supplies. The action state is owned by that panel too, so a confirmation
+ * outlives this form once the tab re-renders as "under review".
  *
  * ── What this replaced ────────────────────────────────────────────────────────
  * A four-step wizard that stored nothing. "Choose file" was a button with no
@@ -41,45 +45,20 @@ const DOCUMENT_OPTIONS = [
 
 const MAX_MB = Math.floor(MAX_DOCUMENT_BYTES / (1024 * 1024));
 
-export function VerifyIdentityForm() {
-  const [state, submit, pending] = useActionState(
-    submitVerificationAction,
-    IDLE_VERIFY_IDENTITY,
-  );
+export function VerifyIdentityForm({
+  state,
+  submit,
+  pending,
+}: {
+  state: VerifyIdentityFormState;
+  submit: (formData: FormData) => void;
+  pending: boolean;
+}) {
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  if (state.status === 'submitted') {
-    return (
-      <div>
-        <AuthHeading
-          title="Submitted"
-          body="Your document is with a reviewer."
-        />
-        <div className="rounded-lg border border-up/35 bg-up/8 p-6">
-          <div className="flex items-center gap-3">
-            <Check className="size-5 shrink-0 text-up" />
-            <p className="text-sm font-medium text-fg">{state.message}</p>
-          </div>
-          <p className="mt-4 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
-            {/* No "most checks complete within two minutes". A person looks at
-                this, and telling somebody to wait two minutes for a decision that
-                takes a working day is how a support queue fills up. */}
-            A person reviews every submission, so this is not instant. You can close
-            this page — the decision arrives by email.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
-      <AuthHeading
-        title="Verify your identity"
-        body="Regulation requires it. Five fields and a photo of one document."
-      />
-
       <form action={submit} className="space-y-5">
         <TextField
           label="Full name, as written on the document"

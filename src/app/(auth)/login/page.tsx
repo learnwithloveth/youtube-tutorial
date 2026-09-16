@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
+import { googleOAuthConfig } from '@/platform/env';
+
 import { LoginForm } from './_components/login-form';
 
 /**
@@ -19,14 +21,24 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Rendered per request, because whether Google is configured is read from the
+ * environment — and a prerendered page would bake in whatever was set at *build*
+ * time. An image built without credentials and deployed with them would show no
+ * button, which is the kind of bug that looks like the feature was never shipped.
+ */
+export const dynamic = 'force-dynamic';
+
 export default function LoginPage() {
+  const googleEnabled = googleOAuthConfig() !== null;
+
   // `LoginForm` reads `next` and `reset` from the query string via
   // `useSearchParams`, which forces a client-side bailout. Without a boundary
   // that bailout propagates to the whole route and Next refuses to prerender it;
   // with one, the shell is still static and only the form waits.
   return (
     <Suspense fallback={<div className="min-h-[28rem]" aria-hidden />}>
-      <LoginForm />
+      <LoginForm googleEnabled={googleEnabled} />
     </Suspense>
   );
 }

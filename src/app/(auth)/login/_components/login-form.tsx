@@ -24,7 +24,26 @@ import { SubmitButton } from '../../_components/submit-button';
  * The passkey and social buttons are still design-only; they are marked `disabled`
  * rather than wired to a navigation that would imply they signed you in.
  */
-export function LoginForm() {
+/**
+ * What a failed trip to Google says on the way back.
+ *
+ * A fixed table keyed by a short code, rather than a message carried in the URL:
+ * whatever the query string holds is attacker input, and a page that renders it
+ * verbatim is a phishing surface on the one screen where that matters most.
+ */
+const SIGN_IN_ERRORS: Readonly<Record<string, string>> = {
+  'google-unavailable': 'Google sign-in is not configured on this deployment.',
+  'google-cancelled': 'Google sign-in was cancelled.',
+  'google-expired': 'That took too long. Try signing in again.',
+  'google-failed': 'Google sign-in did not complete. Try again.',
+  'google-unverified':
+    'Google has not confirmed the address on that account, so it cannot be used to sign in.',
+  'google-linked-elsewhere':
+    'That Google account is already connected to another Novex account.',
+  'account-disabled': 'This account is not available. Contact support.',
+};
+
+export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [state, formAction] = useActionState(signInAction, IDLE_FORM_STATE);
   const [visible, setVisible] = useState(false);
   const searchParams = useSearchParams();
@@ -34,6 +53,7 @@ export function LoginForm() {
   // input until something checks it.
   const next = searchParams.get('next') ?? '';
   const justReset = searchParams.get('reset') === '1';
+  const failure = SIGN_IN_ERRORS[searchParams.get('error') ?? ''];
 
   return (
     <div>
@@ -51,7 +71,16 @@ export function LoginForm() {
         </p>
       ) : null}
 
-      <SocialAuth verb="Log in" />
+      {failure === undefined ? null : (
+        <p
+          role="alert"
+          className="mb-6 rounded-md border border-[color-mix(in_oklab,var(--down)_32%,transparent)] bg-[color-mix(in_oklab,var(--down)_12%,transparent)] px-3.5 py-2.5 text-sm text-down"
+        >
+          {failure}
+        </p>
+      )}
+
+      <SocialAuth verb="Log in" enabled={googleEnabled} next={next || undefined} />
 
       <form action={formAction} className="space-y-5">
         <input type="hidden" name="next" value={next} />

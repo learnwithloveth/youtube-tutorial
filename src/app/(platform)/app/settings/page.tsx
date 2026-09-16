@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 
-import { getSessions, requireUser } from '@/server/auth';
+import { googleOAuthConfig } from '@/platform/env';
+import { getSessions, getSignInMethodsFor, requireUser } from '@/server/auth';
 import { getWalletFor } from '@/server/ledger';
+import { getVerificationStandingFor } from '@/server/verifications';
 
 import { ActiveSessions } from './_components/active-sessions';
 import { SettingsShell } from './_components/settings-shell';
@@ -21,6 +23,7 @@ import { SettingsShell } from './_components/settings-shell';
  * withdrawal is refused by. The session list is live rows from `identity.sessions`
  * with a working "sign out everywhere". Precise location feeds the presence
  * context, and the notification switch registers this device with Cloud Messaging.
+ * Verification reads the account's own identity submissions and files new ones.
  *
  * The API keys and trading-controls tabs are gone rather than mocked — see the
  * shell for what was removed and why.
@@ -33,13 +36,26 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  // Next 16: searchParams is a Promise. `?tab=verification` is how the overview's
+  // prompt opens this page on the right tab.
+  searchParams: Promise<{ tab?: string | string[]; google?: string | string[] }>;
+}) {
   const user = await requireUser('/app/settings');
+  const { tab, google } = await searchParams;
 
-  // Both reads are independent and neither is allowed to fail the page: a session
-  // list that cannot be read is an empty panel, and a wallet that cannot be read
-  // is a limit the page says it could not fetch — not a limit of zero.
-  const [sessions, wallet] = await Promise.allSettled([getSessions(), getWalletFor(user.id)]);
+  // The reads are independent and none is allowed to fail the page: a session list
+  // that cannot be read is an empty panel, a wallet that cannot be read is a limit
+  // the page says it could not fetch — not a limit of zero — and a verification
+  // that cannot be read says so rather than claiming the account is unverified.
+  const [sessions, wallet, verification, methods] = await Promise.allSettled([
+    getSessions(),
+    getWalletFor(user.id),
+    getVerificationStandingFor(user.id),
+    getSignInMethodsFor(user.id),
+  ]);
 
   return (
     <SettingsShell
@@ -50,6 +66,15 @@ export default async function SettingsPage() {
       sessions={
         <ActiveSessions sessions={sessions.status === 'fulfilled' ? sessions.value : []} />
       }
+      verification={
+        verification.status === 'fulfilled' ? verification.value : { state: 'unavailable' }
+      }
+      signInMethods={methods.status === 'fulfilled' ? methods.value : null}
+      googleConfigured={googleOAuthConfig() !== null}
+      googleNotice={typeof google === 'string' ? google : undefined}
+      // The callback lands here with `?google=`, so that outcome opens on the tab
+      // that shows it rather than on Profile.
+      initialTab={typeof tab === 'string' ? tab : google === undefined ? undefined : 'security'}
     />
   );
 }

@@ -4,11 +4,11 @@ import { err, ok, type Result } from '@/shared/kernel/result';
 
 import { EmailAddress } from '../../domain/email-address';
 import { validatePasswordPolicy } from '../../domain/password';
-import { Session } from '../../domain/session';
 import { User } from '../../domain/user';
 import { IdentityErrors, type IdentityError } from '../errors';
 import type { IdentityDependencies } from '../ports';
 import type { SessionDto } from '../dto';
+import { issueSession } from './issue-session';
 import { sendVerificationEmail } from './send-verification-email';
 
 export interface RegisterUserCommand {
@@ -74,20 +74,7 @@ export function createRegisterUser(deps: IdentityDependencies) {
     // ask for another link. `sendVerificationEmail` logs its own failures.
     await sendVerificationEmail(deps, user, now);
 
-    const session = Session.issue({
-      id: deps.sessions.nextId(),
-      userId: user.id,
-      now,
-      userAgentHash: command.userAgent ? deps.digest.hash(command.userAgent) : null,
-      ipHash: command.ipAddress ? deps.digest.hash(command.ipAddress) : null,
-    });
-    await deps.sessions.save(session);
-
-    return ok({
-      sealed: await deps.sealer.seal(session.id),
-      expiresAt: session.expiresAt.toISOString(),
-      userId: user.id,
-    });
+    return ok(await issueSession(deps, user, command, now));
   };
 }
 

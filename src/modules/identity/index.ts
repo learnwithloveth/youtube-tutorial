@@ -51,3 +51,12 @@ export type {
   VerificationQueueDto,
   VerificationSummaryDto,
 } from './application/queries/verification-queue';
+export type { VerificationStandingDto } from './application/queries/verification-standing';
+
+/* Sign-in methods — what the security page shows and offers. */
+export type { AuthProvider } from './domain/connected-account';
+export { PROVIDER_LABELS } from './domain/connected-account';
+export type {
+  ConnectedAccountDto,
+  SignInMethodsDto,
+} from './application/queries/sign-in-methods';

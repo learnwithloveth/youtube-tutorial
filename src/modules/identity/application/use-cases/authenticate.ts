@@ -4,11 +4,11 @@ import { err, ok, type Result } from '@/shared/kernel/result';
 
 import { EmailAddress } from '../../domain/email-address';
 import { type PasswordHash } from '../../domain/password';
-import { Session } from '../../domain/session';
 import { type User } from '../../domain/user';
 import { IdentityErrors, type IdentityError } from '../errors';
 import type { IdentityDependencies } from '../ports';
 import type { SessionDto } from '../dto';
+import { issueSession } from './issue-session';
 
 export interface AuthenticateCommand {
   email: string;
@@ -76,7 +76,17 @@ export function createAuthenticate(deps: IdentityDependencies) {
       );
     }
 
-    const matches = await deps.hasher.verify(command.password, user.passwordHash);
+    // An account created through Google has no password to compare against. It
+    // fails exactly as a wrong password does, and spends the same time doing it, so
+    // this does not become an oracle for which addresses sign in with Google. No
+    // failed attempt is recorded either: there is nothing here to guess.
+    const passwordHash = user.passwordHash;
+    if (passwordHash === null) {
+      await burnTime();
+      return err(IdentityErrors.invalidCredentials());
+    }
+
+    const matches = await deps.hasher.verify(command.password, passwordHash);
 
     if (!matches) {
       user.recordFailedAttempt(now);
@@ -87,29 +97,14 @@ export function createAuthenticate(deps: IdentityDependencies) {
     // Cost parameters are raised over time; upgrade the stored hash transparently
     // while we legitimately hold the plaintext. The alternative is a forced reset
     // for every user, or being stuck on the original parameters forever.
-    if (deps.hasher.needsRehash(user.passwordHash)) {
+    if (deps.hasher.needsRehash(passwordHash)) {
       user.replacePasswordHash(await deps.hasher.hash(command.password));
     }
 
     user.recordSuccessfulAuthentication();
     await deps.users.save(user);
 
-    const session = Session.issue({
-      id: deps.sessions.nextId(),
-      userId: user.id,
-      now,
-      // Hashed, not raw: enough to notice a change, not enough to fingerprint,
-      // and safe to keep under a long retention policy.
-      userAgentHash: command.userAgent ? deps.digest.hash(command.userAgent) : null,
-      ipHash: command.ipAddress ? deps.digest.hash(command.ipAddress) : null,
-    });
-    await deps.sessions.save(session);
-
-    return ok({
-      sealed: await deps.sealer.seal(session.id),
-      expiresAt: session.expiresAt.toISOString(),
-      userId: user.id,
-    });
+    return ok(await issueSession(deps, user, command, now));
   };
 
   /** Performs the same work a real verification would, and discards the result. */

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
@@ -14,13 +14,15 @@ import {
   VerificationToken,
   type VerificationPurpose,
 } from '../../domain/verification-token';
+import type { AuthProvider, ConnectedAccount } from '../../domain/connected-account';
 import type {
+  ConnectedAccountRepository,
   ProfileRepository,
   SessionRepository,
   UserRepository,
   VerificationTokenRepository,
 } from '../../application/ports';
-import { profiles, sessions, users, verificationTokens } from './schema';
+import { connectedAccounts, profiles, sessions, users, verificationTokens } from './schema';
 
 /** Raised when another writer changed the row first. */
 export class ConcurrencyError extends Error {
@@ -33,12 +35,14 @@ export class ConcurrencyError extends Error {
 
 type UserRow = typeof users.$inferSelect;
 type SessionRow = typeof sessions.$inferSelect;
+type ConnectedAccountRow = typeof connectedAccounts.$inferSelect;
 
 function userToDomain(row: UserRow): User {
   return User.rehydrate({
     id: row.id as UserId,
     email: EmailAddress.parseOrThrow(row.email),
-    passwordHash: PasswordHash.fromEncoded(row.passwordHash),
+    // Null for an account that signs in through a provider and has set no password.
+    passwordHash: row.passwordHash === null ? null : PasswordHash.fromEncoded(row.passwordHash),
     status: row.status,
     role: row.role,
     emailVerifiedAt: row.emailVerifiedAt,
@@ -47,6 +51,16 @@ function userToDomain(row: UserRow): User {
     createdAt: row.createdAt,
     version: row.version,
   });
+}
+
+function connectedAccountToDomain(row: ConnectedAccountRow): ConnectedAccount {
+  return {
+    provider: row.provider,
+    providerAccountId: row.providerAccountId,
+    userId: row.userId as UserId,
+    email: row.email,
+    linkedAt: row.linkedAt,
+  };
 }
 
 function sessionToDomain(row: SessionRow): Session {
@@ -152,9 +166,10 @@ function isUniqueViolation(error: unknown): boolean {
   const code = (error as { code?: unknown }).code;
   if (code === '23505') return true;
 
-  // The Neon HTTP driver nests the original under `cause` on some paths, and
-  // reports others only in the message. Checked in that order so a genuine crash
-  // is not mistaken for a taken handle by a coincidental substring.
+  // Drizzle wraps a failed query in `DrizzleQueryError` and keeps the driver's
+  // error, which carries the code, under `cause`. The message is the last resort,
+  // checked after both so a genuine crash is not mistaken for a taken handle by a
+  // coincidental substring.
   const cause = (error as { cause?: unknown }).cause;
   if (cause !== undefined && cause !== error && isUniqueViolation(cause)) return true;
 
@@ -222,7 +237,7 @@ export class DrizzleUserRepository implements UserRepository {
       .values({
         id: snapshot.id,
         email: snapshot.email.value,
-        passwordHash: snapshot.passwordHash.encoded,
+        passwordHash: snapshot.passwordHash?.encoded ?? null,
         status: snapshot.status,
         role: snapshot.role,
         emailVerifiedAt: snapshot.emailVerifiedAt,
@@ -278,7 +293,7 @@ export class DrizzleUserRepository implements UserRepository {
       .update(users)
       .set({
         email: snapshot.email.value,
-        passwordHash: snapshot.passwordHash.encoded,
+        passwordHash: snapshot.passwordHash?.encoded ?? null,
         status: snapshot.status,
         role: snapshot.role,
         emailVerifiedAt: snapshot.emailVerifiedAt,
@@ -291,6 +306,70 @@ export class DrizzleUserRepository implements UserRepository {
 
     // Zero rows means another writer won the race on this version.
     if (updated.length === 0) throw new ConcurrencyError('User', snapshot.id);
+  }
+}
+
+/**
+ * Links to accounts at an identity provider.
+ *
+ * `link` leans on the primary key the same way registration leans on the email
+ * index: two sign-ins racing the same Google account both pass any prior read, and
+ * only the key decides which one wins. A lost race comes back as `false`, not as a
+ * driver error string the caller has to pattern-match.
+ */
+export class DrizzleConnectedAccountRepository implements ConnectedAccountRepository {
+  constructor(private readonly db: Database) {}
+
+  async find(provider: AuthProvider, providerAccountId: string): Promise<ConnectedAccount | null> {
+    const rows = await this.db
+      .select()
+      .from(connectedAccounts)
+      .where(
+        and(
+          eq(connectedAccounts.provider, provider),
+          eq(connectedAccounts.providerAccountId, providerAccountId),
+        ),
+      )
+      .limit(1);
+
+    const row = rows[0];
+    return row === undefined ? null : connectedAccountToDomain(row);
+  }
+
+  async listForUser(userId: UserId): Promise<ConnectedAccount[]> {
+    const rows = await this.db
+      .select()
+      .from(connectedAccounts)
+      .where(eq(connectedAccounts.userId, userId));
+
+    return rows.map(connectedAccountToDomain);
+  }
+
+  async link(account: ConnectedAccount): Promise<boolean> {
+    const inserted = await this.db
+      .insert(connectedAccounts)
+      .values({
+        provider: account.provider,
+        providerAccountId: account.providerAccountId,
+        userId: account.userId,
+        email: account.email,
+        linkedAt: account.linkedAt,
+      })
+      .onConflictDoNothing()
+      .returning({ userId: connectedAccounts.userId });
+
+    return inserted.length > 0;
+  }
+
+  async unlink(userId: UserId, provider: AuthProvider): Promise<boolean> {
+    const removed = await this.db
+      .delete(connectedAccounts)
+      .where(
+        and(eq(connectedAccounts.userId, userId), eq(connectedAccounts.provider, provider)),
+      )
+      .returning({ userId: connectedAccounts.userId });
+
+    return removed.length > 0;
   }
 }
 
@@ -337,6 +416,21 @@ export class DrizzleSessionRepository implements SessionRepository {
       .update(sessions)
       .set({ revokedAt: now })
       .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+      .returning({ id: sessions.id });
+    return revoked.length;
+  }
+
+  async revokeOthersForUser(userId: UserId, keep: SessionId, now: Date): Promise<number> {
+    const revoked = await this.db
+      .update(sessions)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          isNull(sessions.revokedAt),
+          ne(sessions.id, keep),
+        ),
+      )
       .returning({ id: sessions.id });
     return revoked.length;
   }

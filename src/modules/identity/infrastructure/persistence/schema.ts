@@ -4,6 +4,7 @@ import {
   index,
   integer,
   pgSchema,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -49,8 +50,15 @@ export const users = identitySchema.table(
      */
     email: text('email').notNull(),
 
-    /** Self-describing scrypt output: algorithm, parameters, salt, key. */
-    passwordHash: text('password_hash').notNull(),
+    /**
+     * Self-describing scrypt output: algorithm, parameters, salt, key.
+     *
+     * Nullable since Google sign-in: an account created through a provider has no
+     * password until its owner sets one. It is not filled with a random hash to
+     * keep the column `not null` — see `UserProps.passwordHash` for why that
+     * shortcut costs more than it saves.
+     */
+    passwordHash: text('password_hash'),
 
     status: text('status', { enum: ['active', 'locked', 'disabled'] })
       .notNull()
@@ -114,6 +122,38 @@ export const profiles = identitySchema.table(
      * and that intent is easy to break with a later `default ''`.
      */
     uniqueIndex('profiles_handle_uq').on(table.handle),
+  ],
+);
+
+/**
+ * Accounts at an external identity provider, linked to a local account.
+ *
+ * ── The primary key is the provider's own key ─────────────────────────────────
+ * `(provider, provider_account_id)` as the primary key is what makes "one Google
+ * account signs into exactly one Novex account" a rule the database enforces. The
+ * second index enforces the other direction: one connected Google account per
+ * user, so the security page never has to explain two.
+ *
+ * The address is a copy of what the provider reported at link time, kept for
+ * display. It is deliberately not unique and never used to find a link — see
+ * `domain/connected-account.ts`.
+ */
+export const connectedAccounts = identitySchema.table(
+  'connected_accounts',
+  {
+    provider: text('provider', { enum: ['google'] }).notNull(),
+    providerAccountId: text('provider_account_id').notNull(),
+
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+
+    email: text('email').notNull(),
+    linkedAt: timestamp('linked_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.provider, table.providerAccountId] }),
+    uniqueIndex('connected_accounts_user_provider_uq').on(table.userId, table.provider),
   ],
 );
 
