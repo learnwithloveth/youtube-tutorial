@@ -2,7 +2,7 @@
 
 
 import { ActiveLink } from '@/shared/ui/primitives/active-link';
-import { ChevronsLeft, LifeBuoy, ShieldHalf } from 'lucide-react';
+import { ChevronsLeft, ShieldHalf } from 'lucide-react';
 import { DASH_NAV } from '../_data/navigation';
 import { Wordmark, LogoMark } from '@/shared/ui/visuals/logo';
 import { cn } from '@/shared/lib/cn';
@@ -15,6 +15,16 @@ interface SidebarProps {
   onNavigate?: () => void;
   /** Unread notifications, read on the server by the layout above. */
   unread?: number;
+  /**
+   * Whether this account may act in the console, decided on the server.
+   *
+   * Hiding the link is presentation, not protection: `/admin` is guarded by
+   * `requireAdmin`, which answers a customer with a 404 rather than a refusal, so
+   * as far as they are concerned the console is not a page. This stops the rail
+   * advertising a door they cannot open — and stops it telling them the door is
+   * there at all.
+   */
+  isAdmin?: boolean;
 }
 
 export function Sidebar({
@@ -23,6 +33,7 @@ export function Sidebar({
   variant = 'rail',
   onNavigate,
   unread = 0,
+  isAdmin = false,
 }: SidebarProps) {
   const isRail = variant === 'rail';
   const showLabels = !isRail || !collapsed;
@@ -123,31 +134,30 @@ export function Sidebar({
           with a progress bar fixed at 62%. There are no trading tiers on this
           platform and no volume to measure, so it promised a ladder that does not
           exist. Removed rather than reworded: the honest version of that card is
-          nothing. */}
-      <div className="shrink-0 border-t border-line p-3">
-        <ActiveLink
-          href="/admin"
-          onClick={onNavigate}
-          className={cn(
-            'mt-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg',
-            !showLabels && 'justify-center',
-          )}
-        >
-          <ShieldHalf className="size-4 shrink-0 text-warn" />
-          {showLabels ? 'Admin console' : <span className="sr-only">Admin console</span>}
-        </ActiveLink>
-        <ActiveLink
-          href="/contact"
-          onClick={onNavigate}
-          className={cn(
-            'mt-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg',
-            !showLabels && 'justify-center',
-          )}
-        >
-          <LifeBuoy className="size-4 shrink-0" />
-          {showLabels ? 'Help & support' : <span className="sr-only">Help and support</span>}
-        </ActiveLink>
-      </div>
+          nothing.
+
+          "Help & support" sat here too, pointing at the marketing contact page.
+          The support widget in the corner of every one of these screens opens a
+          real conversation with an agent, so the link sent people out of the
+          application to a form to ask for something they could already ask for.
+
+          The whole block is conditional now, rather than an empty bordered strip
+          for the customers who see nothing in it. */}
+      {isAdmin ? (
+        <div className="shrink-0 border-t border-line p-3">
+          <ActiveLink
+            href="/admin"
+            onClick={onNavigate}
+            className={cn(
+              'mt-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg',
+              !showLabels && 'justify-center',
+            )}
+          >
+            <ShieldHalf className="size-4 shrink-0 text-warn" />
+            {showLabels ? 'Admin console' : <span className="sr-only">Admin console</span>}
+          </ActiveLink>
+        </div>
+      ) : null}
     </div>
   );
 }

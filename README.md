@@ -127,6 +127,7 @@ reason. → [docs/architecture.md §5](docs/architecture.md)
 | `MARKET_DATA_REFRESH_TOKEN` | for refresh | Bearer token for `POST /api/market-data/refresh` |
 | `MARKET_DATA_FEED_URL` | no | Defaults to the CoinGecko public API |
 | `MARKET_DATA_FEED_API_KEY` | no | Raises the upstream rate limit |
+| `MARKET_DATA_REFRESH_INTERVAL_SECONDS` | no | Refreshes prices on a loop (min 30). For long-running servers; use a cron on serverless. |
 | `NEXT_PUBLIC_SITE_URL` | no | Canonical origin for metadata and the sitemap |
 
 Configuration is parsed once against a Zod schema at first access, so a missing

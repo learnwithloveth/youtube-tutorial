@@ -169,7 +169,12 @@ export function SupportWidget({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-line bg-bg-elev px-4 py-3 text-sm font-medium text-fg shadow-float transition-colors hover:border-brand-soft"
+        /*
+         * Clears the mobile tab bar, which is fixed to the bottom until `lg` and
+         * was covering this button on every phone and tablet width. The safe-area
+         * inset is added on top, for the home indicator on a modern iPhone.
+         */
+        className="fixed right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-40 inline-flex items-center gap-2 rounded-full border border-line bg-bg-elev px-4 py-3 text-sm font-medium text-fg shadow-float transition-colors hover:border-brand-soft lg:bottom-5"
       >
         <Headset className="size-4 text-brand-soft" />
         Support
@@ -183,7 +188,11 @@ export function SupportWidget({
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 flex h-[34rem] max-h-[calc(100dvh-2.5rem)] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl border border-line bg-bg-elev shadow-float">
+    <div
+      // Same clearance as the button, and a height that accounts for it — the
+      // panel was measured against the full viewport and ran under the bar.
+      className="fixed right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-[34rem] max-h-[calc(100dvh-9rem)] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl border border-line bg-bg-elev shadow-float lg:bottom-5 lg:max-h-[calc(100dvh-2.5rem)]"
+    >
       <header className="flex items-center gap-3 border-b border-line bg-surface px-3 py-2.5">
         <span
           aria-hidden

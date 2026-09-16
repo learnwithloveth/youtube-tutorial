@@ -33,6 +33,20 @@ const schema = z.object({
   MARKET_DATA_FEED_URL: z.url().default('https://api.coingecko.com/api/v3'),
   MARKET_DATA_FEED_API_KEY: z.string().min(1).optional(),
 
+  /**
+   * Seconds between scheduled ticker refreshes, on a server that stays up.
+   *
+   * Unset means no loop, which is correct for a serverless deployment: instances
+   * sleep, so a timer inside one is not a schedule and a real cron against
+   * `POST /api/market-data/refresh` is. Set it for `next dev`, a container or a
+   * VM, where the alternative is quotes that only move when somebody visits.
+   *
+   * Floored at 30: the upstream's free tier is rate-limited per address, and a
+   * tighter loop buys nothing — a quote is not considered stale until five
+   * minutes have passed.
+   */
+  MARKET_DATA_REFRESH_INTERVAL_SECONDS: z.coerce.number().int().min(30).optional(),
+
   NEXT_PUBLIC_SITE_URL: z.url().default('https://novex.io'),
 
   /**

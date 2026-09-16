@@ -211,7 +211,13 @@ export function SettingsShell({
       <PageHeader title="Settings" description="Account, security and limits." />
 
       <div className="grid gap-4 lg:grid-cols-[14rem_1fr]">
-        <nav aria-label="Settings sections" className="lg:sticky lg:top-24 lg:self-start">
+        {/* `min-w-0` so the tab strip scrolls inside itself on a narrow screen.
+            Without it this grid column grows to the width of all five tabs laid
+            out in a row, and the page scrolls sideways rather than the strip. */}
+        <nav
+          aria-label="Settings sections"
+          className="min-w-0 lg:sticky lg:top-24 lg:self-start"
+        >
           <ul className="mask-x flex gap-1 overflow-x-auto pb-1 lg:mask-none lg:flex-col lg:overflow-visible lg:pb-0">
             {TABS.map((item) => (
               <li key={item.id} className="shrink-0 lg:shrink">

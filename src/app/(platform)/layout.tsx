@@ -5,6 +5,7 @@ import { getNotifications } from '@/server/notifications';
 import { getMySupportThread, support } from '@/server/support';
 
 import { AnnouncementBanner } from '../_components/announcement-banner';
+import { QuoteRefresher } from '../_components/quote-refresher';
 
 import { DashboardShell } from './_components/dashboard-shell';
 import { SupportWidget } from './_components/support-widget';
@@ -60,6 +61,10 @@ export default async function PlatformLayout({
       initials={user.initials}
       email={user.email}
       emailVerified={user.emailVerified}
+      // Read from the session on the server. The console link is hidden for
+      // everyone else; `/admin` itself is guarded by `requireAdmin`, which is what
+      // actually keeps them out.
+      isAdmin={user.role === 'admin'}
       notifications={feed.items}
       unread={feed.unread}
       /*
@@ -83,6 +88,10 @@ export default async function PlatformLayout({
         </Suspense>
       }
     >
+      {/* Prices are on the overview, the wallet, the portfolio and the trade
+          screen, all of which render on the server. One refresher in the layout
+          keeps every one of them current without each page arranging its own. */}
+      <QuoteRefresher />
       {children}
       {configured ? (
         <SupportWidget

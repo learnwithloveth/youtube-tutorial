@@ -31,6 +31,7 @@ export function DashboardShell({
   initials,
   emailVerified,
   email,
+  isAdmin,
   notifications,
   unread,
   notice,
@@ -41,6 +42,8 @@ export function DashboardShell({
   initials: string;
   emailVerified: boolean;
   email: string;
+  /** Decided on the server; the rail shows the console link only to operators. */
+  isAdmin: boolean;
   /** The bell's contents, read on the server by the layout above. */
   notifications: readonly NotificationDto[];
   unread: number;
@@ -113,7 +116,7 @@ export function DashboardShell({
         )}
       >
         <aside className="sticky top-0 hidden h-dvh lg:block">
-          <Sidebar collapsed={collapsed} onToggle={toggle} unread={unread} />
+          <Sidebar collapsed={collapsed} onToggle={toggle} unread={unread} isAdmin={isAdmin} />
         </aside>
 
         <div className="flex min-w-0 flex-col">
@@ -127,7 +130,11 @@ export function DashboardShell({
             onOpenDrawer={() => setDrawer(true)}
           />
           {notice}
-          <main id="dashboard-main" className="flex-1 px-4 pb-24 pt-6 md:px-6 md:pb-10 md:pt-8">
+          {/* The bottom padding clears the mobile tab bar, which is `lg:hidden` —
+              so the padding has to survive until `lg` too. It used to drop to
+              `md:pb-10`, which buried the last control on the page on every tablet
+              width between 768px and 1023px. */}
+          <main id="dashboard-main" className="flex-1 px-4 pb-24 pt-6 md:px-6 md:pt-8 lg:pb-10">
             {children}
           </main>
         </div>
@@ -181,6 +188,7 @@ export function DashboardShell({
                 onToggle={toggle}
                 variant="drawer"
                 unread={unread}
+                isAdmin={isAdmin}
                 onNavigate={() => setDrawer(false)}
               />
             </motion.div>

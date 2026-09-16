@@ -172,7 +172,11 @@ export default async function WalletPage() {
           />
         </Panel>
 
-        <div className="space-y-4">
+        {/* `min-w-0` is load-bearing: the balances table below carries a
+            `min-width` so its columns stay readable, and without this the grid
+            column grows to fit it — which on a phone meant the whole page scrolled
+            sideways by 200px instead of the table scrolling inside its own box. */}
+        <div className="min-w-0 space-y-4">
           <Panel>
             <PanelHeader
               title="Daily limits"
