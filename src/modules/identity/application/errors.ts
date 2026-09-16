@@ -10,7 +10,7 @@
  * because it contains no secrets and no I/O.
  */
 
-import { MAX_DISPLAY_NAME } from '../domain/profile';
+import { MAX_DISPLAY_NAME, type ProfileProblem } from '../domain/profile';
 
 export type IdentityError =
   | { _tag: 'EmailMalformed' }
@@ -49,7 +49,9 @@ export type IdentityError =
   | { _tag: 'ProviderAccountLinkedElsewhere'; provider: string }
   | { _tag: 'ProviderAlreadyConnected'; provider: string }
   | { _tag: 'ProviderNotConnected'; provider: string }
-  | { _tag: 'LastSignInMethod'; provider: string };
+  | { _tag: 'LastSignInMethod'; provider: string }
+  | { _tag: 'CountryInvalid' }
+  | { _tag: 'PhoneInvalid' };
 
 export const IdentityErrors = {
   verificationNameRequired: (): IdentityError => ({ _tag: 'VerificationNameRequired' }),
@@ -92,6 +94,8 @@ export const IdentityErrors = {
     provider,
   }),
   lastSignInMethod: (provider: string): IdentityError => ({ _tag: 'LastSignInMethod', provider }),
+  countryInvalid: (): IdentityError => ({ _tag: 'CountryInvalid' }),
+  phoneInvalid: (): IdentityError => ({ _tag: 'PhoneInvalid' }),
   emailMalformed: (): IdentityError => ({ _tag: 'EmailMalformed' }),
   emailAlreadyRegistered: (): IdentityError => ({ _tag: 'EmailAlreadyRegistered' }),
   passwordTooShort: (minimum: number): IdentityError => ({ _tag: 'PasswordTooShort', minimum }),
@@ -138,6 +142,27 @@ export const IdentityErrors = {
 } as const;
 
 /**
+ * A `Profile.update` refusal, as an error the forms can render.
+ *
+ * One mapping, because two use cases set profile fields — registration and the
+ * settings form — and a second copy is how the same bad phone number comes back
+ * with two different messages depending on where it was typed.
+ */
+export function fromProfileProblem(problem: ProfileProblem): IdentityError {
+  switch (problem) {
+    case 'handle-invalid':
+      return IdentityErrors.handleInvalid();
+    case 'country-invalid':
+      return IdentityErrors.countryInvalid();
+    case 'phone-invalid':
+      return IdentityErrors.phoneInvalid();
+    case 'display-name-too-long':
+      return IdentityErrors.displayNameTooLong();
+  }
+}
+
+
+/**
  * User-facing copy.
  *
  * Every branch is written to leak nothing about whether an account exists, what the
@@ -181,6 +206,12 @@ export function presentIdentityError(error: IdentityError): string {
       return `A ${error.provider} account is already connected. Disconnect it first.`;
     case 'ProviderNotConnected':
       return `No ${error.provider} account is connected.`;
+    case 'CountryInvalid':
+      return 'Choose a country from the list.';
+    case 'PhoneInvalid':
+      // Says what the form wants rather than "invalid": a number without its
+      // dialling code is the mistake people actually make here.
+      return 'Enter your number in international form, starting with your dialling code — for example +41 79 123 45 67.';
     case 'LastSignInMethod':
       return `Set a password first. Disconnecting ${error.provider} now would leave no way to sign in.`;
     case 'RateLimited':

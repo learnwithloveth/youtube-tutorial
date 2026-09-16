@@ -107,6 +107,17 @@ export const profiles = identitySchema.table(
     /** Stored without the leading `@`, which is punctuation the interface adds. */
     handle: text('handle'),
 
+    /**
+     * Country of residence, as the account holder gave it. ISO-3166-1 alpha-2.
+     *
+     * Not the country a request came from — sign-up offers that as a default and
+     * this column keeps the answer, which is a different claim and the only one
+     * worth storing.
+     */
+    country: text('country'),
+    /** E.164, or null. Never a national number: see `PHONE_PATTERN`. */
+    phone: text('phone'),
+
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     /** Optimistic-concurrency token, matching every other table in this schema. */
     version: integer('version').notNull().default(0),

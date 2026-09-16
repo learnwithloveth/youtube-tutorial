@@ -5,11 +5,12 @@ import { BadgeCheck, TriangleAlert } from 'lucide-react';
 
 import type { CurrentUserDto } from '@/modules/identity';
 import { MAX_DISPLAY_NAME } from '@/modules/identity';
+import { COUNTRIES } from '@/shared/lib/countries';
 import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { Button } from '@/shared/ui/primitives/button';
-import { TextField } from '@/shared/ui/primitives/field';
+import { SelectField, TextField } from '@/shared/ui/primitives/field';
 
 import { updateProfileAction } from '../_lib/actions';
 import { IDLE_PROFILE_FORM } from '../_lib/form-state';
@@ -27,10 +28,15 @@ import { IDLE_PROFILE_FORM } from '../_lib/form-state';
  * Name and handle are real, stored, and shown everywhere this account appears.
  * Email and member-since are real and read-only.
  *
- * Three fields are gone rather than wired:
+ * Country of residence and phone are real too, as of the sign-up form that now
+ * asks for them and stores them on the profile. Phone was previously removed from
+ * this panel with the note that "nothing sends to it and nothing verifies it" —
+ * still true, and the reason the field says so rather than sitting there looking
+ * like a recovery method. What changed is that the value is now kept and shown
+ * back, instead of being collected and dropped.
  *
- *  - **Phone.** Nothing sends to it and nothing verifies it, so it would be a
- *    string that looks like a recovery method and is not.
+ * Two fields remain gone rather than wired:
+ *
  *  - **Base currency.** There are no FX rates in this application. The setting
  *    would change a label and not a number.
  *  - **Time zone.** Every timestamp renders in UTC on purpose — see
@@ -85,6 +91,28 @@ export function ProfileForm({ user }: { user: CurrentUserDto }) {
           defaultValue={user.handle ?? ''}
           placeholder="Optional"
           autoComplete="off"
+        />
+
+        {/* Both are asked for at sign-up, where the country is filled in from the
+            connection. This is where the answer can be corrected — and where an
+            account created through Google, which was never asked, can give one. */}
+        <SelectField
+          label="Country of residence"
+          name="country"
+          defaultValue={user.country ?? ''}
+          options={[
+            { value: '', label: 'Not set' },
+            ...COUNTRIES.map(([code, name]) => ({ value: code, label: name })),
+          ]}
+        />
+        <TextField
+          label="Phone number"
+          type="tel"
+          name="phone"
+          defaultValue={user.phone ?? ''}
+          placeholder="+41 79 123 45 67"
+          autoComplete="tel"
+          hint="International form. Nothing is sent to it — there is no SMS here yet."
         />
 
         <div className="sm:col-span-2">

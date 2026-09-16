@@ -35,16 +35,46 @@ export const MAX_DISPLAY_NAME = 80;
  */
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,24}$/;
 
+/**
+ * A number in E.164: `+`, country code, national number, 15 digits at the most.
+ *
+ * Only the international form is accepted, because a bare `079 123 4567` cannot be
+ * dialled or checked without knowing which country it belongs to — and the one
+ * thing this context must not do is *assume* which. The sign-up form fills the
+ * dialling code in from where the request came from, so the common path is already
+ * international by the time somebody types a digit.
+ */
+export const PHONE_PATTERN = /^\+[1-9]\d{6,14}$/;
+
+/** Space, brackets, dashes and dots are how people write numbers, not part of one. */
+export function normalisePhone(raw: string): string {
+  return raw.replace(/[\s()\-.]/g, '');
+}
+
 export interface ProfileSnapshot {
   readonly userId: UserId;
   readonly displayName: string | null;
   /** Stored without the leading `@`, which is punctuation the UI adds. */
   readonly handle: string | null;
+  /**
+   * Where the account holder says they live. ISO-3166-1 alpha-2, upper case.
+   *
+   * What they *told us*, which is not the same claim as the country a request
+   * appeared to come from. The sign-up form offers the second as a default for the
+   * first, and the value stored here is whatever was submitted.
+   */
+  readonly country: string | null;
+  /** E.164, or null. */
+  readonly phone: string | null;
   readonly updatedAt: Date;
   readonly version: number;
 }
 
-export type ProfileProblem = 'display-name-too-long' | 'handle-invalid';
+export type ProfileProblem =
+  | 'display-name-too-long'
+  | 'handle-invalid'
+  | 'country-invalid'
+  | 'phone-invalid';
 
 export class Profile {
   private constructor(private snap: ProfileSnapshot) {}
@@ -55,6 +85,8 @@ export class Profile {
       userId,
       displayName: null,
       handle: null,
+      country: null,
+      phone: null,
       updatedAt: at,
       version: 0,
     });
@@ -73,6 +105,12 @@ export class Profile {
   get handle(): string | null {
     return this.snap.handle;
   }
+  get country(): string | null {
+    return this.snap.country;
+  }
+  get phone(): string | null {
+    return this.snap.phone;
+  }
   get version(): number {
     return this.snap.version;
   }
@@ -89,7 +127,12 @@ export class Profile {
    * it rendered must not wipe the ones it did not.
    */
   update(
-    changes: { displayName?: string | undefined; handle?: string | undefined },
+    changes: {
+      displayName?: string | undefined;
+      handle?: string | undefined;
+      country?: string | undefined;
+      phone?: string | undefined;
+    },
     at: Date,
   ): ProfileProblem[] {
     const problems: ProfileProblem[] = [];
@@ -117,6 +160,31 @@ export class Profile {
         problems.push('handle-invalid');
       } else {
         next = { ...next, handle };
+      }
+    }
+
+    if (changes.country !== undefined) {
+      const country = changes.country.trim().toUpperCase();
+      if (country.length === 0) {
+        next = { ...next, country: null };
+      } else if (!/^[A-Z]{2}$/.test(country)) {
+        // Shape only, as `IdentityVerification` does: whether a code is one of the
+        // 249 in the list is reference data, and it is checked at the edge where
+        // that list already lives.
+        problems.push('country-invalid');
+      } else {
+        next = { ...next, country };
+      }
+    }
+
+    if (changes.phone !== undefined) {
+      const phone = normalisePhone(changes.phone);
+      if (phone.length === 0) {
+        next = { ...next, phone: null };
+      } else if (!PHONE_PATTERN.test(phone)) {
+        problems.push('phone-invalid');
+      } else {
+        next = { ...next, phone };
       }
     }
 

@@ -4,8 +4,9 @@ import { err, ok, type Result } from '@/shared/kernel/result';
 
 import { EmailAddress } from '../../domain/email-address';
 import { validatePasswordPolicy } from '../../domain/password';
+import { Profile } from '../../domain/profile';
 import { User } from '../../domain/user';
-import { IdentityErrors, type IdentityError } from '../errors';
+import { fromProfileProblem, IdentityErrors, type IdentityError } from '../errors';
 import type { IdentityDependencies } from '../ports';
 import type { SessionDto } from '../dto';
 import { issueSession } from './issue-session';
@@ -14,6 +15,16 @@ import { sendVerificationEmail } from './send-verification-email';
 export interface RegisterUserCommand {
   email: string;
   password: string;
+  /**
+   * Country of residence and phone number, as given on the form.
+   *
+   * Optional, and stored on the profile rather than on the credential — see
+   * `domain/profile.ts`. The sign-up form defaults the country to where the
+   * request appeared to come from, but what is kept is what was submitted: a
+   * default somebody accepted is still their answer, and a guess is not.
+   */
+  country?: string | undefined;
+  phone?: string | undefined;
   userAgent?: string | null;
   ipAddress?: string | null;
 }
@@ -55,9 +66,17 @@ export function createRegisterUser(deps: IdentityDependencies) {
     }
 
     const passwordHash = await deps.hasher.hash(command.password);
+    const id = deps.users.nextId();
+
+    // Built and checked before the account exists, so a phone number typed without
+    // its dialling code refuses the form rather than leaving a registered account
+    // whose owner never saw the error.
+    const profile = Profile.empty(id, now);
+    const [problem] = profile.update({ country: command.country, phone: command.phone }, now);
+    if (problem !== undefined) return err(fromProfileProblem(problem));
 
     const user = User.register({
-      id: deps.users.nextId(),
+      id,
       email: email.value,
       passwordHash,
       now,
@@ -67,6 +86,12 @@ export function createRegisterUser(deps: IdentityDependencies) {
     const inserted = await deps.users.insertIfEmailFree(user);
     if (!inserted) {
       return err(IdentityErrors.emailAlreadyRegistered());
+    }
+
+    // Only when there is something to store. Most accounts set neither, and the
+    // profile row is created on demand for exactly that reason.
+    if (profile.country !== null || profile.phone !== null) {
+      await deps.profiles.save(profile);
     }
 
     // Deliberately not awaited into the result: a mail transport that is down must

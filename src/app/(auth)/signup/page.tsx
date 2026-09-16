@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 
 import { googleOAuthConfig } from '@/platform/env';
+import { describeRequest } from '@/server/request-context';
+import { dialCodeFor } from '@/shared/lib/phone';
 
 import { SignupForm } from './_components/signup-form';
 
@@ -27,7 +29,28 @@ export const metadata: Metadata = {
  */
 export const dynamic = 'force-dynamic';
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  /*
+   * Where the request appears to come from, used only as a default.
+   *
+   * The same resolver the presence board and the audit trail use — CDN headers
+   * first, an address lookup behind them — so this costs a cache hit rather than a
+   * new round trip for anyone the site has already seen. It resolves to null with
+   * no database, behind a proxy that hides the address, or when every provider
+   * declines, and the form then opens on no country at all.
+   *
+   * It is a guess about a network address, never a statement about a person, which
+   * is why the field says where the value came from and stays editable.
+   */
+  const { location } = await describeRequest();
+  const detectedCountry = location?.country ?? null;
+
   // With no credentials the button is not rendered, rather than rendered and dead.
-  return <SignupForm googleEnabled={googleOAuthConfig() !== null} />;
+  return (
+    <SignupForm
+      googleEnabled={googleOAuthConfig() !== null}
+      detectedCountry={detectedCountry}
+      detectedDialCode={dialCodeFor(detectedCountry)}
+    />
+  );
 }

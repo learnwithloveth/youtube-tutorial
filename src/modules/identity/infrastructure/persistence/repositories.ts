@@ -133,6 +133,8 @@ export class DrizzleProfileRepository implements ProfileRepository {
           userId: snapshot.userId,
           displayName: snapshot.displayName,
           handle: snapshot.handle,
+          country: snapshot.country,
+          phone: snapshot.phone,
           updatedAt: snapshot.updatedAt,
           version: snapshot.version + 1,
         })
@@ -141,6 +143,8 @@ export class DrizzleProfileRepository implements ProfileRepository {
           set: {
             displayName: snapshot.displayName,
             handle: snapshot.handle,
+            country: snapshot.country,
+            phone: snapshot.phone,
             updatedAt: snapshot.updatedAt,
             version: snapshot.version + 1,
           },
@@ -182,6 +186,8 @@ function profileToDomain(row: typeof profiles.$inferSelect): Profile {
     userId: row.userId as UserId,
     displayName: row.displayName,
     handle: row.handle,
+    country: row.country,
+    phone: row.phone,
     updatedAt: row.updatedAt,
     version: row.version,
   });

@@ -10,6 +10,7 @@ import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, SESSION_COOKIE } from '@/server/auth';
 import { describeRequest } from '@/server/request-context';
 import { sessionCookieOptions } from '@/server/session-cookie';
+import { isCountryCode } from '@/shared/lib/countries';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { AuthFormState } from './_lib/form-state';
@@ -91,9 +92,20 @@ export async function signUpAction(
 ): Promise<AuthFormState> {
   const context = await requestContext();
 
+  const country = String(formData.get('country') ?? '').trim();
+  // Checked against the list here rather than in the domain, which validates the
+  // shape only: which codes exist is reference data, and it already lives here.
+  // The field used to be collected and dropped — eight options ending in
+  // "Somewhere else", read by nothing.
+  if (country !== '' && !isCountryCode(country)) {
+    return { error: 'Choose a country from the list.', message: null };
+  }
+
   const result = await identity().registerUser({
     email: String(formData.get('email') ?? ''),
     password: String(formData.get('password') ?? ''),
+    country,
+    phone: String(formData.get('phone') ?? '').trim(),
     ...context,
   });
 

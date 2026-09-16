@@ -29,6 +29,10 @@ export interface CurrentUserDto {
   displayName: string | null;
   /** Without the leading `@`, which the interface adds. */
   handle: string | null;
+  /** Country of residence as the account holder gave it. ISO-3166-1 alpha-2. */
+  country: string | null;
+  /** E.164, or null. The settings form is the only place it is shown. */
+  phone: string | null;
   /**
    * What to actually render, resolved once here.
    *
@@ -58,6 +62,8 @@ export function toCurrentUserDto(user: User, profile?: Profile | null): CurrentU
     createdAt: user.createdAt.toISOString(),
     displayName: profile?.displayName ?? null,
     handle: profile?.handle ?? null,
+    country: profile?.country ?? null,
+    phone: profile?.phone ?? null,
     name,
     initials: initialsFor(name),
   };

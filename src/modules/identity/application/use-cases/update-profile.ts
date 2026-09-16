@@ -31,6 +31,10 @@ export interface UpdateProfileCommand {
   readonly userId: UserId;
   readonly displayName?: string | undefined;
   readonly handle?: string | undefined;
+  /** ISO-3166-1 alpha-2, or an empty string to clear it. */
+  readonly country?: string | undefined;
+  /** E.164, or an empty string to clear it. */
+  readonly phone?: string | undefined;
 }
 
 export type UpdateProfile = (
@@ -48,18 +52,29 @@ export function createUpdateProfile(deps: IdentityDependencies): UpdateProfile {
     const profile = (await deps.profiles.find(command.userId)) ?? Profile.empty(command.userId, now);
 
     const problems = profile.update(
-      { displayName: command.displayName, handle: command.handle },
+      {
+        displayName: command.displayName,
+        handle: command.handle,
+        country: command.country,
+        phone: command.phone,
+      },
       now,
     );
 
-    if (problems.length > 0) {
+    const [first] = problems;
+    if (first !== undefined) {
       // The first one, because the form shows one message and the person fixes one
-      // thing at a time. Both are reachable again on the next submit.
-      return err(
-        problems[0] === 'handle-invalid'
-          ? IdentityErrors.handleInvalid()
-          : IdentityErrors.displayNameTooLong(),
-      );
+      // thing at a time. The rest are reachable again on the next submit.
+      switch (first) {
+        case 'handle-invalid':
+          return err(IdentityErrors.handleInvalid());
+        case 'country-invalid':
+          return err(IdentityErrors.countryInvalid());
+        case 'phone-invalid':
+          return err(IdentityErrors.phoneInvalid());
+        case 'display-name-too-long':
+          return err(IdentityErrors.displayNameTooLong());
+      }
     }
 
     try {

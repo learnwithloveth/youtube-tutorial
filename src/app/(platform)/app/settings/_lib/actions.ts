@@ -9,6 +9,7 @@ import { logger } from '@/platform/observability/logger';
 import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, revokeAllSessions, SESSION_COOKIE } from '@/server/auth';
 import { describeRequest } from '@/server/request-context';
+import { isCountryCode } from '@/shared/lib/countries';
 import type { UserId } from '@/shared/kernel/ids';
 
 import type { ProfileFormState } from './form-state';
@@ -73,11 +74,21 @@ export async function updateProfileAction(
 
   const displayName = formData.get('displayName');
   const handle = formData.get('handle');
+  const country = formData.get('country');
+  const phone = formData.get('phone');
+
+  // Membership in the list is checked here, where the list lives; the entity checks
+  // the shape. An empty string clears the field, which is what "Not set" submits.
+  if (typeof country === 'string' && country !== '' && !isCountryCode(country)) {
+    return { status: 'error', message: 'Choose a country from the list.' };
+  }
 
   const result = await identity().updateProfile({
     userId: user.id,
     displayName: typeof displayName === 'string' ? displayName : undefined,
     handle: typeof handle === 'string' ? handle : undefined,
+    country: typeof country === 'string' ? country : undefined,
+    phone: typeof phone === 'string' ? phone : undefined,
   });
 
   if (!result.ok) {
