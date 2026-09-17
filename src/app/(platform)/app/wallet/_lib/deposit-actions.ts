@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { presentLedgerError, MAX_PROOF_BYTES } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
+import { recordForAdmins } from '@/server/admin-alerts';
 import { getCurrentUser } from '@/server/auth';
 import { ledger } from '@/server/ledger';
 import { describeRequest } from '@/server/request-context';
@@ -66,7 +66,8 @@ export async function submitDepositAction(
   }
 
   const request = await describeRequest();
-  await recordActivity({
+  // Recorded for operators as well: a claim is waiting on one of them to confirm it.
+  await recordForAdmins({
     userId: user.id as UserId,
     kind: 'deposit-recorded',
     reference: result.value.claimId,

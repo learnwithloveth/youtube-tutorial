@@ -1,4 +1,7 @@
+import { after } from 'next/server';
+
 import { presentSupportError } from '@/modules/support';
+import { recordForAdmins } from '@/server/admin-alerts';
 import { getCurrentUser } from '@/server/auth';
 import { support } from '@/server/support';
 
@@ -77,6 +80,18 @@ export async function POST(request: Request): Promise<Response> {
     // returns and what the rest of the console does: a 403 would confirm the id.
     const status = result.error.kind === 'conversation-not-found' ? 404 : 400;
     return Response.json({ error: presentSupportError(result.error) }, { status });
+  }
+
+  // On the console's feed, for every admin page — not only for operators who
+  // switched push on. `push: false` because `postMessage` has already pushed.
+  if (user.role !== 'admin') {
+    const conversationId = result.value.conversation.id;
+    after(() =>
+      recordForAdmins(
+        { userId: user.id, kind: 'support-message-sent', reference: conversationId },
+        { push: false },
+      ),
+    );
   }
 
   return Response.json(result.value, {

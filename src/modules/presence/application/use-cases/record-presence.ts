@@ -57,6 +57,17 @@ export interface RecordPresenceResult {
   /** How long the client should wait before reporting again, in milliseconds. */
   readonly nextBeatMs: number;
   /**
+   * True on the beat a browsing context first reported as this account: a new tab
+   * opened while signed in, or an anonymous tab that has just signed in.
+   *
+   * Whether that makes a *visit* — or is one more tab of a visit already under way
+   * — needs the account's other tabs, which is the caller's question to ask; see
+   * `server/admin-alerts.ts`. It is false for anonymous traffic.
+   */
+  readonly arrived: boolean;
+  /** The page this beat reported, normalised to a route — what an arrival lands on. */
+  readonly path: string;
+  /**
    * The page the visitor just left, on the beat that moved them off it.
    *
    * ── Why presence reports this at all ───────────────────────────────────────
@@ -119,6 +130,7 @@ export function createRecordPresence(deps: PresenceDependencies) {
     const ipDigest = input.network.ip ? deps.digest.hash(input.network.ip) : null;
 
     const existing = await deps.presences.find(visitorId);
+    const arrived = input.userId !== null && (existing === null || existing.userId !== input.userId);
 
     if (existing !== null && !mayClaim(existing.userId, input.userId)) {
       // The row belongs to a signed-in account and this request is not that
@@ -163,6 +175,9 @@ export function createRecordPresence(deps: PresenceDependencies) {
       return ok({
         visitorId,
         nextBeatMs: 0,
+        // A tab that is closing has not arrived anywhere.
+        arrived: false,
+        path: presence.path,
         // A closing tab leaves the page it was on, which is the last chance to
         // record how long it was open.
         departedPage: departure(presence.path, presence.pathSince, now),
@@ -187,6 +202,8 @@ export function createRecordPresence(deps: PresenceDependencies) {
     return ok({
       visitorId,
       nextBeatMs: HEARTBEAT_INTERVAL_MS,
+      arrived,
+      path: presence.path,
       departedPage: leftPath === null ? null : departure(leftPath, leftSince, now),
       observed: observationOf(presence, deps),
     });

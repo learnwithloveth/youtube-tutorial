@@ -128,7 +128,7 @@ export function usePush(userId: string): {
         return;
       }
 
-      await saveToken(await subscribe(app));
+      await registerThisBrowser(app);
       writeOwner(userId);
       setState('granted');
     } catch (failure) {
@@ -209,9 +209,8 @@ export function usePushSync(userId: string): void {
       if (!(await browserSupportsPush()) || cancelled) return;
 
       try {
-        const token = await subscribe(app);
         if (cancelled) return;
-        await saveToken(token);
+        await registerThisBrowser(app);
       } catch (failure) {
         report(failure);
       }
@@ -376,11 +375,62 @@ async function saveToken(token: string): Promise<void> {
   if (response.status === 401) {
     throw new PushSetupError('Your session has ended. Sign in again to turn notifications on.');
   }
+  if (response.status === 410) throw new StaleTokenError();
   if (!response.ok) {
     throw new PushSetupError(
       'Notifications could not be saved for this device. Try again in a moment.',
     );
   }
+}
+
+/** The server checked the token with FCM, which no longer recognises it. */
+class StaleTokenError extends Error {}
+
+/**
+ * Subscribes this browser and saves the registration, replacing a dead token once.
+ *
+ * ── Why a fresh subscription, and not just asking again ──────────────────────
+ * The Firebase SDK caches a token for seven days and hands it back without asking
+ * FCM whether it still exists, so calling `getToken` again returns the same dead
+ * token. What makes it fetch a new one is a changed push subscription: it
+ * compares the cached token's endpoint with the subscription's, sees they differ,
+ * and registers afresh. So the subscription is thrown away and the whole step
+ * repeated — once, because a second dead token means something is wrong that
+ * retrying will not fix.
+ */
+async function registerThisBrowser(app: FirebaseApp): Promise<void> {
+  try {
+    await saveToken(await subscribe(app));
+    return;
+  } catch (failure) {
+    if (!(failure instanceof StaleTokenError)) throw failure;
+  }
+
+  await dropSubscription();
+
+  try {
+    await saveToken(await subscribe(app));
+  } catch (failure) {
+    if (failure instanceof StaleTokenError) {
+      throw new PushSetupError(
+        'The notification service keeps rejecting this browser. Clear this site’s data in your browser settings, reload, and turn notifications on again.',
+      );
+    }
+    throw failure;
+  }
+}
+
+/**
+ * Throws away this browser's push subscription, so the next token is a new one.
+ *
+ * Unsubscribing directly rather than calling Firebase's `deleteToken`: on a
+ * messaging instance that has not been handed a worker yet, `deleteToken`
+ * registers Firebase's *default* worker, on a scope of its own, beside ours.
+ */
+async function dropSubscription(): Promise<void> {
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  const subscription = await registration?.pushManager.getSubscription();
+  await subscription?.unsubscribe();
 }
 
 /**

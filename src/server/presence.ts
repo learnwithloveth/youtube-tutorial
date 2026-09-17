@@ -62,7 +62,12 @@ export const presence = cache((): PresenceModule | null => {
 });
 
 export type RecordPresenceOutcome =
-  | { readonly kind: 'recorded'; readonly result: RecordPresenceResult }
+  | {
+      readonly kind: 'recorded';
+      readonly result: RecordPresenceResult;
+      /** Who the beat was from, as the session said — null for anonymous traffic. */
+      readonly user: { readonly id: UserId; readonly role: string } | null;
+    }
   | { readonly kind: 'not-configured' }
   | { readonly kind: 'unavailable' }
   | { readonly kind: 'rejected'; readonly error: PresenceError };
@@ -109,10 +114,46 @@ export async function recordVisitorPresence(input: {
 
     if (userId !== null) await recordPageView(userId, result.value);
 
-    return { kind: 'recorded', result: result.value };
+    return {
+      kind: 'recorded',
+      result: result.value,
+      user: user && userId !== null ? { id: userId, role: user.role } : null,
+    };
   } catch (error) {
     logger.warn({ event: 'presence_write_failed', module: 'presence' }, error);
     return { kind: 'unavailable' };
+  }
+}
+
+/**
+ * Whether an account has a tab open other than this one, seen within `withinMs`.
+ *
+ * Decides whether a tab that has just arrived is a visit or one more tab of a visit
+ * already under way. A tab closed moments ago still counts: closing one tab and
+ * opening another is not somebody leaving and coming back.
+ *
+ * Errs towards "yes" when presence cannot be read — the cost of that is one arrival
+ * not announced, where the other way round is a notification for every beat of an
+ * outage.
+ */
+export async function hasOtherOpenTab(
+  userId: UserId,
+  visitorId: string,
+  withinMs: number,
+): Promise<boolean> {
+  const context = presence();
+  if (context === null) return true;
+
+  try {
+    const tabs = await context.dependencies.presences.listForUser(
+      userId,
+      new Date(Date.now() - withinMs),
+      20,
+    );
+    return tabs.some((tab) => tab.id !== visitorId);
+  } catch (error) {
+    logger.warn({ event: 'presence_tab_check_failed', module: 'presence' }, error);
+    return true;
   }
 }
 

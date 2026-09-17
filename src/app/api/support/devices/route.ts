@@ -45,8 +45,9 @@ export async function POST(request: Request): Promise<Response> {
   const token = await readToken(request);
   if (token === null) return Response.json({ error: 'A token is required.' }, { status: 400 });
 
+  let outcome;
   try {
-    await context.dependencies.push.register({
+    outcome = await context.dependencies.push.register({
       token,
       userId: user.id,
       role: user.role === 'admin' ? 'operator' : 'customer',
@@ -56,6 +57,12 @@ export async function POST(request: Request): Promise<Response> {
     // way, so a switch could read "on" for a device that was never saved.
     logger.warn({ event: 'push_device_register_failed', module: 'support' }, error);
     return Response.json({ error: 'register-failed' }, { status: 502, headers: NO_STORE });
+  }
+
+  // 410: FCM no longer knows this token. Nothing was saved; the page throws its
+  // subscription away and registers a fresh one.
+  if (outcome === 'stale-token') {
+    return Response.json({ error: 'stale-token' }, { status: 410, headers: NO_STORE });
   }
 
   (await cookies()).set(PUSH_DEVICE_COOKIE, token, pushDeviceCookieOptions());

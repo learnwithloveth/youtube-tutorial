@@ -19,6 +19,7 @@ import {
   ShieldOff,
   IdCard,
   BellRing,
+  Headset,
 } from 'lucide-react';
 
 import type { ActivityEventDto, ActivityKind, EventLocation } from '@/modules/activity';
@@ -61,6 +62,8 @@ const KIND_META: Record<
   'verification-approved': { label: 'Identity verified', icon: IdCard, tone: 'up' },
   'verification-rejected': { label: 'Identity verification refused', icon: IdCard, tone: 'warn' },
   'price-alert-triggered': { label: 'Price alert fired', icon: BellRing, tone: 'neutral' },
+  'visit-started': { label: 'Arrived on the site', icon: Wifi, tone: 'neutral' },
+  'support-message-sent': { label: 'Wrote to support', icon: Headset, tone: 'brand' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {

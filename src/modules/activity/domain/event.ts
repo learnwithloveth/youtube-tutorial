@@ -95,7 +95,25 @@ export type ActivityKind =
    * that fills with price alerts is one nobody reads, and the thing an audit is
    * opened for is a rounding error next to them.
    */
-  | 'price-alert-triggered';
+  | 'price-alert-triggered'
+  /*
+   * A signed-in customer arrived on the site — the first open tab after a gap.
+   *
+   * Written so operators can be told somebody is here, and kept in this trail for
+   * the reason the rest are: "when was this account last on the site" is a
+   * question about the account. It is not a page view (those are written on
+   * departure, with a dwell time), and it is not presence (which is overwritten
+   * and forgets). The path is the page they landed on.
+   */
+  | 'visit-started'
+  /*
+   * A customer wrote to support.
+   *
+   * The message itself stays in the support context and is not copied here — an
+   * audit table kept for a month is no place for the text of a conversation. The
+   * reference is the conversation, which is all an operator needs to open it.
+   */
+  | 'support-message-sent';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -126,7 +144,15 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
  * The list is explicit because the alternative, "everything except `page-view`",
  * silently gave the one-year window to the first kind added that did not want it.
  */
-export const EPHEMERAL_KINDS: readonly ActivityKind[] = ['page-view', 'price-alert-triggered'];
+export const EPHEMERAL_KINDS: readonly ActivityKind[] = [
+  'page-view',
+  'price-alert-triggered',
+  // Operator notifications, not evidence: a month is plenty to answer "when was
+  // this customer last here" and "did they write to us", and a year would be a
+  // browsing history kept for no reason.
+  'visit-started',
+  'support-message-sent',
+];
 
 export function isSecurityKind(kind: ActivityKind): boolean {
   return !EPHEMERAL_KINDS.includes(kind);

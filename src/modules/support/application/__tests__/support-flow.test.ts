@@ -111,7 +111,9 @@ class FakeAttachments implements AttachmentStorage {
 class FakePush implements PushSender {
   readonly sent: PushMessage[] = [];
 
-  async register() {}
+  async register() {
+    return 'registered' as const;
+  }
   async forget() {}
   async forgetAllFor() {
     return 0;

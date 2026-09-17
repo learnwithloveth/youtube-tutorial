@@ -6,7 +6,12 @@ import type { Messaging } from 'firebase-admin/messaging';
 import { logger } from '@/platform/observability/logger';
 import type { UserId } from '@/shared/kernel/ids';
 
-import type { DeviceRegistration, PushMessage, PushSender } from '../../application/ports';
+import type {
+  DeviceRegistration,
+  PushMessage,
+  PushSender,
+  RegistrationOutcome,
+} from '../../application/ports';
 
 import { COLLECTIONS } from './app';
 import { isDeadTokenError } from './dead-token';
@@ -44,7 +49,38 @@ export class FirebasePushSender implements PushSender {
     private readonly messaging: Messaging,
   ) {}
 
-  async register(device: DeviceRegistration): Promise<void> {
+  /**
+   * Checks the token with FCM before saving it.
+   *
+   * ── Why a token a browser has just handed over can already be dead ─────────
+   * The Firebase browser SDK caches a token for seven days and returns it without
+   * asking FCM whether it is still registered. A token FCM has since dropped — a
+   * push subscription the browser revoked, a registration FCM expired — is handed
+   * back as if nothing had happened. Saved blindly, it made the switch read "on",
+   * and the first push to it failed and deleted it: a device that silently never
+   * receives anything, and re-registers the same dead token on every page load.
+   * That is exactly what a development log showed for a browser registered two
+   * days earlier.
+   *
+   * A dry run validates the token and delivers nothing. A dead one is reported as
+   * `stale-token` and never stored, so the browser can replace it.
+   *
+   * Any other failure of the check — FCM briefly unreachable — saves the device
+   * anyway. The check exists to catch a dead token, not to make registration
+   * depend on a second service being up.
+   */
+  async register(device: DeviceRegistration): Promise<RegistrationOutcome> {
+    try {
+      await this.messaging.send({ token: device.token, data: { check: 'registration' } }, true);
+    } catch (error) {
+      if (isDeadTokenError(error as { code?: string; message?: string })) {
+        await this.forget(device.token).catch(() => undefined);
+        logger.info({ event: 'push_device_token_stale', module: 'support' });
+        return 'stale-token';
+      }
+      logger.warn({ event: 'push_device_check_failed', module: 'support' }, error);
+    }
+
     await this.devices()
       .doc(device.token)
       .set({
@@ -52,6 +88,7 @@ export class FirebasePushSender implements PushSender {
         role: device.role,
         registeredAt: Timestamp.now(),
       } satisfies DeviceDocument);
+    return 'registered';
   }
 
   async forget(token: string): Promise<void> {

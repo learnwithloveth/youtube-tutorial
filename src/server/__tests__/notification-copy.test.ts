@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bodyFor, pushFor, type DescribableEvent } from '../notification-copy';
+import { adminCopyFor, bodyFor, pushFor, type DescribableEvent } from '../notification-copy';
 
 function event(overrides: Partial<DescribableEvent> & Pick<DescribableEvent, 'kind'>): DescribableEvent {
   return {
@@ -94,3 +94,92 @@ describe('pushFor', () => {
     }
   });
 });
+
+describe('adminCopyFor', () => {
+  const customer = { id: 'user-7', email: 'ada@example.com' };
+  const event = (overrides: Partial<Parameters<typeof adminCopyFor>[0]> & Pick<Parameters<typeof adminCopyFor>[0], 'kind'>) => ({
+    reference: null,
+    detail: null,
+    browser: null,
+    device: null,
+    location: null,
+    path: null,
+    ...overrides,
+  });
+
+  it('announces an arrival with the page, replacing that customer’s last arrival', () => {
+    expect(adminCopyFor(event({ kind: 'visit-started', path: '/app/wallet' }), customer)).toEqual({
+      title: 'Customer online',
+      body: 'ada@example.com is on /app/wallet',
+      link: '/admin/live',
+      tone: 'brand',
+      tag: 'visit-user-7',
+    });
+  });
+
+  it('sends a support message to the conversation in the console', () => {
+    const copy = adminCopyFor(event({ kind: 'support-message-sent', reference: 'conv/1' }), customer);
+    expect(copy?.title).toBe('New support message');
+    expect(copy?.link).toBe('/admin/support?conversation=conv%2F1');
+  });
+
+  it('sends what is waiting on an operator to the queue that holds it', () => {
+    expect(adminCopyFor(event({ kind: 'withdrawal-requested', detail: '0.5 BTC' }), customer)).toMatchObject({
+      title: 'Withdrawal requested',
+      body: 'ada@example.com · 0.5 BTC',
+      link: '/admin/approvals',
+    });
+    expect(adminCopyFor(event({ kind: 'verification-submitted' }), customer)?.link).toBe('/admin/kyc');
+  });
+
+  it('tells a customer’s deposit claim from an operator crediting it', () => {
+    const claim = adminCopyFor(
+      event({ kind: 'deposit-recorded', reference: 'claim-1', detail: 'claimed 50 USDT' }),
+      customer,
+    );
+    const credit = adminCopyFor(
+      event({ kind: 'deposit-recorded', reference: 'claim-1 by ops@example.com', detail: '50 USDT credited' }),
+      customer,
+    );
+    expect(claim).toMatchObject({ title: 'Deposit claim submitted', link: '/admin/approvals' });
+    expect(credit).toMatchObject({ title: 'Deposit credited', link: '/admin/users/user-7' });
+  });
+
+  it('names the customer and where a sign-in came from', () => {
+    const copy = adminCopyFor(
+      event({ kind: 'sign-in', browser: 'Chrome', device: 'desktop', location: { city: 'Lagos', country: 'NG' } }),
+      customer,
+    );
+    expect(copy?.body).toBe('ada@example.com · Chrome · desktop · Lagos, NG');
+  });
+
+  it('copies every customer notification the bell shows, except what an operator sent', () => {
+    for (const kind of NOTIFIABLE_KINDS) {
+      const copy = adminCopyFor(event({ kind }), customer);
+      if (kind === 'receipt-sent') expect(copy).toBeNull();
+      else expect(copy, kind).not.toBeNull();
+    }
+  });
+
+  it('ignores what is not about a customer', () => {
+    expect(adminCopyFor(event({ kind: 'page-view' }), customer)).toBeNull();
+    expect(adminCopyFor(event({ kind: 'admin-suspended' }), customer)).toBeNull();
+  });
+});
+
+/* The customer bell's kinds, restated so the test does not import the feed module
+   and the database behind it. Kept in step with `NOTIFIABLE` by review. */
+const NOTIFIABLE_KINDS = [
+  'price-alert-triggered',
+  'deposit-recorded',
+  'deposit-rejected',
+  'withdrawal-approved',
+  'withdrawal-rejected',
+  'withdrawal-requested',
+  'verification-approved',
+  'verification-rejected',
+  'password-reset',
+  'email-verified',
+  'sign-in',
+  'receipt-sent',
+] as const;

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { presentLedgerError } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
+import { recordForAdmins } from '@/server/admin-alerts';
 import { getCurrentUser } from '@/server/auth';
 import { ledger } from '@/server/ledger';
 import { describeRequest } from '@/server/request-context';
@@ -69,7 +69,8 @@ export async function requestWithdrawalAction(
   }
 
   const context_ = await describeRequest();
-  await recordActivity({
+  // Recorded for operators as well: a withdrawal request is waiting on one of them.
+  await recordForAdmins({
     userId: user.id as UserId,
     kind: 'withdrawal-requested',
     reference: result.value.withdrawalId,

@@ -1,3 +1,4 @@
+import { getAdminFeed } from '@/server/admin-alerts';
 import { requireAdmin } from '@/server/auth';
 import { getPendingQueueCounts } from '@/server/console';
 
@@ -32,11 +33,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await requireAdmin('/admin');
   // After the gate, never before: an unauthenticated visitor must be redirected
   // without this having read anything about the platform.
-  const counted = await getPendingQueueCounts();
+  // In parallel: the queue counts and the customer-activity bell are independent
+  // reads, and the feed degrades to an empty bell rather than failing the page.
+  const [counted, feed] = await Promise.all([getPendingQueueCounts(), getAdminFeed(20)]);
 
   return (
     <AdminProvider counted={counted}>
-      <AdminShell email={user.email}>
+      <AdminShell email={user.email} operatorId={user.id} initialFeed={feed}>
         {/* Here as well as in the app, because an operator may never open the
             customer side — their registration has to be kept current from this one. */}
         <PushBridge userId={user.id} />

@@ -4,6 +4,8 @@ import { useQueues } from '../_data/store';
 import { ThemeToggle } from '../../(marketing)/_components/theme-toggle';
 import { cn } from '@/shared/lib/cn';
 
+import { AdminNotificationBell, type AdminFeed } from './admin-notifications';
+
 /**
  * Carries the two facts an operator must never have to go looking for: which
  * environment they are acting in, and who they are acting as. Both are load
@@ -11,9 +13,13 @@ import { cn } from '@/shared/lib/cn';
  */
 export function AdminTopBar({
   email,
+  operatorId,
+  feed,
   onOpenDrawer,
 }: {
   email: string;
+  operatorId: string;
+  feed: AdminFeed;
   onOpenDrawer: () => void;
 }) {
   const queues = useQueues();
@@ -51,6 +57,8 @@ export function AdminTopBar({
             <span className="font-semibold tabular-nums">{waiting}</span> item
             {waiting === 1 ? '' : 's'} awaiting action
           </p>
+
+          <AdminNotificationBell feed={feed} operatorId={operatorId} />
 
           <ThemeToggle className="size-9" />
 

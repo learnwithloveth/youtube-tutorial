@@ -184,6 +184,41 @@ describe('recordPresence', () => {
     expect(context.presences.store.get(VISITOR)?.userId).toBe(ALICE);
   });
 
+  describe('arrival', () => {
+    it('says a tab has arrived when it first reports as an account', async () => {
+      const record = createRecordPresence(context.deps);
+
+      const first = await record({ report: report(), userId: ALICE, network: NETWORK });
+      const next = await record({ report: report({ path: '/app' }), userId: ALICE, network: NETWORK });
+
+      expect(first.ok && first.value.arrived).toBe(true);
+      // The same tab moving to another page is the same visit, not a new arrival.
+      expect(next.ok && next.value.arrived).toBe(false);
+    });
+
+    it('counts signing in on an anonymous tab as arriving', async () => {
+      const record = createRecordPresence(context.deps);
+
+      const anonymous = await record({ report: report(), userId: null, network: NETWORK });
+      const signedIn = await record({ report: report(), userId: ALICE, network: NETWORK });
+
+      expect(anonymous.ok && anonymous.value.arrived).toBe(false);
+      expect(signedIn.ok && signedIn.value.arrived).toBe(true);
+    });
+
+    it('never counts a tab that is closing', async () => {
+      const record = createRecordPresence(context.deps);
+
+      const leaving = await record({
+        report: report({ visitorId: OTHER_VISITOR, event: 'leave' }),
+        userId: ALICE,
+        network: NETWORK,
+      });
+
+      expect(leaving.ok && leaving.value.arrived).toBe(false);
+    });
+  });
+
   describe('validation', () => {
     it('rejects a visitor id that is not a UUID', async () => {
       const record = createRecordPresence(context.deps);

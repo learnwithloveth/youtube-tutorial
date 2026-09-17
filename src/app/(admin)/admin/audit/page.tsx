@@ -81,6 +81,8 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'verification-approved': 'Identity verified',
   'verification-rejected': 'Identity verification refused',
   'price-alert-triggered': 'Price alert fired',
+  'visit-started': 'Arrived on the site',
+  'support-message-sent': 'Wrote to support',
 };
 
 export default async function AuditPage() {

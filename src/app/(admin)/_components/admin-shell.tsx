@@ -5,8 +5,11 @@ import { X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useCallback, useState, type ReactNode } from 'react';
 
+import type { AdminFeedDto } from '@/server/admin-alerts';
 import { cn } from '@/shared/lib/cn';
 import { useEscape, useScrollLock } from '@/shared/lib/hooks';
+
+import { AdminToasts, useAdminFeed } from './admin-notifications';
 
 import { AdminSidebar } from './admin-sidebar';
 import { AdminTopBar } from './admin-top-bar';
@@ -24,7 +27,21 @@ const COLLAPSE_KEY = 'novex.admin.collapsed';
  * The authorisation check is in the layout above, on the server. This component
  * never sees a session and cannot be relied on for access control.
  */
-export function AdminShell({ email, children }: { email: string; children: ReactNode }) {
+export function AdminShell({
+  email,
+  operatorId,
+  initialFeed,
+  children,
+}: {
+  email: string;
+  operatorId: string;
+  /** Customer activity, read by the layout so the bell is right on first paint. */
+  initialFeed: AdminFeedDto;
+  children: ReactNode;
+}) {
+  // Held here, above the top bar, because two places show it: the bell, and the
+  // pop-ups that appear over whichever page is open.
+  const feed = useAdminFeed(initialFeed);
   const [collapsed, setCollapsed] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
@@ -85,7 +102,12 @@ export function AdminShell({ email, children }: { email: string; children: React
         </aside>
 
         <div className="flex min-w-0 flex-col">
-          <AdminTopBar email={email} onOpenDrawer={() => setDrawer(true)} />
+          <AdminTopBar
+            email={email}
+            operatorId={operatorId}
+            feed={feed}
+            onOpenDrawer={() => setDrawer(true)}
+          />
           <main id="admin-main" className="flex-1 px-4 pb-12 pt-6 md:px-6 md:pt-7">
             {children}
           </main>
@@ -143,6 +165,8 @@ export function AdminShell({ email, children }: { email: string; children: React
           </>
         ) : null}
       </AnimatePresence>
+
+      <AdminToasts feed={feed} />
     </div>
   );
 }

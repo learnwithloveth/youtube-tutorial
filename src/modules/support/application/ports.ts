@@ -103,7 +103,14 @@ export interface DeviceRegistration {
  * registration and one switch, whatever the message is about.
  */
 export interface PushSender {
-  register(device: DeviceRegistration): Promise<void>;
+  /**
+   * Saves a browser's registration — unless its token is already dead.
+   *
+   * `stale-token` means FCM no longer recognises the token, and nothing was saved.
+   * The browser has to throw its subscription away and ask for a new one; see
+   * `use-push.ts` for why it would otherwise keep offering the same dead token.
+   */
+  register(device: DeviceRegistration): Promise<RegistrationOutcome>;
   forget(token: string): Promise<void>;
   /** Every device registered to one account. Returns how many there were. */
   forgetAllFor(userId: UserId): Promise<number>;
@@ -140,6 +147,8 @@ export interface PushMessage {
 }
 
 export type PushSurface = 'support-queue' | 'support-thread';
+
+export type RegistrationOutcome = 'registered' | 'stale-token';
 
 /** One stored image, as the serving route needs it. */
 export interface StoredAttachment {

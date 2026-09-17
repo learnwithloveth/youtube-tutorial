@@ -7,6 +7,7 @@ import { logger } from '@/platform/observability/logger';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { recordActivity } from './activity';
+import { alertAdmins } from './admin-alerts';
 import { pushFor } from './notification-copy';
 import { support } from './support';
 
@@ -41,6 +42,9 @@ import { support } from './support';
  */
 export async function recordAndPush(command: RecordActivityCommand): Promise<void> {
   await recordActivity(command);
+
+  // Operators hear about every notification a customer gets — see `admin-alerts`.
+  alertAdmins(command);
 
   const message = pushFor({
     kind: command.kind,

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { MAX_DOCUMENT_BYTES, presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
+import { recordForAdmins } from '@/server/admin-alerts';
 import { identity, requireUser } from '@/server/auth';
 import { describeRequest } from '@/server/request-context';
 import { isCountryCode } from '@/shared/lib/countries';
@@ -74,7 +74,8 @@ export async function submitVerificationAction(
 
   const request = await describeRequest();
   try {
-    await recordActivity({
+    // Recorded for operators as well: submitted documents wait in the KYC queue.
+    await recordForAdmins({
       userId: toUserId(user.id),
       kind: 'verification-submitted',
       reference: result.value.verificationId,
