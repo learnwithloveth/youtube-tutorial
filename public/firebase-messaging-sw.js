@@ -22,6 +22,11 @@
  * agent working the support queue, or a customer with the chat open, sees the
  * message arrive there; a notification on top of it is noise. The worker cannot
  * see a page's DOM, so it asks the focused tab — see `showsLive`.
+ *
+ * ── One file, registered at one of two scopes ─────────────────────────────────
+ * At `/admin` for an operator, so a console installed as an app shows their
+ * notifications as its own; at `/` for a customer. A browser holds one of the two,
+ * never both — see `pushScopeFor` in `src/app/_lib/console-app.ts`.
  * ========================================================================== */
 
 /** The screens a message can name as already showing it. Anything else is shown. */
@@ -145,7 +150,13 @@ async function open(link) {
     resolved.origin === self.location.origin ? resolved.href : `${self.location.origin}/`;
 
   const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const tab = tabs.find((candidate) => candidate.url === href) || tabs[0];
+  // This registration's own windows before any other: for an operator that is the
+  // console — its installed app window, or a console tab — rather than whichever
+  // customer page happens to be open.
+  const tab =
+    tabs.find((candidate) => candidate.url === href) ||
+    tabs.find((candidate) => candidate.url.startsWith(self.registration.scope)) ||
+    tabs[0];
   if (!tab) return self.clients.openWindow(href);
 
   // `navigate` is only allowed on a tab this worker controls, and one opened before

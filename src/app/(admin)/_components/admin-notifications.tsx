@@ -11,6 +11,8 @@ import { cn } from '@/shared/lib/cn';
 import { formatAge } from '@/shared/lib/format';
 import { useEscape, useOutsideClick } from '@/shared/lib/hooks';
 
+import { CONSOLE_APP } from '../../_lib/console-app';
+
 /**
  * The console's customer-activity alerts: a bell in the top bar and a pop-up on
  * whichever admin page is open.
@@ -257,7 +259,7 @@ export function AdminNotificationBell({
  * the queue would never find.
  */
 function PushFooter({ operatorId }: { operatorId: string }) {
-  const { state, error, enable } = usePush(operatorId);
+  const { state, error, enable } = usePush(operatorId, CONSOLE_APP.scope);
   if (state === 'unconfigured' || state === 'unsupported') return null;
 
   return (

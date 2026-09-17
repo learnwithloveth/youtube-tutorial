@@ -5,6 +5,7 @@ import { ThemeToggle } from '../../(marketing)/_components/theme-toggle';
 import { cn } from '@/shared/lib/cn';
 
 import { AdminNotificationBell, type AdminFeed } from './admin-notifications';
+import { InstallConsoleButton } from './install-console-button';
 
 /**
  * Carries the two facts an operator must never have to go looking for: which
@@ -57,6 +58,8 @@ export function AdminTopBar({
             <span className="font-semibold tabular-nums">{waiting}</span> item
             {waiting === 1 ? '' : 's'} awaiting action
           </p>
+
+          <InstallConsoleButton className="size-9" />
 
           <AdminNotificationBell feed={feed} operatorId={operatorId} />
 

@@ -22,6 +22,13 @@ import { firebaseApp, VAPID_KEY } from './client';
  * Safari on iOS delivers web push only to a site the user has added to their Home
  * Screen. There is no way to detect that reliably and nothing to be done about it
  * in code; `supported` reports what the browser admits to, and the UI says the rest.
+ *
+ * ── Every hook takes the scope its registration lives at ──────────────────────
+ * `pushScopeFor` in `app/_lib/console-app.ts` decides it, by role: the console's
+ * scope for an operator, so an installed console shows their notifications as its
+ * own, and the site's root for a customer. An account gets the same scope on every
+ * page — the Firebase SDK keeps one token per site, and registering the same
+ * account at two scopes would swap that token back and forth.
  */
 
 export type PushState =
@@ -77,7 +84,10 @@ function writeOwner(value: string | null): void {
 /** A step that failed, carrying the sentence the switch shows for it. */
 class PushSetupError extends Error {}
 
-export function usePush(userId: string): {
+export function usePush(
+  userId: string,
+  scope: string,
+): {
   state: PushState;
   /** Why the last attempt failed, in words for the person who pressed the switch. */
   error: string | null;
@@ -128,7 +138,7 @@ export function usePush(userId: string): {
         return;
       }
 
-      await registerThisBrowser(app);
+      await registerThisBrowser(app, scope);
       writeOwner(userId);
       setState('granted');
     } catch (failure) {
@@ -140,7 +150,7 @@ export function usePush(userId: string): {
       );
       setState('prompt');
     }
-  }, [userId]);
+  }, [userId, scope]);
 
   /**
    * Stops notifications reaching this browser.
@@ -159,7 +169,7 @@ export function usePush(userId: string): {
     // register the account again on its next load.
     writeOwner(RELEASING);
 
-    if (await forgetDevice(await existingToken())) {
+    if (await forgetDevice(await existingToken(scope))) {
       writeOwner(null);
     } else {
       setError(
@@ -168,7 +178,7 @@ export function usePush(userId: string): {
     }
     // Off either way. It is what was asked for, and the removal is retried.
     setState('prompt');
-  }, []);
+  }, [scope]);
 
   return { state, error, enable, disable };
 }
@@ -186,7 +196,7 @@ export function usePush(userId: string): {
  * Silent: it runs on every page, and the switch in Settings is where a failure is
  * worth showing.
  */
-export function usePushSync(userId: string): void {
+export function usePushSync(userId: string, scope: string): void {
   useEffect(() => {
     let cancelled = false;
 
@@ -210,7 +220,7 @@ export function usePushSync(userId: string): void {
 
       try {
         if (cancelled) return;
-        await registerThisBrowser(app);
+        await registerThisBrowser(app, scope);
       } catch (failure) {
         report(failure);
       }
@@ -219,7 +229,7 @@ export function usePushSync(userId: string): void {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, scope]);
 }
 
 /**
@@ -274,11 +284,11 @@ async function browserSupportsPush(): Promise<boolean> {
   return isSupported().catch(() => false);
 }
 
-/** Installs the worker, waits for it to run, and returns this browser's token. */
-async function subscribe(app: FirebaseApp): Promise<string> {
+/** Installs the worker at `scope`, waits for it to run, and returns this browser's token. */
+async function subscribe(app: FirebaseApp, scope: string): Promise<string> {
   let registration: ServiceWorkerRegistration;
   try {
-    registration = await navigator.serviceWorker.register(WORKER_URL, { scope: '/' });
+    registration = await navigator.serviceWorker.register(WORKER_URL, { scope });
     await activated(registration);
   } catch (cause) {
     throw new PushSetupError('This browser would not start the notification service.', { cause });
@@ -387,6 +397,18 @@ async function saveToken(token: string): Promise<void> {
 class StaleTokenError extends Error {}
 
 /**
+ * Registers this browser at `scope`, then removes whatever it still holds at any
+ * other scope.
+ */
+async function registerThisBrowser(app: FirebaseApp, scope: string): Promise<void> {
+  await saveSubscription(app, scope);
+  // Afterwards, never before: until the new registration is saved, the old one is
+  // the only one that delivers anything. A failure here costs a duplicate, not the
+  // registration that just worked, so it is reported rather than thrown.
+  await releaseOtherRegistrations(scope).catch(report);
+}
+
+/**
  * Subscribes this browser and saves the registration, replacing a dead token once.
  *
  * ── Why a fresh subscription, and not just asking again ──────────────────────
@@ -398,18 +420,18 @@ class StaleTokenError extends Error {}
  * repeated — once, because a second dead token means something is wrong that
  * retrying will not fix.
  */
-async function registerThisBrowser(app: FirebaseApp): Promise<void> {
+async function saveSubscription(app: FirebaseApp, scope: string): Promise<void> {
   try {
-    await saveToken(await subscribe(app));
+    await saveToken(await subscribe(app, scope));
     return;
   } catch (failure) {
     if (!(failure instanceof StaleTokenError)) throw failure;
   }
 
-  await dropSubscription();
+  await dropSubscription(scope);
 
   try {
-    await saveToken(await subscribe(app));
+    await saveToken(await subscribe(app, scope));
   } catch (failure) {
     if (failure instanceof StaleTokenError) {
       throw new PushSetupError(
@@ -427,10 +449,47 @@ async function registerThisBrowser(app: FirebaseApp): Promise<void> {
  * messaging instance that has not been handed a worker yet, `deleteToken`
  * registers Firebase's *default* worker, on a scope of its own, beside ours.
  */
-async function dropSubscription(): Promise<void> {
-  const registration = await navigator.serviceWorker.getRegistration('/');
+async function dropSubscription(scope: string): Promise<void> {
+  const registration = await registrationAt(scope);
   const subscription = await registration?.pushManager.getSubscription();
   await subscription?.unsubscribe();
+}
+
+/**
+ * The worker's registration at exactly this scope, if there is one.
+ *
+ * Not `getRegistration(scope)`: that answers with the registration that would
+ * control a page at that URL, which for the console's scope is the root one
+ * whenever the console's own does not exist yet.
+ */
+async function registrationAt(scope: string): Promise<ServiceWorkerRegistration | undefined> {
+  const wanted = new URL(scope, window.location.origin).href;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  return registrations.find((registration) => registration.scope === wanted);
+}
+
+/**
+ * Unsubscribes and removes this worker's registrations at every scope but `scope`.
+ *
+ * A browser delivers through one registration. One left at another scope — an
+ * operator's from before their registrations moved to the console's scope, or a
+ * previous account's on a shared browser — still holds a push subscription and
+ * would show a second copy of every notification. The Firebase SDK deletes the
+ * token it replaces, but it swallows a failure to do so, so this does not rely on
+ * it.
+ */
+async function releaseOtherRegistrations(scope: string): Promise<void> {
+  const keep = new URL(scope, window.location.origin).href;
+  const worker = new URL(WORKER_URL, window.location.origin).href;
+
+  for (const registration of await navigator.serviceWorker.getRegistrations()) {
+    const script = (registration.active ?? registration.waiting ?? registration.installing)
+      ?.scriptURL;
+    if (registration.scope === keep || script !== worker) continue;
+
+    await (await registration.pushManager.getSubscription())?.unsubscribe();
+    await registration.unregister();
+  }
 }
 
 /**
@@ -439,14 +498,14 @@ async function dropSubscription(): Promise<void> {
  * Null when there is no worker or no subscription — `getToken` would otherwise
  * subscribe the browser in order to answer, which is the opposite of switching off.
  */
-async function existingToken(): Promise<string | null> {
+async function existingToken(scope: string): Promise<string | null> {
   const app = firebaseApp();
   if (app === null || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     return null;
   }
 
   try {
-    const registration = await navigator.serviceWorker.getRegistration('/');
+    const registration = await registrationAt(scope);
     if (!registration || (await registration.pushManager.getSubscription()) === null) return null;
     return await getToken(getMessaging(app), {
       vapidKey: VAPID_KEY,

@@ -7,6 +7,7 @@ import { getMySupportThread, support } from '@/server/support';
 import { AnnouncementBanner } from '../_components/announcement-banner';
 import { PushBridge } from '../_components/push-bridge';
 import { QuoteRefresher } from '../_components/quote-refresher';
+import { pushScopeFor } from '../_lib/console-app';
 
 import { DashboardShell } from './_components/dashboard-shell';
 import { SupportWidget } from './_components/support-widget';
@@ -95,7 +96,7 @@ export default async function PlatformLayout({
       <QuoteRefresher />
       {/* Push shares the support configuration: device registrations live beside
           the conversations, so a deployment without one cannot store the other. */}
-      {configured ? <PushBridge userId={user.id} /> : null}
+      {configured ? <PushBridge userId={user.id} scope={pushScopeFor(user.role)} /> : null}
       {children}
       {configured ? (
         <SupportWidget

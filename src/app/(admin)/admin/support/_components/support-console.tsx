@@ -32,6 +32,7 @@ import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
 
 import { ConfirmButton, QuietButton } from '../../../_components/admin-ui';
 import { Panel } from '../../../../_console/components/page-header';
+import { CONSOLE_APP } from '../../../../_lib/console-app';
 
 /**
  * Live support, on real conversations.
@@ -426,7 +427,7 @@ export function SupportConsole({
  * a denial is sticky, curable only by the operator finding a setting.
  */
 function PushToggle({ operatorId }: { operatorId: string }) {
-  const { state, error, enable } = usePush(operatorId);
+  const { state, error, enable } = usePush(operatorId, CONSOLE_APP.scope);
 
   if (state === 'unconfigured') return null;
 

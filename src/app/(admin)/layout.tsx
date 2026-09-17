@@ -1,11 +1,25 @@
+import type { Metadata } from 'next';
+
 import { getAdminFeed } from '@/server/admin-alerts';
 import { requireAdmin } from '@/server/auth';
 import { getPendingQueueCounts } from '@/server/console';
 
 import { PushBridge } from '../_components/push-bridge';
+import { CONSOLE_APP, pushScopeFor } from '../_lib/console-app';
 
 import { AdminProvider } from './_data/store';
 import { AdminShell } from './_components/admin-shell';
+
+/**
+ * The console is installable as an app, and the customer site is not: this is the
+ * only layout that links a manifest. See `_lib/console-app.ts`.
+ */
+export const metadata: Metadata = {
+  manifest: CONSOLE_APP.manifest,
+  // iOS reads these rather than the manifest for a Home Screen icon and its label.
+  appleWebApp: { capable: true, title: 'Console' },
+  icons: { apple: '/icons/apple-touch-icon.png' },
+};
 
 /**
  * The operations console.
@@ -42,7 +56,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminShell email={user.email} operatorId={user.id} initialFeed={feed}>
         {/* Here as well as in the app, because an operator may never open the
             customer side — their registration has to be kept current from this one. */}
-        <PushBridge userId={user.id} />
+        <PushBridge userId={user.id} scope={pushScopeFor(user.role)} />
         {children}
       </AdminShell>
     </AdminProvider>

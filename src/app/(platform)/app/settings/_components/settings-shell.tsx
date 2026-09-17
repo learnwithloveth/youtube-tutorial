@@ -15,6 +15,7 @@ import { usePush } from '@/shared/firebase/use-push';
 import { cn } from '@/shared/lib/cn';
 
 import { PageHeader, Panel, PanelHeader } from '../../../../_console/components/page-header';
+import { pushScopeFor } from '../../../../_lib/console-app';
 import { usd } from '../../_lib/format-usd';
 import { IdentityVerification } from './identity-verification';
 import { PreciseLocationControl } from './precise-location-control';
@@ -124,8 +125,8 @@ function Toggle({
  * has refused permission cannot be talked into it from JavaScript, which is why
  * the denied state explains itself rather than offering a switch that will not move.
  */
-function PushNotificationToggle({ userId }: { userId: string }) {
-  const { state, error, enable, disable } = usePush(userId);
+function PushNotificationToggle({ userId, scope }: { userId: string; scope: string }) {
+  const { state, error, enable, disable } = usePush(userId, scope);
 
   if (state === 'unconfigured') {
     return (
@@ -342,7 +343,7 @@ export function SettingsShell({
             <Panel>
               <PanelHeader title="Notifications" subtitle="Per device, not per account" />
               <div className="divide-y divide-line/60">
-                <PushNotificationToggle userId={user.id} />
+                <PushNotificationToggle userId={user.id} scope={pushScopeFor(user.role)} />
               </div>
               <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
                 This setting belongs to the browser you are using, not to your account:

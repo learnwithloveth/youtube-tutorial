@@ -18,6 +18,7 @@
     "db:studio": "drizzle-kit studio",
     "db:refresh": "node --conditions=react-server --import tsx scripts/refresh-market-data.ts",
     "map:generate": "node --import tsx scripts/generate-world-map.ts",
+    "icons:generate": "node --import tsx scripts/generate-console-icons.ts",
     "firebase:deploy": "node --conditions=react-server --import tsx scripts/deploy-firestore.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm lint:boundaries && pnpm test",
     "admin:grant": "node --conditions=react-server --import tsx scripts/grant-admin.ts",

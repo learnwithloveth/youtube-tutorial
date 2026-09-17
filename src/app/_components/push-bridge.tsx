@@ -22,12 +22,15 @@ import { usePushMessages, usePushSync } from '@/shared/firebase/use-push';
  * ── Except for the support queue ─────────────────────────────────────────────
  * The console keeps its own realtime listener. Re-rendering it on every customer
  * message would be a round of server reads that changes nothing on the screen.
+ *
+ * `scope` is `pushScopeFor(role)`, never the area the page is in: an operator's
+ * registration stays at the console's scope while they browse the customer side.
  */
-export function PushBridge({ userId }: { userId: string }) {
+export function PushBridge({ userId, scope }: { userId: string; scope: string }) {
   const router = useRouter();
   const pending = useRef<number | null>(null);
 
-  usePushSync(userId);
+  usePushSync(userId, scope);
 
   const onPush = useCallback(
     (surface: string | null) => {
