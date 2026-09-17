@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { BRAND } from '@/modules/content';
 import { googleOAuthConfig } from '@/platform/env';
 import { describeRequest } from '@/server/request-context';
 import { dialCodeFor } from '@/shared/lib/phone';
@@ -16,7 +17,7 @@ import { SignupForm } from './_components/signup-form';
  */
 export const metadata: Metadata = {
   title: 'Create an account',
-  description: 'Open a Novex account in under two minutes and trade 340+ assets with fees from 0.00%.',
+  description: `Open a ${BRAND.name} account in under two minutes and trade 340+ assets with fees from 0.00%.`,
   // Authentication screens have nothing to offer a search result, and indexing
   // them invites phishing pages to rank beside the real one.
   robots: { index: false, follow: false },

@@ -43,5 +43,5 @@ next-env.d.ts
 # The Vite source the dashboard and admin console were ported from. Reference
 # material, not part of this build; excluded from tsconfig, eslint and
 # dependency-cruiser. Delete once nothing needs to be checked against it.
-/novex/
+# /novex/
 /novex-admin/

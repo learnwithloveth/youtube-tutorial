@@ -9,6 +9,7 @@ import type {
   SignInMethodsDto,
   VerificationStandingDto,
 } from '@/modules/identity';
+import { BRAND } from '@/modules/content';
 import type { DailyLimitDto } from '@/modules/ledger';
 import { usePush } from '@/shared/firebase/use-push';
 import { cn } from '@/shared/lib/cn';
@@ -254,7 +255,7 @@ export function SettingsShell({
         <div className="min-w-0 space-y-4">
           {tab === 'profile' ? (
             <Panel>
-              <PanelHeader title="Profile" subtitle="How you appear across Novex" />
+              <PanelHeader title="Profile" subtitle={`How you appear across ${BRAND.name}`} />
               <ProfileForm user={user} />
             </Panel>
           ) : null}

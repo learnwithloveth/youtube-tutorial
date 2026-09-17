@@ -1,6 +1,7 @@
 import { ArrowRight, Coins, Lock, ShieldCheck, Timer } from 'lucide-react';
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
@@ -21,10 +22,10 @@ const PILLARS = [
 ];
 
 const EARN_FAQ = [
-  { question: 'Where does the yield come from?', answer: 'From the protocol itself. When you stake, Novex delegates your assets to validators that secure the underlying network, and the network mints rewards for that work. There is no lending, no rehypothecation, and no counterparty taking the other side of a trade.' },
+  { question: 'Where does the yield come from?', answer: `From the protocol itself. When you stake, ${BRAND.name} delegates your assets to validators that secure the underlying network, and the network mints rewards for that work. There is no lending, no rehypothecation, and no counterparty taking the other side of a trade.` },
   { question: 'Can I lose my staked assets?', answer: 'Two ways, both bounded. Validators can be slashed for misbehaviour — our shield covers that up to $50M. And the asset itself can fall in price; staking pays you in the same asset, so a 9% APY on something that halves is still a loss in dollar terms.' },
   { question: 'How long does unstaking take?', answer: 'Instantly for 21 of the 38 supported assets. The rest follow the protocol unbonding period — 2 days on Cosmos, around 28 on Polkadot, variable on Ethereum depending on the exit queue. The exact window is shown before you confirm.' },
-  { question: 'Do I keep custody while staking?', answer: 'Assets staked from your exchange account remain in Novex custody and are included in the daily proof-of-reserves. Assets staked from Novex Wallet stay in your own MPC custody throughout.' },
+  { question: 'Do I keep custody while staking?', answer: `Assets staked from your exchange account remain in ${BRAND.name} custody and are included in the daily proof-of-reserves. Assets staked from ${BRAND.name} Wallet stay in your own MPC custody throughout.` },
 ];
 
 export const metadata: Metadata = {
@@ -39,7 +40,7 @@ export default async function EarnPage() {
   return (
     <>
       <PageHero
-        eyebrow="Novex Earn"
+        eyebrow={`${BRAND.name} Earn`}
         title={
           <>
             Idle assets are
@@ -104,7 +105,7 @@ export default async function EarnPage() {
 
       <Section>
         <div className="shell">
-          <SectionHeading eyebrow="How it works" title="Yield without the counterparty risk" body="Novex Earn is native protocol staking. No lending desk, no rehypothecation, no one on the other side of your position." />
+          <SectionHeading eyebrow="How it works" title="Yield without the counterparty risk" body={`${BRAND.name} Earn is native protocol staking. No lending desk, no rehypothecation, no one on the other side of your position.`} />
           <StaggerGroup className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {PILLARS.map((pillar) => (
               <StaggerItem key={pillar.title}>

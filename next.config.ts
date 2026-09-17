@@ -29,6 +29,22 @@ import type { NextConfig } from 'next';
  * realtime subscription.
  */
 const nextConfig: NextConfig = {
+  /**
+   * ── The site's name and description, from the environment ────────────────────
+   * Client Components render the name too — the logo's label, the top bar, the
+   * support widget — so the browser bundle has to see the same value the server
+   * rendered with, or the two disagree at hydration and React throws the tree away.
+   * A `NEXT_PUBLIC_` prefix would arrange that, but these are named `WEBSITE_NAME`
+   * and `WEBSITE_DESCRIPTION`; `env` inlines exactly these two, under those names.
+   *
+   * Inlined at build time, which is the cost: after changing either, restart
+   * `next dev` or rebuild. The fallbacks when they are unset live in
+   * `modules/content/infrastructure/brand.ts`.
+   */
+  env: {
+    WEBSITE_NAME: process.env.WEBSITE_NAME ?? '',
+    WEBSITE_DESCRIPTION: process.env.WEBSITE_DESCRIPTION ?? '',
+  },
   experimental: {
     staleTimes: {
       dynamic: 30,

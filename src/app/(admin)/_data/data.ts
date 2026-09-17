@@ -1,6 +1,7 @@
 import { ASSETS } from '../../_console/data/assets';
 import { cycle, hashSeed, pick, seededRandom } from '../../_console/data/simulation';
 import { NOW } from '../../_console/data/series';
+import { BRAND } from '@/modules/content';
 import type {
   AdminMember, AdminUser, Approval, AuditEntry, FeatureFlag, Incident,
   Listing, Payout, Risk, SupportMessage, Ticket, TreasuryWallet, Validator,
@@ -14,7 +15,7 @@ export const ACTING_ADMIN = {
   name: 'Marcus Vogel',
   email: 'marcus.vogel@novex.io',
   initials: 'MV',
-  hue: '#22D3EE',
+  hue: '#16B8AC',
   role: 'Owner' as const,
   /** Policy: a second, different approver above this notional. */
   dualControlThreshold: 100_000,
@@ -26,7 +27,7 @@ const NAMES = ['Amara Okonkwo', 'Daniel Reyes', 'Sofia Lindqvist', 'Tolu Adeyemi
   'Jae Kim', 'Lena Weber', 'Omar Said', 'Nkechi Eze', 'Ben Frost', 'Mai Tanaka', 'Ivo Kovac',
   'Rui Santos', 'Hui Chen', 'Aoife Doyle'];
 const COUNTRIES = ['NG', 'CH', 'SE', 'NG', 'IN', 'KR', 'DE', 'AE', 'NG', 'GB', 'JP', 'HR', 'PT', 'SG', 'IE'];
-const HUES = ['#8B5CF6', '#22D3EE', '#E879F9', '#34D399', '#FBBF24', '#FB7185', '#60A5FA', '#2DD4BF'];
+const HUES = ['#10BD85', '#16B8AC', '#C026D3', '#5FF09B', '#FBBF24', '#EA580C', '#2563EB', '#A8DE1F'];
 
 const initials = (name: string) =>
   name
@@ -97,7 +98,7 @@ export const APPROVALS: Approval[] = (() => {
       network: pick(networks, rand),
       destination: kind === 'withdrawal'
         ? `0x${Math.floor(rand() * 0xffffffff).toString(16).padStart(8, '0')}…${Math.floor(rand() * 0xffff).toString(16).padStart(4, '0')}`
-        : 'Novex custody',
+        : `${BRAND.name} custody`,
       submittedAt: new Date(NOW - i * 47 * 60_000 - rand() * HOUR).toISOString(),
       risk,
       riskScore: score,
@@ -282,12 +283,12 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
 ];
 
 export const ADMIN_TEAM: AdminMember[] = [
-  { id: 'a1', name: 'Marcus Vogel', email: 'marcus.vogel@novex.io', initials: 'MV', hue: '#22D3EE', role: 'Owner', lastActive: 'Now', mfa: 'Hardware key', status: 'active' },
-  { id: 'a2', name: 'Priya Raman', email: 'priya.raman@novex.io', initials: 'PR', hue: '#8B5CF6', role: 'Compliance', lastActive: '12 minutes ago', mfa: 'Hardware key', status: 'active' },
-  { id: 'a3', name: 'Lena Weber', email: 'lena.weber@novex.io', initials: 'LW', hue: '#E879F9', role: 'Support', lastActive: '2 minutes ago', mfa: 'Passkey', status: 'active' },
-  { id: 'a4', name: 'Rui Santos', email: 'rui.santos@novex.io', initials: 'RS', hue: '#34D399', role: 'Treasury', lastActive: '1 hour ago', mfa: 'Hardware key', status: 'active' },
+  { id: 'a1', name: 'Marcus Vogel', email: 'marcus.vogel@novex.io', initials: 'MV', hue: '#16B8AC', role: 'Owner', lastActive: 'Now', mfa: 'Hardware key', status: 'active' },
+  { id: 'a2', name: 'Priya Raman', email: 'priya.raman@novex.io', initials: 'PR', hue: '#10BD85', role: 'Compliance', lastActive: '12 minutes ago', mfa: 'Hardware key', status: 'active' },
+  { id: 'a3', name: 'Lena Weber', email: 'lena.weber@novex.io', initials: 'LW', hue: '#C026D3', role: 'Support', lastActive: '2 minutes ago', mfa: 'Passkey', status: 'active' },
+  { id: 'a4', name: 'Rui Santos', email: 'rui.santos@novex.io', initials: 'RS', hue: '#5FF09B', role: 'Treasury', lastActive: '1 hour ago', mfa: 'Hardware key', status: 'active' },
   { id: 'a5', name: 'Hui Chen', email: 'hui.chen@novex.io', initials: 'HC', hue: '#FBBF24', role: 'Engineer', lastActive: '4 hours ago', mfa: 'Passkey', status: 'active' },
-  { id: 'a6', name: 'Ben Frost', email: 'ben.frost@novex.io', initials: 'BF', hue: '#FB7185', role: 'Read-only', lastActive: '3 days ago', mfa: 'TOTP', status: 'suspended' },
+  { id: 'a6', name: 'Ben Frost', email: 'ben.frost@novex.io', initials: 'BF', hue: '#EA580C', role: 'Read-only', lastActive: '3 days ago', mfa: 'TOTP', status: 'suspended' },
 ];
 
 /** Which role may take which action. The console reads this, it is not decorative. */

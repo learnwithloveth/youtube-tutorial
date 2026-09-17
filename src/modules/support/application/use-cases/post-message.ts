@@ -187,7 +187,7 @@ async function announce(
 
   await deps.push.notify({
     audience: { userId: conversation.userId },
-    title: 'Novex support replied',
+    title: `${deps.siteName} support replied`,
     body: preview,
     link: '/app',
     tag: `support-${conversation.id}`,

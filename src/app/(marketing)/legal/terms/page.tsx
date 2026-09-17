@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { LegalDocument, type LegalSection } from '../_components/legal-document';
+import { BRAND } from '@/modules/content';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -8,12 +9,12 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          These terms form a binding agreement between you and Novex Technologies AG, a company
+          These terms form a binding agreement between you and {BRAND.name} Technologies AG, a company
           registered in Zurich, Switzerland. By opening an account, accessing the platform, or
           placing an order you accept them in full.
         </p>
         <p>
-          Where a service is provided by a Novex group entity in your jurisdiction, that entity&apos;s
+          Where a service is provided by a {BRAND.name} group entity in your jurisdiction, that entity&apos;s
           supplementary terms apply alongside these and prevail in the event of a conflict.
         </p>
       </>
@@ -44,7 +45,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          Novex operates a matching venue for digital assets. We act as an execution venue, not as
+          {BRAND.name} operates a matching venue for digital assets. We act as an execution venue, not as
           your adviser, and we do not act as principal against your order flow.
         </p>
         <p>
@@ -69,10 +70,10 @@ const SECTIONS: LegalSection[] = [
         </p>
         <p>
           Fiat balances are held in client money accounts at tier-1 banks, titled to customers and
-          held off the Novex balance sheet.
+          held off the {BRAND.name} balance sheet.
         </p>
         <p>
-          Assets held in Novex Wallet are in your own custody. We cannot move, freeze or recover
+          Assets held in {BRAND.name} Wallet are in your own custody. We cannot move, freeze or recover
           them, and the provisions of this section do not apply to them.
         </p>
       </>
@@ -175,7 +176,7 @@ const SECTIONS: LegalSection[] = [
 export const metadata: Metadata = {
   title: 'Terms of service',
   description:
-    'The agreement governing your use of Novex.',
+    `The agreement governing your use of ${BRAND.name}.`,
 };
 
 export default function TermsPage() {
@@ -184,7 +185,7 @@ export default function TermsPage() {
     <LegalDocument
       title="Terms of service"
       updated="12 August 2026"
-      summary="The agreement that governs your Novex account. Written to be read, with the parts that matter most to you near the top."
+      summary={`The agreement that governs your ${BRAND.name} account. Written to be read, with the parts that matter most to you near the top.`}
       sections={SECTIONS}
     />
   );

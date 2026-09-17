@@ -180,6 +180,8 @@ export interface RegisterIdentityOptions {
   sessionSecret: string;
   /** Origin used to build the links in outbound mail. */
   appUrl: string;
+  /** The site's name, as outbound mail signs itself. */
+  siteName: string;
   /** Omit to fall back to logging messages instead of sending them. */
   smtp?: SmtpConfig | undefined;
   /** Omit to run without Google sign-in, which is a supported configuration. */
@@ -216,6 +218,7 @@ export function registerIdentity(options: RegisterIdentityOptions): IdentityModu
     digest: new HmacDigest(options.sessionSecret),
     email,
     urls,
+    siteName: options.siteName,
     clock: options.clock ?? systemClock,
   };
 

@@ -26,7 +26,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <Aurora className="lg:hidden" />
 
       <div className="relative flex flex-col px-5 py-8 md:px-10">
-        <Link href="/" className="inline-flex w-fit" aria-label={`${BRAND.name} home`}>
+        <Link href="/" className="inline-flex w-fit max-w-full" aria-label={`${BRAND.name} home`}>
           <Wordmark />
         </Link>
         <div className="flex flex-1 items-center justify-center py-12">

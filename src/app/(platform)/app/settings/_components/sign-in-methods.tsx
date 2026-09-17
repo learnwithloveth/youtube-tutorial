@@ -39,7 +39,7 @@ const GOOGLE_NOTICES: Readonly<Record<string, { tone: 'up' | 'down'; message: st
   },
   'google-linked-elsewhere': {
     tone: 'down',
-    message: 'That Google account is already connected to another Novex account.',
+    message: 'That Google account is already connected to another account.',
   },
   'google-already-connected': {
     tone: 'down',

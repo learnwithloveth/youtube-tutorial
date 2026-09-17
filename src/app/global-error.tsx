@@ -19,8 +19,8 @@ export default function GlobalError({
     <html lang="en">
       <body
         style={{
-          background: '#05060b',
-          color: '#edeff7',
+          background: '#04120d',
+          color: '#e6f2ea',
           fontFamily: 'ui-sans-serif, system-ui, sans-serif',
           display: 'grid',
           placeItems: 'center',
@@ -33,11 +33,11 @@ export default function GlobalError({
           <h1 style={{ fontSize: '1.75rem', fontWeight: 600, margin: 0 }}>
             The page could not be loaded
           </h1>
-          <p style={{ marginTop: '1rem', color: '#9ba3be', lineHeight: 1.6 }}>
+          <p style={{ marginTop: '1rem', color: '#93ab9f', lineHeight: 1.6 }}>
             Something failed before the site could render. The issue has been logged.
           </p>
           {error.digest ? (
-            <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#7d85a3' }}>
+            <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#77907f' }}>
               Reference {error.digest}
             </p>
           ) : null}
@@ -48,8 +48,8 @@ export default function GlobalError({
               marginTop: '2rem',
               borderRadius: '999px',
               border: 'none',
-              background: '#8b5cf6',
-              color: '#ffffff',
+              background: '#10bd85',
+              color: '#032018',
               padding: '0.75rem 1.75rem',
               fontSize: '0.875rem',
               fontWeight: 500,

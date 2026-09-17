@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { LegalDocument, type LegalSection } from '../_components/legal-document';
+import { BRAND } from '@/modules/content';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -8,7 +9,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          Novex Technologies AG, Bahnhofstrasse 42, 8001 Zurich, is the controller of the personal
+          {BRAND.name} Technologies AG, Bahnhofstrasse 42, 8001 Zurich, is the controller of the personal
           data described here. Our Data Protection Officer can be reached at{' '}
           <a href="mailto:dpo@novex.io">dpo@novex.io</a>.
         </p>
@@ -126,7 +127,7 @@ const SECTIONS: LegalSection[] = [
 export const metadata: Metadata = {
   title: 'Privacy policy',
   description:
-    'What data Novex collects, why, and the control you have over it.',
+    `What data ${BRAND.name} collects, why, and the control you have over it.`,
 };
 
 export default function PrivacyPage() {

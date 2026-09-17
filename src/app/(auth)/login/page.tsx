@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
+import { BRAND } from '@/modules/content';
 import { googleOAuthConfig } from '@/platform/env';
 
 import { LoginForm } from './_components/login-form';
@@ -15,7 +16,7 @@ import { LoginForm } from './_components/login-form';
  */
 export const metadata: Metadata = {
   title: 'Log in',
-  description: 'Sign in to your Novex account with a passkey, a password, or a linked provider.',
+  description: `Sign in to your ${BRAND.name} account with a passkey, a password, or a linked provider.`,
   // Authentication screens have nothing to offer a search result, and indexing
   // them invites phishing pages to rank beside the real one.
   robots: { index: false, follow: false },

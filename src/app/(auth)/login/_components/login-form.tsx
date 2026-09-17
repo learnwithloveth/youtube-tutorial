@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useActionState, useState } from 'react';
 
+import { BRAND } from '@/modules/content';
 import { TextField } from '@/shared/ui/primitives/field';
 
 import { signInAction } from '../../actions';
@@ -39,7 +40,7 @@ const SIGN_IN_ERRORS: Readonly<Record<string, string>> = {
   'google-unverified':
     'Google has not confirmed the address on that account, so it cannot be used to sign in.',
   'google-linked-elsewhere':
-    'That Google account is already connected to another Novex account.',
+    'That Google account is already connected to another account.',
   'account-disabled': 'This account is not available. Contact support.',
 };
 
@@ -139,7 +140,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
         </SubmitButton>
       </form>
 
-      <AuthFooterLink prompt="New to Novex?" label="Create an account" href="/signup" />
+      <AuthFooterLink prompt={`New to ${BRAND.name}?`} label="Create an account" href="/signup" />
     </div>
   );
 }

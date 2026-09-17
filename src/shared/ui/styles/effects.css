@@ -1,5 +1,5 @@
 /* =============================================================================
- * Effects layer — the visual signature of Aurora Noir.
+ * Effects layer — the visual signature of Phosphor.
  * Every animation here is compositor-only (transform / opacity / filter) so the
  * main thread stays free while the page is scrolled or recorded.
  * ========================================================================== */

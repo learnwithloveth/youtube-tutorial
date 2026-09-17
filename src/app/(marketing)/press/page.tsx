@@ -13,12 +13,12 @@ import { CountUp } from '@/shared/ui/primitives/count-up';
 import { formatDate } from '@/shared/lib/format';
 
 const PALETTE = [
-  { name: 'Void', hex: '#05060B' },
-  { name: 'Brand violet', hex: '#8B5CF6' },
-  { name: 'Aurora cyan', hex: '#22D3EE' },
-  { name: 'Signal magenta', hex: '#E879F9' },
-  { name: 'Mint', hex: '#34D399' },
-  { name: 'Ink', hex: '#EDEFF7' },
+  { name: 'Void', hex: '#04120D' },
+  { name: 'Phosphor jade', hex: '#10BD85' },
+  { name: 'Signal lime', hex: '#C8F450' },
+  { name: 'Aqua', hex: '#4FE4D8' },
+  { name: 'Spring', hex: '#5FF09B' },
+  { name: 'Ink', hex: '#E6F2EA' },
 ];
 
 const FACTS = [
@@ -27,13 +27,13 @@ const FACTS = [
   { k: 'Offices', v: 'Zurich · Singapore · Lagos' },
   { k: 'Licences', v: '14 jurisdictions' },
   { k: 'Listed assets', v: '340+' },
-  { k: 'Legal entity', v: 'Novex Technologies AG' },
+  { k: 'Legal entity', v: `${BRAND.name} Technologies AG` },
 ];
 
 export const metadata: Metadata = {
   title: 'Press',
   description:
-    'Logos, brand assets, company facts and media contacts for the Novex press office.',
+    `Logos, brand assets, company facts and media contacts for the ${BRAND.name} press office.`,
 };
 
 export default function PressPage() {
@@ -97,10 +97,13 @@ export default function PressPage() {
             body="Clear space on all sides equal to the height of the mark. Do not recolour it, rotate it, or place it on a busy photograph."
           />
 
-          <div className="mt-14 grid gap-4 lg:grid-cols-3">
+          {/* `grid-cols-1` is `minmax(0, 1fr)`: without it the single phone column
+              sizes to its widest content, and a long site name in a lockup that
+              will not wrap made the page scroll sideways. */}
+          <div className="mt-14 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Reveal>
               <Card className="flex h-56 flex-col items-center justify-center gap-6 p-8">
-                <Wordmark markClassName="size-12" className="scale-125" />
+                <Wordmark markClassName="size-12" />
                 <p className="text-xs uppercase tracking-wider text-fg-subtle">
                   Primary lockup · SVG, PNG
                 </p>
@@ -116,13 +119,13 @@ export default function PressPage() {
             </Reveal>
             <Reveal delay={0.14}>
               <Card className="flex h-56 flex-col items-center justify-center gap-4 bg-white p-8" edge={false}>
-                <span className="inline-flex items-center gap-2.5">
-                  <LogoMark className="size-9" />
-                  <span className="font-display text-lg font-bold tracking-[-0.04em] text-[#0b0d16]">
-                    NOVEX
+                <span className="inline-flex min-w-0 max-w-full items-center gap-2.5">
+                  <LogoMark decorative className="size-9" />
+                  <span className="min-w-0 truncate font-display text-lg font-bold tracking-[-0.04em] text-[#06140e]">
+                    {BRAND.wordmark}
                   </span>
                 </span>
-                <p className="text-xs uppercase tracking-wider text-[#565e7a]">On light surfaces</p>
+                <p className="text-xs uppercase tracking-wider text-[#4b5f55]">On light surfaces</p>
               </Card>
             </Reveal>
           </div>
@@ -158,16 +161,16 @@ export default function PressPage() {
                 </h3>
                 <div className="mt-6 space-y-5">
                   <div>
-                    <p className="font-display text-3xl font-semibold text-fg">Sora Semibold</p>
+                    <p className="font-display text-3xl font-semibold text-fg">Gabarito Semibold</p>
                     <p className="mt-1 text-xs text-fg-subtle">Display · headings and the wordmark</p>
                   </div>
                   <div>
-                    <p className="text-xl text-fg">Inter Regular</p>
+                    <p className="text-xl text-fg">Figtree Regular</p>
                     <p className="mt-1 text-xs text-fg-subtle">Body · all running text and UI</p>
                   </div>
                   <div>
                     <p data-numeric className="text-xl text-fg">
-                      JetBrains Mono 0123456789
+                      IBM Plex Mono 0123456789
                     </p>
                     <p className="mt-1 text-xs text-fg-subtle">Numeric · prices, quantities, code</p>
                   </div>

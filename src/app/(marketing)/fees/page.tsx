@@ -4,6 +4,7 @@ import { FeeExplorer } from './_components/fee-explorer';
 import { ArrowRight, Check, Info, Minus } from 'lucide-react';
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
 import { DisclosureList } from '@/shared/ui/primitives/disclosure';
@@ -22,9 +23,9 @@ const COMPARISON = [
 
 const FEE_FAQ = [
   { question: 'How is my volume tier calculated?', answer: 'We look at your trailing 30-day taker + maker notional volume in USD, recalculated every hour. Moving up a tier applies immediately; moving down only happens at the daily boundary, so a quiet afternoon never costs you a rate.' },
-  { question: 'What is a maker rebate?', answer: 'A maker order adds liquidity to the book rather than taking it. At Prime tier your maker fee is negative — Novex pays you 0.005% of the notional, settled daily in the quote currency.' },
+  { question: 'What is a maker rebate?', answer: `A maker order adds liquidity to the book rather than taking it. At Prime tier your maker fee is negative — ${BRAND.name} pays you 0.005% of the notional, settled daily in the quote currency.` },
   { question: 'Are there hidden spreads?', answer: 'No. The rate you see on the conversion widget is the routed mid-price and the fee is quoted separately. We do not mark up the rate and take a second margin inside it.' },
-  { question: 'What about network fees?', answer: 'On-chain withdrawals carry the network fee at cost, shown before you confirm. Novex adds nothing on top and does not round up.' },
+  { question: 'What about network fees?', answer: `On-chain withdrawals carry the network fee at cost, shown before you confirm. ${BRAND.name} adds nothing on top and does not round up.` },
 ];
 
 export const metadata: Metadata = {
@@ -67,7 +68,7 @@ export default function FeesPage() {
           <StaggerGroup className="mt-12 overflow-hidden rounded-lg border border-line">
             <div className="grid grid-cols-[1.6fr_1fr_1fr] border-b border-line bg-bg-sunken/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
               <span>Feature</span>
-              <span className="text-center text-brand-soft">Novex</span>
+              <span className="text-center text-brand-soft">{BRAND.name}</span>
               <span className="text-center">Industry range</span>
             </div>
             {COMPARISON.map((row) => (

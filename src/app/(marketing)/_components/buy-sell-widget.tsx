@@ -3,6 +3,7 @@
 import { ArrowDownUp, ChevronDown, Lock, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { BRAND } from '@/modules/content';
 import { estimateConversion, type MarketDto } from '@/modules/market-data';
 import { BasisPoints, Money } from '@/shared/kernel';
 import { cn } from '@/shared/lib/cn';
@@ -256,7 +257,7 @@ export function BuySellWidget({
               </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-fg-subtle">Novex fee (0.10%)</dt>
+              <dt className="text-fg-subtle">{BRAND.name} fee (0.10%)</dt>
               <dd data-numeric className="text-fg-muted">
                 {formatPrice(estimate.fee.toDecimalString(), QUOTE_CURRENCY)}
               </dd>

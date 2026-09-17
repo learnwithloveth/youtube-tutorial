@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BRAND } from '@/modules/content';
 import { Reveal } from '@/shared/ui/motion/reveal';
 import { Badge } from '@/shared/ui/primitives/badge';
 
@@ -71,7 +72,7 @@ export function LegalDocument({
 
       <Reveal>
         <div className="mt-16 rounded-lg border border-line bg-bg-sunken/60 p-6 text-sm leading-relaxed text-fg-subtle">
-          Novex is a fictional exchange created as a design demonstration. This document is
+          {BRAND.name} is a fictional exchange created as a design demonstration. This document is
           illustrative sample copy and is not legal advice or an enforceable agreement.
         </div>
       </Reveal>

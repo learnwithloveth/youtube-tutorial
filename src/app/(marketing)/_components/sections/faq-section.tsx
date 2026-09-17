@@ -1,10 +1,11 @@
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { DisclosureList, type DisclosureItem } from '@/shared/ui/primitives/disclosure';
 import { Reveal } from '@/shared/ui/motion/reveal';
 
 export const HOME_FAQ: DisclosureItem[] = [
   {
-    question: 'How does Novex prove it holds my assets?',
+    question: `How does ${BRAND.name} prove it holds my assets?`,
     answer:
       'Every 24 hours we publish a Merkle root of all customer balances alongside signed attestations of on-chain reserve addresses. Your account page gives you your own leaf and the sibling hashes, so you can verify your balance is inside the published root without trusting us or an auditor.',
   },
@@ -14,14 +15,14 @@ export const HOME_FAQ: DisclosureItem[] = [
       'Spot trading starts at 0.10% taker and 0.02% maker, falling to 0.03% / −0.005% at the top volume tier. New accounts trade the top 20 pairs commission-free for 30 days. Deposits over local rails are free; card funding carries the network fee at cost.',
   },
   {
-    question: 'Is Novex regulated?',
+    question: `Is ${BRAND.name} regulated?`,
     answer:
-      'Novex operates under 14 licences including MiCA authorisation in the EEA, a Major Payment Institution licence in Singapore, and FinCEN MSB registration in the United States. Product availability varies by jurisdiction and is shown at signup.',
+      `${BRAND.name} operates under 14 licences including MiCA authorisation in the EEA, a Major Payment Institution licence in Singapore, and FinCEN MSB registration in the United States. Product availability varies by jurisdiction and is shown at signup.`,
   },
   {
     question: 'Can I hold my own keys?',
     answer:
-      'Yes. Novex Wallet is fully self-custodial and uses MPC key shards split across three regions — we never hold or assemble a complete private key. You can move between the exchange account and the wallet in one tap with no withdrawal fee.',
+      `Yes. ${BRAND.name} Wallet is fully self-custodial and uses MPC key shards split across three regions — we never hold or assemble a complete private key. You can move between the exchange account and the wallet in one tap with no withdrawal fee.`,
   },
   {
     question: 'What happens if the exchange is compromised?',

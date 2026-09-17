@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 
+import { BRAND } from '@/modules/content';
 import { ActiveLink } from '@/shared/ui/primitives/active-link';
 import { AnimatePresence, motion } from 'motion/react';
 import {
@@ -119,7 +120,7 @@ export function TopBar({
         >
           <Menu className="size-4" />
         </button>
-        <Link href="/app" className="lg:hidden" aria-label="Novex dashboard">
+        <Link href="/app" className="lg:hidden" aria-label={`${BRAND.name} dashboard`}>
           <LogoMark className="size-8" />
         </Link>
 

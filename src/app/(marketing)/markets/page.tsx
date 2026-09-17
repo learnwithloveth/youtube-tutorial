@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { BRAND } from '@/modules/content';
 import type { MarketDto } from '@/modules/market-data';
 import { getMarkets } from '@/server/market-data';
 import { cn } from '@/shared/lib/cn';
@@ -25,7 +26,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: 'Markets',
   description:
-    'Prices, 24-hour moves and volume across every asset listed on Novex, with the time each quote was observed.',
+    `Prices, 24-hour moves and volume across every asset listed on ${BRAND.name}, with the time each quote was observed.`,
 };
 
 export default function MarketsPage() {

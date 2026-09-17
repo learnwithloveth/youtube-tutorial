@@ -5,6 +5,7 @@ import {
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
 import { FeatureRows, type FeatureRow } from '../_components/sections/feature-rows';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { Card } from '@/shared/ui/primitives/card';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
@@ -47,7 +48,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: 'Features',
   description:
-    'Sub-millisecond matching, eight order types, proof-of-reserves and self-custody — everything the Novex engine does.',
+    `Sub-millisecond matching, eight order types, proof-of-reserves and self-custody — everything the ${BRAND.name} engine does.`,
 };
 
 export default async function FeaturesPage() {
@@ -126,7 +127,7 @@ export default async function FeaturesPage() {
             <span className="text-aurora">in one account.</span>
           </>
         }
-        body="Novex is one platform for spot trading, recurring investment, staking and self-custody — built on the infrastructure institutions already trust."
+        body={`${BRAND.name} is one platform for spot trading, recurring investment, staking and self-custody — built on the infrastructure institutions already trust.`}
         actions={
           <>
             <ButtonLink href="/signup" size="lg" sheen>

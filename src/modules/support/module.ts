@@ -47,6 +47,8 @@ export interface RegisterSupportOptions {
    * missing Firebase project does.
    */
   db: Database;
+  /** The site's name, which notifications are signed with. */
+  siteName: string;
   ids?: IdGenerator;
   clock?: Clock;
 }
@@ -63,6 +65,7 @@ export function registerSupport(options: RegisterSupportOptions): SupportModule 
     attachments: new PostgresAttachmentStorage(options.db),
     ids: options.ids ?? systemIdGenerator,
     clock: options.clock ?? systemClock,
+    siteName: options.siteName,
   };
 
   return {

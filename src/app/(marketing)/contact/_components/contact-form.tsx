@@ -3,6 +3,7 @@
 import { Check, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 
+import { BRAND } from '@/modules/content';
 import { Button } from '@/shared/ui/primitives/button';
 import { SelectField, TextAreaField, TextField } from '@/shared/ui/primitives/field';
 
@@ -57,7 +58,7 @@ export function ContactForm() {
         name="message"
         required
         placeholder="Tell us what you need. Please do not include passwords, 2FA codes or private keys."
-        hint="Never share credentials. Novex staff will never ask for them."
+        hint={`Never share credentials. ${BRAND.name} staff will never ask for them.`}
       />
       <Button type="submit" size="lg" sheen className="w-full sm:w-auto">
         {sent ? (

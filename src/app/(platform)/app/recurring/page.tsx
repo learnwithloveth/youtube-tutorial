@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pause, Play, Plus, Repeat } from 'lucide-react';
 import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
+import { BRAND } from '@/modules/content';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
 import { ChartFrame } from '@/shared/ui/charts/chart-frame';
 import { AreaChart } from '@/shared/ui/charts/area-chart';
@@ -95,7 +96,7 @@ export default function RecurringPage() {
             <SelectField
               label="Funding source"
               options={[
-                { value: 'cash', label: 'Novex cash balance' },
+                { value: 'cash', label: `${BRAND.name} cash balance` },
                 { value: 'bank', label: 'Bank · SEPA Instant ••4402' },
                 { value: 'card', label: 'Card ••8821' },
               ]}

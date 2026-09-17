@@ -43,6 +43,7 @@ function makeDeps() {
     digest: { hash: (value: string) => `d:${value}` },
     email: new RecordingEmailSender(),
     urls: fakeUrls,
+    siteName: 'Novex',
     clock: fixedClock(NOW),
   } as unknown as IdentityDependencies;
 

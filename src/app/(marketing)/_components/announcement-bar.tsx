@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { BRAND } from '@/modules/content';
 
 export function AnnouncementBar() {
   const [visible, setVisible] = useState(true);
@@ -24,7 +25,7 @@ export function AnnouncementBar() {
               <span className="relative inline-flex size-2 rounded-full bg-accent" />
             </span>
             <span className="truncate text-fg-muted">
-              <span className="font-semibold text-fg">Novex Earn is live.</span>
+              <span className="font-semibold text-fg">{BRAND.name} Earn is live.</span>
               <span className="hidden sm:inline"> Stake 38 assets at up to 12.4% APY —</span>
               <span className="sm:hidden"> Up to 12.4% APY</span>
             </span>

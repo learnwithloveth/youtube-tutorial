@@ -1,6 +1,7 @@
 'use client';
 
 
+import { BRAND } from '@/modules/content';
 import { ActiveLink } from '@/shared/ui/primitives/active-link';
 import { ArrowLeft, ChevronsLeft } from 'lucide-react';
 import { ADMIN_NAV } from '../_data/navigation';
@@ -32,11 +33,11 @@ export function AdminSidebar({
       <span aria-hidden className="h-0.5 shrink-0 bg-gradient-to-r from-warn via-brand to-accent" />
 
       <div className={cn('flex h-[3.75rem] shrink-0 items-center px-4', showLabels ? 'justify-between' : 'justify-center')}>
-        <ActiveLink href="/admin" onClick={onNavigate} className="flex items-center gap-2.5" aria-label="Novex console">
+        <ActiveLink href="/admin" onClick={onNavigate} className="flex min-w-0 items-center gap-2.5" aria-label={`${BRAND.name} console`}>
           <LogoMark className="size-8" />
           {showLabels ? (
-            <span className="leading-tight">
-              <span className="block font-display text-sm font-bold tracking-[-0.03em] text-fg">NOVEX</span>
+            <span className="min-w-0 leading-tight">
+              <span title={BRAND.name} className="block truncate font-display text-sm font-bold tracking-[-0.03em] text-fg">{BRAND.wordmark}</span>
               <span className="block font-mono text-[0.6rem] uppercase tracking-[0.22em] text-warn">Console</span>
             </span>
           ) : null}

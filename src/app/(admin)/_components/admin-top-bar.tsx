@@ -58,7 +58,7 @@ export function AdminTopBar({
             <span
               aria-hidden
               className="grid size-7 place-items-center rounded-full text-xs font-semibold text-white"
-              style={{ background: `linear-gradient(140deg, ${ACTING_ADMIN.hue}, color-mix(in oklab, ${ACTING_ADMIN.hue} 40%, #05060b))` }}
+              style={{ background: `linear-gradient(140deg, ${ACTING_ADMIN.hue}, color-mix(in oklab, ${ACTING_ADMIN.hue} 40%, var(--bg)))` }}
             >
               {ACTING_ADMIN.initials}
             </span>

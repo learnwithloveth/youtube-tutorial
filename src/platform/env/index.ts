@@ -50,6 +50,20 @@ const schema = z.object({
   NEXT_PUBLIC_SITE_URL: z.url().default('https://novex.io'),
 
   /**
+   * The site's name and description — the wordmark, page titles, meta tags, email
+   * subjects.
+   *
+   * Listed here to be documented; they are *read* through `BRAND` in the content
+   * module, because Client Components render the name and this module never reaches
+   * a browser. The one reader here is `smtpConfig`, for the sender's name. `next.config.ts` inlines both into every bundle at
+   * build time, so a change needs a restart or a rebuild. Unset or blank falls back
+   * to the design's own name and description — not an error, because a blank name
+   * has an obvious right answer and refusing to boot over it would not be one.
+   */
+  WEBSITE_NAME: z.string().optional(),
+  WEBSITE_DESCRIPTION: z.string().optional(),
+
+  /**
    * IP geolocation for the live-activity console.
    *
    * On by default. Locating a visitor from the connection is the point of the
@@ -142,7 +156,8 @@ const schema = z.object({
     .transform((value) => value === 'true'),
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASSWORD: z.string().min(1).optional(),
-  SMTP_FROM: z.string().min(1).default('Novex <no-reply@novex.io>'),
+  /** Unset signs mail with the site's name — see `smtpConfig`. */
+  SMTP_FROM: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -313,6 +328,10 @@ export function smtpConfig(): {
     secure: config.SMTP_SECURE,
     user: config.SMTP_USER,
     password: config.SMTP_PASSWORD,
-    from: config.SMTP_FROM,
+    // The sender's display name follows the site's unless SMTP_FROM pins one, so a
+    // renamed deployment does not go on signing its mail as the old name. Built from
+    // WEBSITE_NAME here rather than from BRAND, which this layer may not import; the
+    // fallback matches the one in `modules/content/infrastructure/brand.ts`.
+    from: config.SMTP_FROM ?? `${config.WEBSITE_NAME?.trim() || 'Novex'} <no-reply@novex.io>`,
   };
 }

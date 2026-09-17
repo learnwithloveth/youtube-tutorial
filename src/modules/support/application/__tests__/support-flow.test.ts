@@ -138,6 +138,7 @@ function build() {
     } } as RealtimeAuth,
     ids: sequentialIdGenerator(),
     clock: fixedClock(NOW),
+    siteName: 'Novex',
   };
 
   return {
@@ -255,6 +256,8 @@ describe('support conversations', () => {
       audience: { userId: CUSTOMER },
       link: '/app',
       surface: 'support-thread',
+      // Signed with the deployment's name, not a literal.
+      title: 'Novex support replied',
     });
     // One notification per thread on a device, replaced rather than stacked.
     expect(toOperators?.tag).toBe(`support-${id}`);

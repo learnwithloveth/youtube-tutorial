@@ -80,44 +80,6 @@ const ASSETS: readonly LedgerAsset[] = [
         eta: '~3 min',
         addressPattern: /^0x[0-9a-fA-F]{40}$/,
       },
-      {
-        id: 'arbitrum',
-        label: 'Arbitrum One',
-        fee: '0.000080000000000000',
-        eta: '~1 min',
-        addressPattern: /^0x[0-9a-fA-F]{40}$/,
-      },
-    ],
-  },
-  {
-    code: 'USDC',
-    name: 'USD Coin',
-    // Six, because that is what the ERC-20 contract declares. Storing it at 2
-    // because "it is a dollar" would silently truncate every balance.
-    scale: 6,
-    minimumWithdrawal: '10.000000',
-    networks: [
-      {
-        id: 'ethereum',
-        label: 'Ethereum',
-        fee: '4.500000',
-        eta: '~3 min',
-        addressPattern: /^0x[0-9a-fA-F]{40}$/,
-      },
-      {
-        id: 'arbitrum',
-        label: 'Arbitrum One',
-        fee: '0.500000',
-        eta: '~1 min',
-        addressPattern: /^0x[0-9a-fA-F]{40}$/,
-      },
-      {
-        id: 'solana',
-        label: 'Solana',
-        fee: '0.100000',
-        eta: 'Instant',
-        addressPattern: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
-      },
     ],
   },
   {
@@ -160,21 +122,6 @@ const ASSETS: readonly LedgerAsset[] = [
         fee: '1.100000',
         eta: '~1 min',
         addressPattern: TRON_ADDRESS,
-      },
-    ],
-  },
-  {
-    code: 'SOL',
-    name: 'Solana',
-    scale: 9,
-    minimumWithdrawal: '0.050000000',
-    networks: [
-      {
-        id: 'solana',
-        label: 'Solana',
-        fee: '0.000005000',
-        eta: 'Instant',
-        addressPattern: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
       },
     ],
   },

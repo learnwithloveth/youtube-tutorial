@@ -201,7 +201,9 @@ export function presentIdentityError(error: IdentityError): string {
       // would send them round the same loop.
       return `${error.provider} has not confirmed the address on that account, so it cannot be used to sign in.`;
     case 'ProviderAccountLinkedElsewhere':
-      return `That ${error.provider} account is already connected to another Novex account.`;
+      // No site name: nothing is injected into a pure function, and the sentence is
+      // exactly as clear without one — which also keeps it true under any name.
+      return `That ${error.provider} account is already connected to another account.`;
     case 'ProviderAlreadyConnected':
       return `A ${error.provider} account is already connected. Disconnect it first.`;
     case 'ProviderNotConnected':

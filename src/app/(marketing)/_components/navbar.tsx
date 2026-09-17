@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 
+import { BRAND } from '@/modules/content';
 import { cn } from '@/shared/lib/cn';
 import { useEscape, useScrolled } from '@/shared/lib/hooks';
 import { Wordmark } from '@/shared/ui/visuals/logo';
@@ -80,7 +81,7 @@ export function Navbar({
         onMouseLeave={scheduleClose}
       >
         <nav aria-label="Primary" className="shell flex h-18 items-center gap-6 py-4">
-          <Link href="/" className="shrink-0" aria-label="Novex home">
+          <Link href="/" className="min-w-0" aria-label={`${BRAND.name} home`}>
             <Wordmark />
           </Link>
 

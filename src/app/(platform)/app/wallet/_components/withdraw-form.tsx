@@ -71,7 +71,7 @@ export function WithdrawForm({
   const chooseAsset = (code: string) => {
     setAssetCode(code);
     // Networks are per asset; keeping the old selection would leave a Bitcoin
-    // route selected for a USDC withdrawal, which the server would reject.
+    // route selected for a USDT withdrawal, which the server would reject.
     const next = assets.find((candidate) => candidate.code === code);
     setNetworkId(next?.networks[0]?.id ?? '');
   };
@@ -285,7 +285,7 @@ function DepositPanel({
 
   return (
     <div className="space-y-3">
-      {deposit.demo ? (
+      {/* {deposit.demo ? (
         // Loud, above the address, and impossible to scroll past. A demo address
         // that looks like a real one is the single most expensive thing this page
         // could get wrong.
@@ -301,7 +301,7 @@ function DepositPanel({
             </span>
           </p>
         </div>
-      ) : null}
+      ) : null} */}
 
       <div>
         <p className="mb-2 text-xs text-fg-subtle">

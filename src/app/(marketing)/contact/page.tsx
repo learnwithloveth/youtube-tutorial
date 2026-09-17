@@ -25,7 +25,7 @@ const OFFICES = [
 export const metadata: Metadata = {
   title: 'Contact',
   description:
-    'Reach Novex support, the institutional desk, the press office or the security team.',
+    `Reach ${BRAND.name} support, the institutional desk, the press office or the security team.`,
 };
 
 export default function ContactPage() {

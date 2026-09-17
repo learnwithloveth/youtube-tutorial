@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { LegalDocument, type LegalSection } from '../_components/legal-document';
+import { BRAND } from '@/modules/content';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -81,7 +82,7 @@ const SECTIONS: LegalSection[] = [
 export const metadata: Metadata = {
   title: 'Cookie policy',
   description:
-    'The cookies Novex sets, what each is for, and how to refuse them.',
+    `The cookies ${BRAND.name} sets, what each is for, and how to refuse them.`,
 };
 
 export default function CookiesPage() {

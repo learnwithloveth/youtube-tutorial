@@ -197,4 +197,11 @@ export interface SupportDependencies {
   attachments: AttachmentStorage;
   ids: IdGenerator;
   clock: Clock;
+  /**
+   * The site's name, for the words a notification opens with.
+   *
+   * Injected: it is the deployment's to set, and a use case that read the
+   * environment could not be tested without global state.
+   */
+  siteName: string;
 }

@@ -6,7 +6,7 @@ import type { Asset } from './market-types';
  * the shape below is intentionally identical to that payload.
  */
 export const ASSETS: readonly Asset[] = [
-  { id: 'btc', symbol: 'BTC', name: 'Bitcoin', glyph: '₿', hue: '#F7931A', category: 'Layer 1', price: 94820.44, change24h: 2.41, change7d: 8.12, marketCap: 1_874_000_000_000, volume24h: 41_200_000_000, supply: 19_780_000, apy: 0, blurb: 'The original settlement layer and the deepest book on Novex.' },
+  { id: 'btc', symbol: 'BTC', name: 'Bitcoin', glyph: '₿', hue: '#F7931A', category: 'Layer 1', price: 94820.44, change24h: 2.41, change7d: 8.12, marketCap: 1_874_000_000_000, volume24h: 41_200_000_000, supply: 19_780_000, apy: 0, blurb: 'The original settlement layer and the deepest book on this exchange.' },
   { id: 'eth', symbol: 'ETH', name: 'Ethereum', glyph: 'Ξ', hue: '#8A92B2', category: 'Layer 1', price: 4218.9, change24h: 3.87, change7d: 11.4, marketCap: 507_400_000_000, volume24h: 22_900_000_000, supply: 120_300_000, apy: 3.6, blurb: 'Programmable money and the settlement rail for most of DeFi.' },
   { id: 'sol', symbol: 'SOL', name: 'Solana', glyph: '◎', hue: '#14F195', category: 'Layer 1', price: 238.16, change24h: 6.02, change7d: 18.9, marketCap: 114_800_000_000, volume24h: 8_640_000_000, supply: 482_000_000, apy: 7.1, blurb: 'Sub-second finality with parallel execution at 65k TPS.' },
   { id: 'usdc', symbol: 'USDC', name: 'USD Coin', glyph: '$', hue: '#2775CA', category: 'Stablecoin', price: 1.0001, change24h: 0.01, change7d: -0.01, marketCap: 61_200_000_000, volume24h: 12_100_000_000, supply: 61_190_000_000, apy: 5.2, blurb: 'Fully reserved dollars, attested monthly by a top-4 auditor.' },

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import { BRAND } from '@/modules/content';
 import type { UserSummaryDto } from '@/modules/identity';
 import type { ConversationDto, ConversationStatus } from '@/modules/support';
 import {
@@ -49,7 +50,7 @@ export const support = cache((): SupportModule | null => {
   const handle = db();
   if (handle === null) return null;
 
-  return registerSupport({ db: handle });
+  return registerSupport({ db: handle, siteName: BRAND.name });
 });
 
 /** What the console knows about the customer behind a conversation. */

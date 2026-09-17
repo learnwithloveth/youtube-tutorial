@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Boxes, Gauge, Globe2, KeyRound, Layers, LineChart } from 'lucide-react';
+import { BRAND } from '@/modules/content';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { StaggerGroup, StaggerItem } from '@/shared/ui/motion/reveal';
@@ -118,7 +119,7 @@ export function BentoFeatures() {
             <Header
               icon={KeyRound}
               title="Keys you actually hold"
-              body="MPC shards across three regions. Novex never assembles a full private key — not even to sign."
+              body={`MPC shards across three regions. ${BRAND.name} never assembles a full private key — not even to sign.`}
             />
           </Tile>
 

@@ -1,6 +1,7 @@
 import { ASSET_BY_ID, ASSETS } from '../../_console/data/assets';
 import { hashSeed, pick, seededRandom } from '../../_console/data/simulation';
 import { DAY, NOW, buildSeries } from '../../_console/data/series';
+import { BRAND } from '@/modules/content';
 
 // Re-exported so the dashboard pages keep importing them from one place.
 export { NOW, buildSeries };
@@ -24,7 +25,7 @@ export const ACCOUNT = {
   handle: '@amara',
   email: 'amara@meridian.capital',
   initials: 'AO',
-  hue: '#8B5CF6',
+  hue: '#10BD85',
   tier: 'Gold',
   memberSince: '2021-03-14',
   verified: true,
@@ -209,7 +210,7 @@ export const API_KEYS: readonly ApiKey[] = [
 
 export const SESSIONS: readonly Session[] = [
   { id: 's1', device: 'MacBook Pro · Chrome 141', location: 'Zurich, CH', ip: '203.0.113.24', lastActive: 'Now', current: true },
-  { id: 's2', device: 'iPhone 17 Pro · Novex iOS', location: 'Zurich, CH', ip: '203.0.113.51', lastActive: '18 minutes ago', current: false },
+  { id: 's2', device: `iPhone 17 Pro · ${BRAND.name} iOS`, location: 'Zurich, CH', ip: '203.0.113.51', lastActive: '18 minutes ago', current: false },
   { id: 's3', device: 'iPad Air · Safari', location: 'Lagos, NG', ip: '198.51.100.32', lastActive: '2 days ago', current: false },
 ];
 

@@ -33,7 +33,7 @@ interface CatalogueEntry {
 }
 
 const CATALOGUE: readonly CatalogueEntry[] = [
-  { symbol: 'BTC', slug: 'btc', name: 'Bitcoin', glyph: '₿', hue: '#F7931A', category: 'Layer 1', blurb: 'The original settlement layer and the deepest book on Novex.', feedId: 'bitcoin', priceScale: 2, yieldBp: null },
+  { symbol: 'BTC', slug: 'btc', name: 'Bitcoin', glyph: '₿', hue: '#F7931A', category: 'Layer 1', blurb: 'The original settlement layer and the deepest book on this exchange.', feedId: 'bitcoin', priceScale: 2, yieldBp: null },
   { symbol: 'ETH', slug: 'eth', name: 'Ethereum', glyph: 'Ξ', hue: '#8A92B2', category: 'Layer 1', blurb: 'Programmable money and the settlement rail for most of DeFi.', feedId: 'ethereum', priceScale: 2, yieldBp: 360 },
   { symbol: 'SOL', slug: 'sol', name: 'Solana', glyph: '◎', hue: '#14F195', category: 'Layer 1', blurb: 'Sub-second finality with parallel execution at 65k TPS.', feedId: 'solana', priceScale: 2, yieldBp: 710 },
   { symbol: 'USDC', slug: 'usdc', name: 'USD Coin', glyph: '$', hue: '#2775CA', category: 'Stablecoin', blurb: 'Fully reserved dollars, attested monthly by a top-4 auditor.', feedId: 'usd-coin', priceScale: 4, yieldBp: 520 },

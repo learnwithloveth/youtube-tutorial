@@ -1,4 +1,5 @@
 import { Bell, Fingerprint, Repeat, Wifi } from 'lucide-react';
+import { BRAND } from '@/modules/content';
 import { Section } from '@/shared/ui/primitives/section';
 import { Reveal } from '@/shared/ui/motion/reveal';
 import { PhoneMock } from '@/shared/ui/visuals/phone-mock';
@@ -26,7 +27,7 @@ export function AppShowcase({ holdings }: { holdings: readonly MarketDto[] }) {
           <Reveal>
             <p className="eyebrow mb-5">
               <span aria-hidden className="h-px w-6 bg-gradient-to-r from-transparent to-brand-soft" />
-              Novex mobile
+              {BRAND.name} mobile
             </p>
             <h2 className="text-4xl font-semibold">
               Your whole portfolio, in a pocket that already has enough apps.

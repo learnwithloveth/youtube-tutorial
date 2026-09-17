@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Check, Clock, X } from 'lucide-react';
 
+import { BRAND } from '@/modules/content';
 import type { ReceiptDto } from '@/modules/ledger';
 import { requireUser } from '@/server/auth';
 import { getReceiptFor } from '@/server/ledger';
@@ -108,7 +109,7 @@ export default async function ReceiptPage({
     <main className="mx-auto max-w-lg px-5 py-10 print:max-w-none print:px-0 print:py-0">
       <div className="mb-6 flex items-start justify-between gap-4 print:hidden">
         <p className="text-xs leading-relaxed text-fg-subtle">
-          Printed from your Novex account. This is a record of a movement, not a tax
+          Printed from your {BRAND.name} account. This is a record of a movement, not a tax
           invoice.
         </p>
         <PrintButton />
@@ -126,7 +127,7 @@ export default async function ReceiptPage({
           {/* Issuer and document type on one line. Both belong on a printed
               document and neither earns a line of its own above a title. */}
           <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-            Novex <span aria-hidden>·</span> {outcome.document}
+            {BRAND.name} <span aria-hidden>·</span> {outcome.document}
           </p>
 
           <h1 className="mt-5 text-xl font-semibold text-fg">

@@ -1,6 +1,7 @@
 import { Bell, Fingerprint, Gauge, QrCode, Repeat, Star, Wifi } from 'lucide-react';
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { Card } from '@/shared/ui/primitives/card';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
@@ -20,11 +21,11 @@ const FEATURES = [
   { icon: Bell, title: 'Alerts under 400 ms', body: 'Push delivered the moment the book crosses your level, not on the next poll.' },
   { icon: Wifi, title: 'Built for bad networks', body: 'Offline-first cache and delta sync — designed on throttled 3G, not office fibre.' },
   { icon: Gauge, title: 'Full order types', body: 'Stop-limit, trailing stop, TWAP and iceberg all work on mobile.' },
-  { icon: QrCode, title: 'Scan to pay', body: 'Send to any address or Novex tag by camera, with simulation before you sign.' },
+  { icon: QrCode, title: 'Scan to pay', body: `Send to any address or ${BRAND.name} tag by camera, with simulation before you sign.` },
 ];
 
 const REVIEWS = [
-  { stars: 5, title: 'Finally an app that respects my connection', body: 'I trade from a train most mornings. Novex is the only exchange app that does not collapse into spinners.', name: 'martin_k', store: 'App Store' },
+  { stars: 5, title: 'Finally an app that respects my connection', body: `I trade from a train most mornings. ${BRAND.name} is the only exchange app that does not collapse into spinners.`, name: 'martin_k', store: 'App Store' },
   { stars: 5, title: 'The widget is honest', body: 'Shows a stale-data indicator instead of pretending. Small thing. Nobody else does it.', name: 'aoife.dev', store: 'Google Play' },
   { stars: 5, title: 'Recurring buys done right', body: 'Skipping one instalment without killing the whole schedule should not be rare, but it is.', name: 'jrodriguez', store: 'App Store' },
 ];
@@ -46,7 +47,7 @@ export default async function AppPage() {
   return (
     <>
       <PageHero
-        eyebrow="Novex mobile"
+        eyebrow={`${BRAND.name} mobile`}
         title={
           <>
             The whole exchange,
@@ -116,7 +117,7 @@ export default async function AppPage() {
                 <div>
                   <h2 className="text-4xl font-semibold">Point your camera here</h2>
                   <p className="mt-5 max-w-md text-lg text-fg-muted">
-                    Scan to open the right store for your device. Or search “Novex” — we are the one
+                    Scan to open the right store for your device. Or search “{BRAND.name}” — we are the one
                     with the prism.
                   </p>
                   <AppStoreBadges className="mt-9" />

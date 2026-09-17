@@ -120,5 +120,5 @@ function applyTheme(resolved: 'dark' | 'light'): void {
   root.style.colorScheme = resolved;
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', resolved === 'dark' ? '#05060b' : '#fbfbfe');
+    ?.setAttribute('content', resolved === 'dark' ? '#04120d' : '#f5faf7');
 }

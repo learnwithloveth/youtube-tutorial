@@ -92,7 +92,7 @@ export function Footer() {
 
         <div className="mt-8 space-y-4 border-t border-line pt-8">
           <p className="max-w-4xl text-xs leading-relaxed text-fg-subtle">
-            Digital assets are volatile and their value can fall as well as rise. Novex is a
+            Digital assets are volatile and their value can fall as well as rise. {BRAND.name} is a
             fictional exchange created for design and demonstration purposes; nothing on this site
             is investment advice, an offer, or a solicitation. Staking rewards are variable and not
             guaranteed. Availability of products varies by jurisdiction.

@@ -1,4 +1,5 @@
 import { Quote, Star } from 'lucide-react';
+import { BRAND } from '@/modules/content';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { StaggerGroup, StaggerItem } from '@/shared/ui/motion/reveal';
@@ -8,11 +9,11 @@ import { Glow } from '@/shared/ui/visuals/aurora';
 const REVIEWS = [
   {
     quote:
-      'We moved our treasury execution to Novex after benchmarking fills against three venues for a quarter. Slippage on size dropped 38 basis points. That is the whole story.',
+      `We moved our treasury execution to ${BRAND.name} after benchmarking fills against three venues for a quarter. Slippage on size dropped 38 basis points. That is the whole story.`,
     name: 'Amara Okonkwo',
     role: 'Head of Treasury, Meridian Capital',
     initials: 'AO',
-    hue: '#8B5CF6',
+    hue: '#10BD85',
   },
   {
     quote:
@@ -20,7 +21,7 @@ const REVIEWS = [
     name: 'Daniel Reyes',
     role: 'Staff Engineer, Loop Payments',
     initials: 'DR',
-    hue: '#22D3EE',
+    hue: '#16B8AC',
   },
   {
     quote:
@@ -28,7 +29,7 @@ const REVIEWS = [
     name: 'Sofia Lindqvist',
     role: 'Independent trader',
     initials: 'SL',
-    hue: '#E879F9',
+    hue: '#C026D3',
   },
   {
     quote:
@@ -36,7 +37,7 @@ const REVIEWS = [
     name: 'Tolu Adeyemi',
     role: 'Product designer',
     initials: 'TA',
-    hue: '#34D399',
+    hue: '#5FF09B',
   },
 ];
 
@@ -63,7 +64,7 @@ export function Testimonials({ tone = 'default' }: { tone?: 'default' | 'sunken'
                   <span
                     aria-hidden
                     className="grid size-10 shrink-0 place-items-center rounded-full text-sm font-semibold text-white ring-1 ring-inset ring-white/20"
-                    style={{ background: `linear-gradient(140deg, ${review.hue}, color-mix(in oklab, ${review.hue} 45%, #05060b))` }}
+                    style={{ background: `linear-gradient(140deg, ${review.hue}, color-mix(in oklab, ${review.hue} 45%, var(--bg)))` }}
                   >
                     {review.initials}
                   </span>

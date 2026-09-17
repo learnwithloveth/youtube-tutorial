@@ -60,6 +60,7 @@ function makeDeps(now = NOW) {
     digest: { hash: (value) => `d:${value}` },
     email,
     urls: fakeUrls,
+    siteName: 'Novex',
     clock: fixedClock(now),
   };
 

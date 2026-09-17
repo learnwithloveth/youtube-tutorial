@@ -23,19 +23,19 @@ const TIMELINE = [
   { year: '2020', title: 'First licence', body: 'FINMA-supervised operations begin. The matching engine handles its first million orders.' },
   { year: '2021', title: 'Singapore hub', body: 'Major Payment Institution licence granted. APAC volume overtakes Europe within nine months.' },
   { year: '2022', title: 'Proof of reserves', body: 'First daily Merkle attestation published — eleven months before it became an industry expectation.' },
-  { year: '2023', title: 'Novex Wallet', body: 'MPC self-custody ships with no seed phrase. One million wallets created in the first quarter.' },
+  { year: '2023', title: `${BRAND.name} Wallet`, body: 'MPC self-custody ships with no seed phrase. One million wallets created in the first quarter.' },
   { year: '2024', title: 'The Rust rewrite', body: 'The new matching core goes live after five months of shadow replay. Tail latency falls 94%.' },
   { year: '2025', title: 'MiCA authorisation', body: 'Passporting into 27 EEA markets. Institutional custody crosses $100B.' },
   { year: '2026', title: 'Lagos engineering hub', body: 'Third engineering site opens as African volume triples year over year.' },
 ];
 
 const LEADERS = [
-  { name: 'Isabelle Moreau', role: 'Chief Executive', bio: 'Previously ran market structure at a European clearing house. Wrote the original matching engine spec.', initials: 'IM', hue: '#8B5CF6' },
-  { name: 'Daniel Reyes', role: 'VP Engineering', bio: 'Fifteen years in payments infrastructure. Owns the postmortem policy and defends it in board meetings.', initials: 'DR', hue: '#22D3EE' },
-  { name: 'Marcus Vogel', role: 'Head of Security', bio: 'Former offensive security lead. Reports to the board rather than to engineering, deliberately.', initials: 'MV', hue: '#E879F9' },
-  { name: 'Amara Okonkwo', role: 'Head of Market Structure', bio: 'Publishes the research that makes our commercial team uncomfortable. That is the job.', initials: 'AO', hue: '#34D399' },
+  { name: 'Isabelle Moreau', role: 'Chief Executive', bio: 'Previously ran market structure at a European clearing house. Wrote the original matching engine spec.', initials: 'IM', hue: '#10BD85' },
+  { name: 'Daniel Reyes', role: 'VP Engineering', bio: 'Fifteen years in payments infrastructure. Owns the postmortem policy and defends it in board meetings.', initials: 'DR', hue: '#16B8AC' },
+  { name: 'Marcus Vogel', role: 'Head of Security', bio: 'Former offensive security lead. Reports to the board rather than to engineering, deliberately.', initials: 'MV', hue: '#C026D3' },
+  { name: 'Amara Okonkwo', role: 'Head of Market Structure', bio: 'Publishes the research that makes our commercial team uncomfortable. That is the job.', initials: 'AO', hue: '#5FF09B' },
   { name: 'Priya Raman', role: 'Principal Engineer', bio: 'Led the Rust rewrite. Maintains the benchmark methodology we publish quarterly.', initials: 'PR', hue: '#FBBF24' },
-  { name: 'Tolu Adeyemi', role: 'Design Lead', bio: 'Made the whole mobile team work on throttled 3G for a quarter. Retention went up.', initials: 'TA', hue: '#FB7185' },
+  { name: 'Tolu Adeyemi', role: 'Design Lead', bio: 'Made the whole mobile team work on throttled 3G for a quarter. Retention went up.', initials: 'TA', hue: '#EA580C' },
 ];
 
 export const metadata: Metadata = {
@@ -149,7 +149,7 @@ export default function AboutPage() {
                   <span
                     aria-hidden
                     className="grid size-12 place-items-center rounded-full text-sm font-semibold text-white ring-1 ring-inset ring-white/20"
-                    style={{ background: `linear-gradient(140deg, ${leader.hue}, color-mix(in oklab, ${leader.hue} 40%, #05060b))` }}
+                    style={{ background: `linear-gradient(140deg, ${leader.hue}, color-mix(in oklab, ${leader.hue} 40%, var(--bg)))` }}
                   >
                     {leader.initials}
                   </span>

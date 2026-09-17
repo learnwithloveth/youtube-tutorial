@@ -10,7 +10,7 @@ export function Byline({ post, className }: { post: BlogPost; className?: string
         aria-hidden
         className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold text-white ring-1 ring-inset ring-white/20"
         style={{
-          background: `linear-gradient(140deg, ${post.hue}, color-mix(in oklab, ${post.hue} 40%, #05060b))`,
+          background: `linear-gradient(140deg, ${post.hue}, color-mix(in oklab, ${post.hue} 40%, var(--bg)))`,
         }}
       >
         {post.initials}

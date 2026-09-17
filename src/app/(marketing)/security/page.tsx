@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { Card } from '@/shared/ui/primitives/card';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
@@ -33,8 +34,8 @@ const LICENCES = [
 
 const SECURITY_FAQ = [
   { question: 'How do I verify my balance is in the reserves?', answer: 'Open Account → Proof of reserves. We give you your account leaf hash and the sibling hashes up the Merkle tree. Recompute the root locally with any SHA-256 implementation and compare it to the root we published on-chain that day. If they match, your balance was included.' },
-  { question: 'What is actually covered by the insurance fund?', answer: 'The $250M fund covers loss of customer assets from a compromise of Novex-controlled infrastructure, including hot wallet theft and insider misappropriation. It does not cover losses from you sharing credentials, approving a malicious transaction from Novex Wallet, or market movement.' },
-  { question: 'Do you have access to my Novex Wallet keys?', answer: 'No. Novex Wallet uses threshold MPC with shards held by you, your device secure enclave, and a recovery shard you can assign. Novex never holds a quorum and cannot sign on your behalf, which is also why we cannot recover a wallet if you lose both your device and your recovery shard.' },
+  { question: 'What is actually covered by the insurance fund?', answer: `The $250M fund covers loss of customer assets from a compromise of ${BRAND.name}-controlled infrastructure, including hot wallet theft and insider misappropriation. It does not cover losses from you sharing credentials, approving a malicious transaction from ${BRAND.name} Wallet, or market movement.` },
+  { question: `Do you have access to my ${BRAND.name} Wallet keys?`, answer: `No. ${BRAND.name} Wallet uses threshold MPC with shards held by you, your device secure enclave, and a recovery shard you can assign. ${BRAND.name} never holds a quorum and cannot sign on your behalf, which is also why we cannot recover a wallet if you lose both your device and your recovery shard.` },
   { question: 'What happens during an incident?', answer: 'Incidents are posted to status.novex.io within 15 minutes of detection, updated at least every 30 minutes, and followed by a public postmortem within five business days. We publish the postmortem whether or not customer funds were affected.' },
 ];
 
@@ -83,7 +84,7 @@ export default function SecurityPage() {
                   <p className="mt-5 text-lg leading-relaxed text-fg-muted">
                     We publish a Merkle root of all customer balances alongside signed attestations
                     of every on-chain reserve address. Your account page hands you your own leaf and
-                    the sibling hashes, so you can prove inclusion without trusting Novex — or the
+                    the sibling hashes, so you can prove inclusion without trusting {BRAND.name} — or the
                     auditor.
                   </p>
                   <ButtonLink href="/signup" variant="outline" className="mt-8">
@@ -198,7 +199,7 @@ export default function SecurityPage() {
                   <p className="font-medium text-fg">Segregated client money</p>
                   <p className="text-sm text-fg-muted">
                     Fiat balances are held at tier-1 banks in accounts titled to customers, never on
-                    the Novex balance sheet.
+                    the {BRAND.name} balance sheet.
                   </p>
                 </div>
               </div>

@@ -163,7 +163,7 @@ export function usePush(userId: string): {
       writeOwner(null);
     } else {
       setError(
-        'Could not reach Novex to switch notifications off. This device stops receiving them the next time it can.',
+        'Could not reach the server to switch notifications off. This device stops receiving them the next time it can.',
       );
     }
     // Off either way. It is what was asked for, and the removal is retried.
@@ -366,7 +366,7 @@ async function saveToken(token: string): Promise<void> {
       cache: 'no-store',
     });
   } catch (cause) {
-    throw new PushSetupError('Could not reach Novex. Check your connection and try again.', {
+    throw new PushSetupError('Could not reach the server. Check your connection and try again.', {
       cause,
     });
   }

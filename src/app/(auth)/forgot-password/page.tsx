@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { ForgotPasswordForm } from './_components/forgot-password-form';
+import { BRAND } from '@/modules/content';
 
 /**
  * A thin Server Component wrapper.
@@ -12,7 +13,7 @@ import { ForgotPasswordForm } from './_components/forgot-password-form';
  */
 export const metadata: Metadata = {
   title: 'Reset your password',
-  description: 'Request a password reset link for your Novex account.',
+  description: `Request a password reset link for your ${BRAND.name} account.`,
   // Authentication screens have nothing to offer a search result, and indexing
   // them invites phishing pages to rank beside the real one.
   robots: { index: false, follow: false },

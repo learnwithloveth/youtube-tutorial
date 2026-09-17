@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import { BRAND } from '@/modules/content';
 import {
   ArrowLeftRight, BadgeCheck, BookOpen, Building2, Coins, CreditCard, FileText,
   Gauge, Gift, Landmark, LifeBuoy, Newspaper, Percent, Server, ShieldCheck,
@@ -72,7 +73,7 @@ export const PRIMARY_NAV: NavColumn[] = [
       {
         heading: 'Platform',
         items: [
-          { label: 'Novex Wallet', href: '/wallet', description: 'Self-custody with MPC key shards.', icon: Wallet },
+          { label: `${BRAND.name} Wallet`, href: '/wallet', description: 'Self-custody with MPC key shards.', icon: Wallet },
           { label: 'Mobile app', href: '/mobile', description: 'iOS & Android, 4.9★ rated.', icon: Smartphone },
           { label: 'Security', href: '/security', description: 'Proof-of-reserves, HSM cold storage.', icon: ShieldCheck },
           { label: 'Features', href: '/features', description: 'Everything the engine can do.', icon: Sparkles },
@@ -106,7 +107,7 @@ export const PRIMARY_NAV: NavColumn[] = [
     label: 'Company',
     groups: [
       {
-        heading: 'About Novex',
+        heading: `About ${BRAND.name}`,
         items: [
           { label: 'Our story', href: '/about', description: 'Why we rebuilt the matching engine.', icon: Building2 },
           { label: 'Careers', href: '/careers', description: '31 open roles across 9 timezones.', icon: Users, badge: 'Hiring' },
@@ -134,7 +135,7 @@ export const FOOTER_NAV: { heading: string; links: { label: string; href: string
     heading: 'Products',
     links: [
       { label: 'Features', href: '/features' },
-      { label: 'Novex Wallet', href: '/wallet' },
+      { label: `${BRAND.name} Wallet`, href: '/wallet' },
       { label: 'Mobile app', href: '/mobile' },
       { label: 'Security', href: '/security' },
       { label: 'Institutional', href: '/institutional' },

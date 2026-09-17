@@ -1,6 +1,7 @@
 'use client';
 
 
+import { BRAND } from '@/modules/content';
 import { ActiveLink } from '@/shared/ui/primitives/active-link';
 import { ChevronsLeft, ShieldHalf } from 'lucide-react';
 import { DASH_NAV } from '../_data/navigation';
@@ -44,7 +45,7 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col gap-6 border-r border-line bg-bg-elev">
       <div className={cn('flex h-16 shrink-0 items-center px-4', showLabels ? 'justify-between' : 'justify-center')}>
-        <ActiveLink href="/" aria-label="Novex home" onClick={onNavigate}>
+        <ActiveLink href="/" aria-label={`${BRAND.name} home`} onClick={onNavigate} className="min-w-0">
           {showLabels ? <Wordmark /> : <LogoMark />}
         </ActiveLink>
         {isRail ? (

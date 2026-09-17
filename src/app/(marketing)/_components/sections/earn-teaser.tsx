@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react';
+import { BRAND } from '@/modules/content';
 import { Section } from '@/shared/ui/primitives/section';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
@@ -23,7 +24,7 @@ export function EarnTeaser({ stakeable }: { stakeable: readonly InstrumentDto[] 
           <Reveal>
             <p className="eyebrow mb-5">
               <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-              Novex Earn
+              {BRAND.name} Earn
             </p>
             <h2 className="text-4xl font-semibold">
               Put idle assets to work at up to <span className="text-aurora">12.4% APY</span>

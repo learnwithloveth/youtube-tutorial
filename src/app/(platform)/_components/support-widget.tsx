@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CheckCheck, Headset, X } from 'lucide-react';
 
+import { BRAND } from '@/modules/content';
 import type { ConversationDto, MessageDto } from '@/modules/support';
 import { useOwnConversation } from '@/shared/firebase/use-support-realtime';
 import { cn } from '@/shared/lib/cn';
@@ -25,9 +26,9 @@ import { CHAT_WALLPAPER, dayLabelFor, utcDayKey } from './chat-surface';
  * cannot drift apart again — they already had, and an agent could not answer a
  * screenshot with a screenshot.
  *
- * The colours are not borrowed. A green WhatsApp clone dropped inside a violet
- * exchange reads as a third-party embed, which is the opposite of what a support
- * widget should look like.
+ * The colours are not borrowed: the bubbles take this product's own tokens. A
+ * WhatsApp clone in WhatsApp's colours reads as a third-party embed, which is the
+ * opposite of what a support widget should look like.
  *
  * ── It sends through this application, and reads from Firestore ────────────────
  * Two different paths on purpose. The send is a POST to a route that holds the
@@ -205,7 +206,7 @@ export function SupportWidget({
           <Headset className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-fg">Novex Support</p>
+          <p className="truncate text-sm font-semibold text-fg">{BRAND.name} Support</p>
           {/* Where WhatsApp shows "online". Ours reports the connection, because
               that is what this application actually knows — nothing here tracks
               whether an agent is at their desk. */}

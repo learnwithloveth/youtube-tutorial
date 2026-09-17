@@ -107,7 +107,7 @@ Both must pass before a change is done.
   directive-free module for exactly this reason — the earlier version silently
   generated `localStorage.getItem(undefined)`.
 - **`useId` is not available in Server Components.** Pass an explicit id instead
-  (see `Sparkline`), or hoist shared SVG defs to the layout (see `LogoGradients`).
+  (see `Sparkline`), or hoist shared SVG defs to the root layout.
 - **`server-only` needs the `react-server` export condition outside Next.**
   Scripts run as `node --conditions=react-server --import tsx`. Vitest aliases it
   to a stub instead — see `src/test/server-only-stub.ts`.

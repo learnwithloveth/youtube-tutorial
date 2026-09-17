@@ -1,5 +1,6 @@
 import { ArrowRight, PlayCircle, ShieldCheck, Sparkles } from 'lucide-react';
 
+import { BRAND } from '@/modules/content';
 import type { MarketDto } from '@/modules/market-data';
 import { AnimatedHeading, AnimatedPanel } from '@/shared/ui/motion/animated-heading';
 import { Reveal } from '@/shared/ui/motion/reveal';
@@ -28,7 +29,7 @@ export function HomeHero({ markets }: { markets: readonly MarketDto[] }) {
           <Reveal>
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs text-fg-muted backdrop-blur-md">
               <Sparkles className="size-3.5 text-accent" />
-              Novex Earn is live — up to 12.4% APY
+              {BRAND.name} Earn is live — up to 12.4% APY
               <ArrowRight className="size-3" />
             </span>
           </Reveal>

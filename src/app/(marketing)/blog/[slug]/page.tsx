@@ -7,7 +7,7 @@ import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
 import { Reveal } from '@/shared/ui/motion/reveal';
-import { getBlogPost, listBlogPosts } from '@/modules/content';
+import { BRAND, getBlogPost, listBlogPosts } from '@/modules/content';
 import { formatDate } from '@/shared/lib/format';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -77,7 +77,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               <span
                 aria-hidden
                 className="grid size-11 place-items-center rounded-full text-sm font-semibold text-white ring-1 ring-inset ring-white/20"
-                style={{ background: `linear-gradient(140deg, ${post.hue}, color-mix(in oklab, ${post.hue} 40%, #05060b))` }}
+                style={{ background: `linear-gradient(140deg, ${post.hue}, color-mix(in oklab, ${post.hue} 40%, var(--bg)))` }}
               >
                 {post.initials}
               </span>
@@ -108,7 +108,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             </article>
 
             <div className="mt-12 rounded-lg border border-line bg-bg-sunken/60 p-6 text-sm leading-relaxed text-fg-subtle">
-              Novex is a fictional exchange built as a design demonstration. The analysis above is
+              {BRAND.name} is a fictional exchange built as a design demonstration. The analysis above is
               illustrative and is not investment advice.
             </div>
           </Reveal>

@@ -55,7 +55,11 @@ export async function sendVerificationEmail(
   try {
     const token = await issueToken(deps, user, 'email-verification', now);
     await deps.email.send(
-      renderVerificationEmail({ to: user.email, url: deps.urls.verifyEmail(token) }),
+      renderVerificationEmail({
+        to: user.email,
+        url: deps.urls.verifyEmail(token),
+        siteName: deps.siteName,
+      }),
     );
     logger.info({
       event: 'verification_email_sent',
@@ -80,7 +84,11 @@ export async function sendPasswordResetEmail(
   try {
     const token = await issueToken(deps, user, 'password-reset', now);
     await deps.email.send(
-      renderPasswordResetEmail({ to: user.email, url: deps.urls.resetPassword(token) }),
+      renderPasswordResetEmail({
+        to: user.email,
+        url: deps.urls.resetPassword(token),
+        siteName: deps.siteName,
+      }),
     );
     logger.info({
       event: 'password_reset_email_sent',

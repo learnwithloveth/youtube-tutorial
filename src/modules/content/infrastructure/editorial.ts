@@ -1,4 +1,5 @@
 import type { BlogPost, PressItem, Role, Track } from '../domain/types';
+import { BRAND } from './brand';
 
 /**
  * The editorial corpus, verbatim from the approved design.
@@ -20,7 +21,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     author: 'Priya Raman',
     role: 'Principal Engineer, Core',
     initials: 'PR',
-    hue: '#8B5CF6',
+    hue: '#10BD85',
     date: '2026-08-19',
     readingMinutes: 11,
     featured: true,
@@ -42,7 +43,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     author: 'Marcus Vogel',
     role: 'Head of Security',
     initials: 'MV',
-    hue: '#22D3EE',
+    hue: '#16B8AC',
     date: '2026-07-30',
     readingMinutes: 8,
     body: [
@@ -63,7 +64,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     author: 'Amara Okonkwo',
     role: 'Head of Market Structure',
     initials: 'AO',
-    hue: '#E879F9',
+    hue: '#C026D3',
     date: '2026-07-08',
     readingMinutes: 9,
     body: [
@@ -79,12 +80,12 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     slug: 'designing-for-the-worst-network-in-the-room',
     title: 'Designing for the worst network in the room',
     excerpt:
-      'We built the Novex mobile app on a throttled 3G connection for a quarter. It changed the architecture, the animation budget, and what we let the interface promise.',
+      `We built the ${BRAND.name} mobile app on a throttled 3G connection for a quarter. It changed the architecture, the animation budget, and what we let the interface promise.`,
     category: 'Product',
     author: 'Tolu Adeyemi',
     role: 'Design Lead, Mobile',
     initials: 'TA',
-    hue: '#34D399',
+    hue: '#5FF09B',
     date: '2026-06-21',
     readingMinutes: 7,
     body: [
@@ -124,7 +125,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     author: 'Amara Okonkwo',
     role: 'Head of Market Structure',
     initials: 'AO',
-    hue: '#E879F9',
+    hue: '#C026D3',
     date: '2026-04-02',
     readingMinutes: 10,
     body: [
@@ -186,10 +187,10 @@ export const LEARN_TRACKS: readonly Track[] = [
 ];
 
 export const PRESS_ITEMS: readonly PressItem[] = [
-  { date: '2026-08-24', outlet: 'Financial Times', headline: 'Novex opens Lagos engineering hub as African volumes triple', href: '#' },
+  { date: '2026-08-24', outlet: 'Financial Times', headline: `${BRAND.name} opens Lagos engineering hub as African volumes triple`, href: '#' },
   { date: '2026-07-11', outlet: 'Bloomberg', headline: 'Exchange publishes third-party liability attestation, raising the bar on reserves', href: '#' },
-  { date: '2026-06-02', outlet: 'The Block', headline: 'Novex matching engine benchmark: 1.4M orders per second, independently replicated', href: '#' },
-  { date: '2026-04-18', outlet: 'CoinDesk', headline: 'MiCA authorisation granted; Novex passports into 27 EEA markets', href: '#' },
-  { date: '2026-02-27', outlet: 'Reuters', headline: 'Novex declines payment for order flow as US venues expand the practice', href: '#' },
-  { date: '2026-01-15', outlet: 'TechCrunch', headline: 'Novex Wallet ships MPC self-custody with no seed phrase', href: '#' },
+  { date: '2026-06-02', outlet: 'The Block', headline: `${BRAND.name} matching engine benchmark: 1.4M orders per second, independently replicated`, href: '#' },
+  { date: '2026-04-18', outlet: 'CoinDesk', headline: `MiCA authorisation granted; ${BRAND.name} passports into 27 EEA markets`, href: '#' },
+  { date: '2026-02-27', outlet: 'Reuters', headline: `${BRAND.name} declines payment for order flow as US venues expand the practice`, href: '#' },
+  { date: '2026-01-15', outlet: 'TechCrunch', headline: `${BRAND.name} Wallet ships MPC self-custody with no seed phrase`, href: '#' },
 ];

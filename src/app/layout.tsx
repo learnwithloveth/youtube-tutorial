@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 
 import { BRAND } from '@/modules/content';
 import { fontVariables } from '@/shared/ui/fonts';
-import { LogoGradients } from '@/shared/ui/visuals/logo';
 
 import { PresenceReporter } from './_providers/presence-reporter';
 import { ThemeProvider } from './_providers/theme-provider';
@@ -49,8 +48,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#05060b' },
-    { media: '(prefers-color-scheme: light)', color: '#fbfbfe' },
+    { media: '(prefers-color-scheme: dark)', color: '#04120d' },
+    { media: '(prefers-color-scheme: light)', color: '#f5faf7' },
   ],
   colorScheme: 'dark light',
 };
@@ -71,7 +70,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeScript />
       </head>
       <body>
-        <LogoGradients />
         <ThemeProvider>{children}</ThemeProvider>
         {/* Mounted at the root so every route reports, including the marketing
             pages — most visitors to an exchange are signed out, and a live board

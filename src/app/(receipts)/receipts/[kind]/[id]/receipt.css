@@ -31,7 +31,7 @@
 
   [data-receipt] {
     /* Paper, ink, and a rule you can actually see on a laser printer. The greys
-       are darker than the screen's: a #7d85a3 subtitle is legible backlit and
+       are darker than the screen's: a #77907f subtitle is legible backlit and
        almost gone at 600dpi on white. */
     --bg: #fff;
     --bg-elev: #fff;
@@ -45,7 +45,7 @@
     /* The outcome disc is the one piece of colour that has to survive, because
        it is the difference between a completed transaction and a refused one at
        a glance. Darkened for white paper — the screen tints are mixed for a
-       #05060b ground and wash out on it. */
+       #04120d ground and wash out on it. */
     --up: #047857;
     --down: #b91c1c;
     --warn: #b45309;

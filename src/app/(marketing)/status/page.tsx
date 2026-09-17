@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleAlert, CircleDot, Wrench } from 'lucide-react';
 import { PageHero } from '../_components/sections/page-hero';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { Card } from '@/shared/ui/primitives/card';
 import { Badge } from '@/shared/ui/primitives/badge';
@@ -22,7 +23,7 @@ const SERVICES: { name: string; description: string; health: Health; uptime: num
   { name: 'Mobile apps', description: 'iOS and Android clients', health: 'operational', uptime: 99.996 },
   { name: 'Fiat deposits', description: 'Card, SEPA, FPS, ACH, PIX, NIP', health: 'degraded', uptime: 99.912 },
   { name: 'On-chain withdrawals', description: '32 supported networks', health: 'operational', uptime: 99.988 },
-  { name: 'Novex Wallet', description: 'MPC signing and recovery', health: 'operational', uptime: 99.993 },
+  { name: `${BRAND.name} Wallet`, description: 'MPC signing and recovery', health: 'operational', uptime: 99.993 },
   { name: 'Staking rewards', description: 'Delegation and daily distribution', health: 'maintenance', uptime: 99.971 },
 ];
 
@@ -88,7 +89,7 @@ function UptimeBars({ seed, health }: { seed: string; health: Health }) {
 
 export const metadata: Metadata = {
   title: 'System status',
-  description: 'Live service health, uptime history and the incident log for the Novex platform.',
+  description: `Live service health, uptime history and the incident log for the ${BRAND.name} platform.`,
 };
 
 export default async function StatusPage() {

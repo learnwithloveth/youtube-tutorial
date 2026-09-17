@@ -345,5 +345,12 @@ export interface IdentityDependencies {
   digest: Digest;
   email: EmailSender;
   urls: AppUrls;
+  /**
+   * The site's name, as outbound mail signs itself.
+   *
+   * Injected for the reason `urls` is: it comes from the deployment's environment,
+   * and a use case that reads `process.env` cannot be tested without global state.
+   */
+  siteName: string;
   clock: { now(): Date };
 }

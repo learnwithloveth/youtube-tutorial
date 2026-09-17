@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { BRAND } from '@/modules/content';
 import { BasisPoints, Money } from '@/shared/kernel';
 import { estimateConversion, type MarketDto, type QuoteDto } from '@/modules/market-data';
 import { getInstruments, getMarket, getMarkets } from '@/server/market-data';
@@ -61,7 +62,7 @@ export async function generateMetadata({
 
   return {
     title: `${market.name} (${market.symbol}) price`,
-    description: `${market.name} price, market cap, volume and 7-day trend. Buy ${market.symbol} on Novex with fees from 0.00%.`,
+    description: `${market.name} price, market cap, volume and 7-day trend. Buy ${market.symbol} on ${BRAND.name} with fees from 0.00%.`,
     alternates: { canonical: `/markets/${market.slug}` },
   };
 }
@@ -153,7 +154,7 @@ export default async function AssetPage({ params }: { params: Promise<{ slug: st
 
       <CtaBand
         title={`Buy ${market.name} in 90 seconds.`}
-        body={`Open a free Novex account and take your first ${market.symbol} position with fees from 0.00%.`}
+        body={`Open a free ${BRAND.name} account and take your first ${market.symbol} position with fees from 0.00%.`}
       />
     </>
   );

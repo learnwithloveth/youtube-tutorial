@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 
+import { BRAND } from '@/modules/content';
 import type { CurrentUserDto, SessionSummaryDto, SignInMethodsDto } from '@/modules/identity';
 import {
   getSignInMethods,
@@ -42,6 +43,7 @@ export const identity = cache((): IdentityModule => {
     db: requireDb(),
     sessionSecret: sessionSecret(),
     appUrl: env().APP_URL,
+    siteName: BRAND.name,
     ...(smtp ? { smtp } : {}),
     ...(google ? { google } : {}),
   });

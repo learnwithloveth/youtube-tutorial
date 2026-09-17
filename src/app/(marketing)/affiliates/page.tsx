@@ -4,6 +4,7 @@ import { EarningsCalculator } from './_components/earnings-calculator';
 import { ArrowRight, BarChart3, Banknote, Link2, Megaphone } from 'lucide-react';
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
@@ -26,7 +27,7 @@ const TIERS = [
 const AFFILIATE_FAQ = [
   { question: 'When and how do I get paid?', answer: 'Monthly in USDC or to a bank account, on the fifth working day, for the previous calendar month. Elite partners are paid weekly. There is no minimum threshold and no payout fee.' },
   { question: 'What counts as an active referral?', answer: 'An account that completed verification through your link and traded at least once in the trailing 30 days. Dormant accounts do not count towards your tier but you still earn on them if they trade again.' },
-  { question: 'Can I run paid search on the Novex brand?', answer: 'No. Brand-term bidding is the one prohibited channel, because it bids up our own cost to acquire someone who was already looking for us. Everything else — content, video, newsletters, communities — is fair game.' },
+  { question: `Can I run paid search on the ${BRAND.name} brand?`, answer: 'No. Brand-term bidding is the one prohibited channel, because it bids up our own cost to acquire someone who was already looking for us. Everything else — content, video, newsletters, communities — is fair game.' },
   { question: 'Is there a cap?', answer: 'No cap on earnings and no cap on referrals. Our largest partner earned $412,000 last quarter, and we would very much like someone to beat that.' },
 ];
 

@@ -64,7 +64,7 @@ async function receive(event) {
 
   await self.registration.showNotification(message.title, {
     body: message.body,
-    icon: '/favicon.ico',
+    icon: '/logo.png',
     // A tag replaces an earlier notification with the same one: one per support
     // conversation, one per price alert. `renotify` keeps the replacement audible —
     // silently swapping the text is a message nobody notices — and is only allowed

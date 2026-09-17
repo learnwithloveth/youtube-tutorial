@@ -5,7 +5,7 @@ import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
 import { StaggerGroup, StaggerItem } from '@/shared/ui/motion/reveal';
-import { listRoles } from '@/modules/content';
+import { BRAND, listRoles } from '@/modules/content';
 import type { Metadata } from 'next';
 
 import { RoleList } from './_components/role-list';
@@ -109,7 +109,7 @@ export default function CareersPage() {
         title="Nothing fits? Tell us anyway."
         body="We open roles for people more often than we admit publicly. Send us what you would want to work on."
         primary={{ label: 'Get in touch', href: '/contact' }}
-        secondary={{ label: 'About Novex', href: '/about' }}
+        secondary={{ label: `About ${BRAND.name}`, href: '/about' }}
       />
     </>
   );

@@ -2,6 +2,7 @@ import { ArrowRight, Blocks, Fingerprint, Globe, KeyRound, RefreshCcw, ShieldChe
 import { PageHero } from '../_components/sections/page-hero';
 import { CtaBand } from '../_components/sections/cta-band';
 import { FeatureRows, type FeatureRow } from '../_components/sections/feature-rows';
+import { BRAND } from '@/modules/content';
 import { Section, SectionHeading } from '@/shared/ui/primitives/section';
 import { Card } from '@/shared/ui/primitives/card';
 import { InteractiveCard } from '@/shared/ui/primitives/interactive-card';
@@ -19,8 +20,8 @@ const NETWORKS = ['Ethereum', 'Bitcoin', 'Solana', 'Base', 'Arbitrum', 'Optimism
 
 const WALLET_FAQ = [
   { question: 'What is MPC and why does it matter?', answer: 'Multi-party computation splits your private key into shards that never come together. Signing happens collaboratively between shards, so a complete key never exists on any device, server, or piece of paper. There is no seed phrase to photograph, lose, or have phished out of you.' },
-  { question: 'What happens if I lose my phone?', answer: 'Your device shard is gone, but the other two are not. Install the app on a new device, authenticate, and your recovery shard plus your cloud shard reconstitute signing capability. Novex still never holds a quorum.' },
-  { question: 'Can Novex freeze my wallet?', answer: 'No. Novex Wallet is non-custodial. We cannot move, freeze, or claw back assets held in it — including if a court orders us to. Assets in your exchange account are a different matter and are subject to the terms of service.' },
+  { question: 'What happens if I lose my phone?', answer: `Your device shard is gone, but the other two are not. Install the app on a new device, authenticate, and your recovery shard plus your cloud shard reconstitute signing capability. ${BRAND.name} still never holds a quorum.` },
+  { question: `Can ${BRAND.name} freeze my wallet?`, answer: `No. ${BRAND.name} Wallet is non-custodial. We cannot move, freeze, or claw back assets held in it — including if a court orders us to. Assets in your exchange account are a different matter and are subject to the terms of service.` },
   { question: 'Does it cost anything?', answer: 'The wallet is free. On-chain transactions carry the network fee at cost with nothing added. Moving between your exchange account and your wallet is free and instant.' },
 ];
 
@@ -29,7 +30,7 @@ const WALLET_FAQ = [
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: 'Novex Wallet',
+  title: `${BRAND.name} Wallet`,
   description:
     'Self-custody with MPC key shards, no seed phrase, and one-tap transfers to your exchange account.',
 };
@@ -44,7 +45,7 @@ export default async function WalletPage() {
       title: 'A wallet with no seed phrase to lose',
       body: 'Threshold MPC splits signing authority across your device secure enclave, an encrypted cloud shard, and a recovery shard you assign. A complete private key is never assembled — not on your phone, not on our servers, not anywhere.',
       bullets: [
-        'Two of three shards sign; Novex never holds a quorum',
+        `Two of three shards sign; ${BRAND.name} never holds a quorum`,
         'Recovery through a trusted contact or your own hardware key',
         'Every signature requires biometric approval on your device',
       ],
@@ -89,7 +90,7 @@ export default async function WalletPage() {
   return (
     <>
       <PageHero
-        eyebrow="Novex Wallet"
+        eyebrow={`${BRAND.name} Wallet`}
         title={
           <>
             Your keys.
@@ -122,7 +123,7 @@ export default async function WalletPage() {
           />
           <StaggerGroup className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: ShieldCheck, title: 'Non-custodial', body: 'Novex cannot move, freeze or recover your assets. That is the point.' },
+              { icon: ShieldCheck, title: 'Non-custodial', body: `${BRAND.name} cannot move, freeze or recover your assets. That is the point.` },
               { icon: Fingerprint, title: 'Biometric signing', body: 'Face ID or fingerprint on every transaction, with simulation shown first.' },
               { icon: RefreshCcw, title: 'Free internal transfers', body: 'Move between exchange and wallet instantly, at no cost, any number of times.' },
               { icon: Globe, title: '32 networks', body: 'One address book, one history, every chain that matters.' },
@@ -163,7 +164,7 @@ export default async function WalletPage() {
 
       <CtaBand
         title="Take custody in about a minute."
-        body="Create a wallet from inside the Novex app — no new account, no seed phrase, no ceremony."
+        body={`Create a wallet from inside the ${BRAND.name} app — no new account, no seed phrase, no ceremony.`}
         primary={{ label: 'Get the app', href: '/app' }}
         secondary={{ label: 'Read the security model', href: '/security' }}
       />
