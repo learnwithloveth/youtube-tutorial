@@ -62,5 +62,10 @@
     "typescript": "^5",
     "vitest": "^5.0.0"
   },
-  "packageManager": "pnpm@10.25.0"
+  "packageManager": "pnpm@10.25.0",
+  "pnpm": {
+    "overrides": {
+      "jwks-rsa>jose": "^5"
+    }
+  }
 }
