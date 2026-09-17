@@ -34,14 +34,26 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function SupportPage() {
+export default async function SupportPage({
+  searchParams,
+}: {
+  // `?conversation=` is where a push notification about a message points.
+  searchParams: Promise<{ conversation?: string | string[] }>;
+}) {
   const operator = await requireAdmin('/admin/support');
-  const inbox = await getSupportInbox();
+  const [inbox, { conversation: requested }] = await Promise.all([
+    getSupportInbox(),
+    searchParams,
+  ]);
 
-  // The newest conversation's transcript, so the thread panel is filled on arrival
-  // too. One extra read, on the one conversation the operator is most likely to
-  // open first.
-  const newest = inbox.conversations[0] ?? null;
+  // The transcript of the conversation a notification linked to, or else the
+  // newest, so the thread panel is filled on arrival too. One extra read, on the one
+  // conversation the operator is most likely to open first. Matched against the
+  // inbox rather than read by id, so a link can only open a thread the inbox has.
+  const newest =
+    inbox.conversations.find((conversation) => conversation.id === requested) ??
+    inbox.conversations[0] ??
+    null;
   const thread = newest === null ? null : await getSupportThread(newest.id);
 
   return (

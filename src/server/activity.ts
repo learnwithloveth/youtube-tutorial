@@ -51,7 +51,12 @@ export const activity = cache((): ActivityModule | null => {
   return handle ? registerActivity({ db: handle }) : null;
 });
 
-/** Appends one event. Never throws, never blocks the caller's real work. */
+/**
+ * Appends one event. Never throws, never blocks the caller's real work.
+ *
+ * To also send it to the account's devices, call `recordAndPush` in `./push`
+ * instead.
+ */
 export async function recordActivity(command: RecordActivityCommand): Promise<void> {
   const context = activity();
   if (context === null) return;

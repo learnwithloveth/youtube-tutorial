@@ -16,6 +16,7 @@ import type { AssetOptionDto, BalanceDto } from '@/modules/ledger';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/primitives/button';
 import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
+import { AssetMark } from '@/shared/ui/visuals/asset-mark';
 
 import { requestWithdrawalAction } from '../_lib/actions';
 import { submitDepositAction } from '../_lib/deposit-actions';
@@ -108,12 +109,21 @@ export function WithdrawForm({
               onClick={() => chooseAsset(option.code)}
               aria-pressed={option.code === assetCode}
               className={cn(
-                'rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
+                'inline-flex items-center gap-2 rounded-lg border py-2.5 pl-3 pr-4 text-sm font-medium transition-colors',
                 option.code === assetCode
                   ? 'border-brand-soft/60 bg-brand/12 text-fg'
                   : 'border-line text-fg-muted hover:border-line-strong hover:text-fg',
               )}
             >
+              {/* The plain coin here, not a network variant: no chain is chosen yet.
+                  The glyph and hue are only the fallback for an asset with no logo
+                  file; the ledger's option carries neither. */}
+              <AssetMark
+                symbol={option.code}
+                glyph={option.code.slice(0, 1)}
+                hue="var(--chart-1)"
+                size="xs"
+              />
               {option.code}
             </button>
           ))}
@@ -367,6 +377,17 @@ function NetworkChooser({
                 checked={option.id === selected}
                 onChange={() => onSelect(option.id)}
                 className="sr-only"
+              />
+              {/* The coin on this chain — USDT with an Ethereum badge, or with a
+                  Tron one — because this is the choice that loses funds when it is
+                  wrong, and a badge is noticed where a label is skimmed. An asset
+                  with one network, or no network logo, shows its plain mark. */}
+              <AssetMark
+                symbol={assetCode}
+                network={option.id}
+                glyph={assetCode.slice(0, 1)}
+                hue="var(--chart-1)"
+                size="sm"
               />
               <span className="text-sm text-fg">{option.label}</span>
             </span>

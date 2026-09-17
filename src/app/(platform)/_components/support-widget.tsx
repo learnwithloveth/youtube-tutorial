@@ -189,6 +189,10 @@ export function SupportWidget({
 
   return (
     <div
+      // The open thread, updating itself: a reply is not also announced by the
+      // operating system while it is arriving here. Only while live — polling
+      // shows a reply seconds late, and the notification is how they hear sooner.
+      data-live-surface={status === 'live' ? 'support-thread' : undefined}
       // Same clearance as the button, and a height that accounts for it — the
       // panel was measured against the full viewport and ran under the bar.
       className="fixed right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-[34rem] max-h-[calc(100dvh-9rem)] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl border border-line bg-bg-elev shadow-float lg:bottom-5 lg:max-h-[calc(100dvh-2.5rem)]"

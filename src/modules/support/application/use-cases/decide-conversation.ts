@@ -97,7 +97,9 @@ export function createDecideConversation(deps: SupportDependencies): DecideConve
         audience: { userId: conversation.userId },
         title: 'Your support conversation was resolved',
         body: conversation.snapshot().subject,
-        conversationId: conversation.id,
+        link: '/app',
+        tag: `support-${conversation.id}`,
+        surface: 'support-thread',
       });
     }
 

@@ -13,8 +13,8 @@ import { db } from '@/platform/db/client';
 import { logger } from '@/platform/observability/logger';
 import type { UserId } from '@/shared/kernel/ids';
 
-import { recordActivity } from './activity';
 import { getMarkets } from './market-data';
+import { recordAndPush } from './push';
 
 /**
  * The application's alerts facade.
@@ -112,7 +112,7 @@ export async function evaluateAlerts(): Promise<{ triggered: number; examined: n
 
   for (const trigger of result.triggered) {
     try {
-      await recordActivity({
+      await recordAndPush({
         userId: trigger.userId as UserId,
         kind: 'price-alert-triggered',
         reference: trigger.alertId,
@@ -120,6 +120,8 @@ export async function evaluateAlerts(): Promise<{ triggered: number; examined: n
         location: null,
         agent: null,
         ipDigest: null,
+        // An alert is the one notification whose whole point is reaching somebody
+        // who is not looking at the screen.
       });
     } catch {
       logger.warn({ event: 'alert_trail_write_skipped', module: 'alerts' });

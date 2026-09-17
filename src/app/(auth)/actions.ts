@@ -2,12 +2,14 @@
 
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 
 import type { ActivityKind } from '@/modules/activity';
 import { presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
 import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, SESSION_COOKIE } from '@/server/auth';
+import { forgetPushDevice, PUSH_DEVICE_COOKIE, recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import { sessionCookieOptions } from '@/server/session-cookie';
 import { isCountryCode } from '@/shared/lib/countries';
@@ -62,10 +64,15 @@ async function requestContext(): Promise<{ userAgent: string | null; ipAddress: 
  * most useful line in an audit trail; a page view already has a location because
  * the heartbeat resolved one anyway.
  */
-async function recordAuthEvent(kind: ActivityKind, userId: string): Promise<void> {
+async function recordAuthEvent(
+  kind: ActivityKind,
+  userId: string,
+  options: { readonly push?: boolean } = {},
+): Promise<void> {
   const context = await describeRequest();
+  const record = options.push === true ? recordAndPush : recordActivity;
 
-  await recordActivity({
+  await record({
     userId: userId as UserId,
     kind,
     location: context.location,
@@ -153,7 +160,10 @@ export async function signInAction(
     sessionCookieOptions(new Date(result.value.expiresAt)),
   );
 
-  await recordAuthEvent('sign-in', result.value.userId);
+  // Pushed to the account's devices, which are normally all *other* browsers:
+  // signing out forgets this one's registration. A sign-in somebody did not make
+  // is the notification this whole mechanism is most worth having for.
+  await recordAuthEvent('sign-in', result.value.userId, { push: true });
 
   redirect(safeRedirectTarget(formData.get('next')));
 }
@@ -170,6 +180,16 @@ export async function signOutAction(): Promise<void> {
   // would otherwise keep working until it expired.
   await identity().signOut(sealed);
   store.delete(SESSION_COOKIE);
+
+  // This browser stops receiving the account's notifications. On a shared machine
+  // the next person would otherwise be shown the last one's alerts — and an
+  // operator's registration previews what customers write. After the response,
+  // because a Firestore delete is not worth holding the redirect for.
+  const device = store.get(PUSH_DEVICE_COOKIE)?.value;
+  if (device !== undefined) {
+    store.delete(PUSH_DEVICE_COOKIE);
+    after(() => forgetPushDevice(device));
+  }
 
   if (user) await recordAuthEvent('sign-out', user.id);
 
@@ -214,7 +234,7 @@ export async function resetPasswordAction(
     return { error: presentIdentityError(result.error), message: null };
   }
 
-  await recordAuthEvent('password-reset', result.value.userId);
+  await recordAuthEvent('password-reset', result.value.userId, { push: true });
 
   // Every session was revoked, including any the attacker held. The user signs in
   // again with the new password.

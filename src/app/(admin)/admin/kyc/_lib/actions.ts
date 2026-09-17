@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 
 import { presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
 import { identity, requireAdmin } from '@/server/auth';
+import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import { toUserId, type UserId } from '@/shared/kernel/ids';
 
@@ -60,7 +60,7 @@ export async function decideVerificationAction(
 
   const request = await describeRequest();
   try {
-    await recordActivity({
+    await recordAndPush({
       userId: toUserId(result.value.userId),
       kind: action === 'approve' ? 'verification-approved' : 'verification-rejected',
       reference: result.value.verificationId,

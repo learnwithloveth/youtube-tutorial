@@ -1,11 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowLeftRight, Bell, CandlestickChart, LayoutDashboard,
+  ArrowLeftRight, Bell, LayoutDashboard,
   Inbox, Receipt, Settings, Wallet,
   // Needed again by the entries commented out below. Parked here rather than
   // deleted so re-enabling one is uncommenting two lines, not hunting for the icon
   // it wanted. Same arrangement in the admin nav.
-  // Coins, Gift, Repeat,
+  // CandlestickChart, Coins, Gift, Repeat,
 } from 'lucide-react';
 
 export interface DashNavItem {
@@ -65,6 +65,9 @@ export const DASH_NAV: DashNavGroup[] = [
 export const MOBILE_TABS: DashNavItem[] = [
   { label: 'Overview', href: '/app', icon: LayoutDashboard, end: true },
   { label: 'Portfolio', href: '/app/portfolio', icon: ArrowLeftRight },
-  { label: 'Trade', href: '/app/trade', icon: CandlestickChart },
+  // Was Trade. The trade screen has no order ticket — see `/app/trade` — so a
+  // thumb-reachable tab for it pointed at the one screen that cannot do what its
+  // name says, while the statement of what actually moved sat behind "More".
+  { label: 'Transactions', href: '/app/transactions', icon: Receipt },
   { label: 'Wallet', href: '/app/wallet', icon: Wallet },
 ];

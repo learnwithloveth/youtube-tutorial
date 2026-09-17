@@ -7,6 +7,7 @@ import { presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
 import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, SESSION_COOKIE } from '@/server/auth';
+import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
@@ -60,7 +61,9 @@ export async function changePasswordAction(
     return { status: 'error', message: presentIdentityError(result.error) };
   }
 
-  await trail(user.id, 'password-reset', 'changed from settings');
+  // Pushed: a password changed is what every *other* device on the account needs
+  // to hear about, in case the person changing it is not the owner.
+  await trail(user.id, 'password-reset', 'changed from settings', { push: true });
 
   logger.info({
     event: 'password_changed',
@@ -112,10 +115,12 @@ async function trail(
   userId: string,
   kind: 'password-reset' | 'sign-in',
   detail: string,
+  options: { readonly push?: boolean } = {},
 ): Promise<void> {
   try {
     const request = await describeRequest();
-    await recordActivity({
+    const record = options.push === true ? recordAndPush : recordActivity;
+    await record({
       userId: userId as UserId,
       kind,
       detail,

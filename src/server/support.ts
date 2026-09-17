@@ -13,7 +13,6 @@ import {
   type SupportModule,
 } from '@/modules/support/server';
 import { db } from '@/platform/db/client';
-import { env } from '@/platform/env';
 import { logger } from '@/platform/observability/logger';
 import { toUserId, type UserId } from '@/shared/kernel/ids';
 
@@ -50,7 +49,7 @@ export const support = cache((): SupportModule | null => {
   const handle = db();
   if (handle === null) return null;
 
-  return registerSupport({ db: handle, appUrl: env().APP_URL });
+  return registerSupport({ db: handle });
 });
 
 /** What the console knows about the customer behind a conversation. */

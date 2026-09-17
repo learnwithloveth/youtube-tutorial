@@ -9,6 +9,7 @@ import type {
   AttachmentStorage,
   ConversationRepository,
   MessageRepository,
+  PushMessage,
   PushSender,
   RealtimeAuth,
   SupportDependencies,
@@ -108,12 +109,15 @@ class FakeAttachments implements AttachmentStorage {
 }
 
 class FakePush implements PushSender {
-  readonly sent: { audience: unknown; title: string }[] = [];
+  readonly sent: PushMessage[] = [];
 
   async register() {}
   async forget() {}
-  async notify(input: { audience: unknown; title: string }) {
-    this.sent.push({ audience: input.audience, title: input.title });
+  async forgetAllFor() {
+    return 0;
+  }
+  async notify(input: PushMessage) {
+    this.sent.push(input);
     return 1;
   }
 }
@@ -231,6 +235,33 @@ describe('support conversations', () => {
     // explicitly when a thread is opened.
     expect(reply.value.conversation.unreadForOperator).toBe(1);
     expect(harness.push.sent.at(-1)?.audience).toEqual({ userId: CUSTOMER });
+  });
+
+  it('links each push to the screen that answers it, and tags it by conversation', async () => {
+    const opened = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const id = opened.value.conversation.id;
+
+    await harness.post({ author: 'operator', authorId: OPERATOR, conversationId: id, body: 'Hi' });
+
+    const [toOperators, toCustomer] = harness.push.sent;
+    expect(toOperators).toMatchObject({
+      audience: 'operators',
+      link: `/admin/support?conversation=${id}`,
+      surface: 'support-queue',
+    });
+    expect(toCustomer).toMatchObject({
+      audience: { userId: CUSTOMER },
+      link: '/app',
+      surface: 'support-thread',
+    });
+    // One notification per thread on a device, replaced rather than stacked.
+    expect(toOperators?.tag).toBe(`support-${id}`);
+    expect(toCustomer?.tag).toBe(toOperators?.tag);
+    // A path, never an origin: the worker resolves it against the site that
+    // registered the browser.
+    for (const push of harness.push.sent) expect(push.link.startsWith('/')).toBe(true);
   });
 
   it('reopens a resolved thread when the customer writes again', async () => {

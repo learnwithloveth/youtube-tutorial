@@ -4,9 +4,9 @@ import { revalidatePath } from 'next/cache';
 
 import { presentLedgerError } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
 import { requireAdmin } from '@/server/auth';
 import { getPendingDepositClaims, ledger } from '@/server/ledger';
+import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
@@ -66,7 +66,7 @@ export async function decideDepositAction(
     // Recorded against the customer, not the operator: the trail answers "what
     // happened to this account". The operator is named in the reference so the
     // decision stays attributable.
-    await recordActivity({
+    await recordAndPush({
       userId: subject.userId as UserId,
       kind: result.value.status === 'approved' ? 'deposit-recorded' : 'deposit-rejected',
       reference: `${claimId} by ${operator.email}`,
@@ -79,6 +79,8 @@ export async function decideDepositAction(
       location: request.location,
       agent: request.agent,
       ipDigest: request.ipDigest,
+      // The operator's decision reaches the customer's devices. The claim they
+      // filed themselves, recorded under the same kind, does not.
     });
   }
 

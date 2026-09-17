@@ -11,13 +11,12 @@
  *
  * ── Adding one ───────────────────────────────────────────────────────────────
  * Drop the file in `public/` and add a line here. **Prefer an SVG**: these marks
- * are drawn from 32px in a table row up to 56px on an asset page, and on a
+ * are drawn from 20px in a picker up to 56px on an asset page, and on a
  * high-density screen the 64px bitmaps below are already being scaled past their
  * pixel count. An SVG is also a fraction of the bytes.
  *
- * Only these three files are not yet listings — litecoin, monero and sui are in
- * `public/` and their entries are here ready, so listing one is a catalogue edit
- * and nothing else.
+ * Litecoin, monero and sui have files and entries but are not listings yet, so
+ * listing one is a catalogue edit and nothing else.
  */
 export const ASSET_LOGOS: Readonly<Record<string, string>> = {
   BTC: '/bitcoin.gif',
@@ -28,6 +27,7 @@ export const ASSET_LOGOS: Readonly<Record<string, string>> = {
   XRP: '/xrp.png',
   BNB: '/bnb.png',
   LINK: '/chainlink.png',
+  TRX: '/tron.png',
 
   // Not listed in the catalogue yet; the files are here.
   LTC: '/litecoin.png',
@@ -36,11 +36,49 @@ export const ASSET_LOGOS: Readonly<Record<string, string>> = {
 };
 
 /**
- * The logo for a symbol, or null when this application ships none.
+ * Logos for one asset on one network, keyed `SYMBOL:networkId`.
+ *
+ * ── Why these exist ──────────────────────────────────────────────────────────
+ * USDT is one asset with one price and two chains, and the chain is the part a
+ * customer must not get wrong: USDT sent over Tron to an Ethereum address is gone.
+ * The price table has no reason to care which chain, so it keeps the plain Tether
+ * mark. The deposit and withdrawal screens do, and there the mark carries the
+ * chain's badge, so the choice is visible and not just written in a label.
+ *
+ * The network ids are the ledger's — `ethereum`, `tron` — so a key here lines up
+ * with the network a withdrawal or a deposit address was actually recorded against.
+ */
+export const NETWORK_LOGOS: Readonly<Record<string, string>> = {
+  'USDT:ethereum': '/usdt-eth.png',
+  'USDT:tron': '/usdt-trx.png',
+};
+
+export interface AssetLogo {
+  readonly src: string;
+  /**
+   * A network logo, drawn as a composite: the coin's disc with the chain's badge
+   * overlapping its edge. It must be shown whole — clipping it to a circle, as the
+   * plain logos are, would cut the badge off, and the badge is the point.
+   */
+  readonly composite: boolean;
+}
+
+/**
+ * The logo for a symbol, preferring the network's own when one is given and known.
  *
  * Null is the ordinary case — most of the catalogue has no logo file — and the
- * caller renders the lettered mark for it rather than a gap.
+ * caller renders the lettered mark for it rather than a gap. An unknown network
+ * falls back to the asset's plain logo rather than to nothing: the coin is still
+ * the coin.
  */
-export function assetLogoFor(symbol: string): string | null {
-  return ASSET_LOGOS[symbol.trim().toUpperCase()] ?? null;
+export function assetLogoFor(symbol: string, network?: string | null): AssetLogo | null {
+  const code = symbol.trim().toUpperCase();
+
+  if (network) {
+    const composite = NETWORK_LOGOS[`${code}:${network.trim().toLowerCase()}`];
+    if (composite) return { src: composite, composite: true };
+  }
+
+  const plain = ASSET_LOGOS[code];
+  return plain ? { src: plain, composite: false } : null;
 }

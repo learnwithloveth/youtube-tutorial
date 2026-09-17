@@ -1,6 +1,8 @@
 import { requireAdmin } from '@/server/auth';
 import { getPendingQueueCounts } from '@/server/console';
 
+import { PushBridge } from '../_components/push-bridge';
+
 import { AdminProvider } from './_data/store';
 import { AdminShell } from './_components/admin-shell';
 
@@ -34,7 +36,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <AdminProvider counted={counted}>
-      <AdminShell email={user.email}>{children}</AdminShell>
+      <AdminShell email={user.email}>
+        {/* Here as well as in the app, because an operator may never open the
+            customer side — their registration has to be kept current from this one. */}
+        <PushBridge userId={user.id} />
+        {children}
+      </AdminShell>
     </AdminProvider>
   );
 }

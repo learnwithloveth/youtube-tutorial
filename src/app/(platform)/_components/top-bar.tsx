@@ -16,6 +16,7 @@ import { useEscape, useOutsideClick } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { formatAge } from '@/shared/lib/format';
 
+import { signOutAction } from '../../(auth)/actions';
 import { markNotificationsReadAction } from '../app/alerts/_lib/actions';
 import { ResendVerification } from '../../_components/resend-verification';
 
@@ -50,8 +51,21 @@ function Popover({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          /*
+           * ── Anchored to the header on a phone, to its button above that ─────
+           * Right-aligned to its trigger, a 320px panel only fits when the trigger
+           * sits near the right edge. The bell does not: on a phone it is a button
+           * or two in from the avatar, so the panel ran off the left of the screen.
+           *
+           * Below `sm` the trigger wrappers are not positioned, so this attaches to
+           * the sticky header instead and spans it with a margin each side — the
+           * width a phone has, whichever button opened it. From `sm` up the wrapper
+           * is `relative` again and the panel sits under its button, sized by the
+           * caller's `sm:w-*`.
+           */
           className={cn(
-            'absolute right-0 top-full z-50 mt-2 overflow-hidden rounded-lg border border-line',
+            'absolute inset-x-3 top-full z-50 mt-2 overflow-hidden rounded-lg border border-line',
+            'sm:inset-x-auto sm:right-0',
             'bg-bg-elev/98 shadow-float backdrop-blur-2xl',
             className,
           )}
@@ -130,7 +144,7 @@ export function TopBar({
 
           <ThemeToggle className="size-9" />
 
-          <div className="relative">
+          <div className="sm:relative">
             <button
               type="button"
               id="notifications-button"
@@ -158,7 +172,7 @@ export function TopBar({
               </span>
             </button>
 
-            <Popover open={bell} onClose={closeBell} labelledBy="notifications-button" className="w-80">
+            <Popover open={bell} onClose={closeBell} labelledBy="notifications-button" className="sm:w-80">
               <p className="border-b border-line px-4 py-3 text-sm font-medium text-fg">Notifications</p>
               <ul className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
@@ -224,7 +238,7 @@ export function TopBar({
             </Popover>
           </div>
 
-          <div className="relative">
+          <div className="sm:relative">
             <button
               type="button"
               id="account-button"
@@ -243,7 +257,7 @@ export function TopBar({
               <span className="sr-only">Account menu for {name}</span>
             </button>
 
-            <Popover open={account} onClose={closeAccount} labelledBy="account-button" className="w-64">
+            <Popover open={account} onClose={closeAccount} labelledBy="account-button" className="sm:w-64">
               <div className="border-b border-line px-4 py-3.5">
                 {/* All three lines are the signed-in account now. This menu used to
                     show a demo persona's name and a "Verified · Gold" badge above
@@ -288,14 +302,19 @@ export function TopBar({
                 ))}
               </ul>
               <div className="border-t border-line p-1.5">
-                <ActiveLink
-                  href="/login"
-                  onClick={closeAccount}
-                  className="flex items-center gap-2.5 rounded-sm px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
-                >
-                  <LogOut className="size-4" />
-                  Sign out
-                </ActiveLink>
+                {/* A form posting the sign-out action, looking exactly as the link did.
+                    It was a link to /login, which ends nothing: the session survived
+                    the click — so did this browser's push registration — and on a
+                    shared machine the next person was still in the account. */}
+                <form action={signOutAction}>
+                  <button
+                    type="submit"
+                    className="flex w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+                  >
+                    <LogOut className="size-4" />
+                    Sign out
+                  </button>
+                </form>
               </div>
             </Popover>
           </div>

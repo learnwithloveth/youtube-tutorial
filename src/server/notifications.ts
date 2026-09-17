@@ -8,6 +8,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { getActivityForUser } from './activity';
 import { alerts, getNotificationsReadAt } from './alerts';
+import { bodyFor, COPY, type NotificationTone } from './notification-copy';
 
 /**
  * A customer's notification feed.
@@ -53,7 +54,7 @@ export const NOTIFIABLE: readonly ActivityKind[] = [
   'receipt-sent',
 ];
 
-export type NotificationTone = 'up' | 'down' | 'warn' | 'brand' | 'neutral';
+export type { NotificationTone } from './notification-copy';
 
 export interface NotificationDto {
   readonly id: string;
@@ -159,28 +160,6 @@ export async function markNotificationsRead(userId: UserId): Promise<void> {
   }
 }
 
-/**
- * How each event reads in the bell.
- *
- * Written from the customer's side, which is a different voice to the audit log's:
- * the console says "Withdrawal approved" about somebody, and this says "Your
- * withdrawal was approved" to them.
- */
-const COPY: Partial<Record<ActivityKind, { title: string; tone: NotificationTone }>> = {
-  'price-alert-triggered': { title: 'Price alert', tone: 'brand' },
-  'deposit-recorded': { title: 'Deposit credited', tone: 'up' },
-  'deposit-rejected': { title: 'Deposit not accepted', tone: 'down' },
-  'withdrawal-requested': { title: 'Withdrawal requested', tone: 'neutral' },
-  'withdrawal-approved': { title: 'Withdrawal approved', tone: 'up' },
-  'withdrawal-rejected': { title: 'Withdrawal not approved', tone: 'down' },
-  'verification-approved': { title: 'Identity verified', tone: 'up' },
-  'verification-rejected': { title: 'Identity verification refused', tone: 'down' },
-  'password-reset': { title: 'Password changed', tone: 'warn' },
-  'email-verified': { title: 'Email confirmed', tone: 'up' },
-  'sign-in': { title: 'New sign-in', tone: 'warn' },
-  'receipt-sent': { title: 'Receipt emailed', tone: 'neutral' },
-};
-
 function toNotification(
   event: ActivityEventDto,
   lastRead: Date | null,
@@ -204,15 +183,4 @@ function toNotification(
     unread: lastRead === null || new Date(event.occurredAt).getTime() > lastRead.getTime(),
     tone: copy.tone,
   };
-}
-
-/** The detail line, built from what the event actually recorded. */
-function bodyFor(event: ActivityEventDto): string | null {
-  if (event.kind === 'sign-in') {
-    const place = [event.location?.city, event.location?.country].filter(Boolean).join(', ');
-    // The device and where from, which is the whole reason a sign-in is notified:
-    // somebody reading this has to be able to tell "that was me" from "that was not".
-    return [event.browser, event.device, place].filter(Boolean).join(' · ') || null;
-  }
-  return event.detail;
 }

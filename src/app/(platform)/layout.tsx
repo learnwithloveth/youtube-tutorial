@@ -5,6 +5,7 @@ import { getNotifications } from '@/server/notifications';
 import { getMySupportThread, support } from '@/server/support';
 
 import { AnnouncementBanner } from '../_components/announcement-banner';
+import { PushBridge } from '../_components/push-bridge';
 import { QuoteRefresher } from '../_components/quote-refresher';
 
 import { DashboardShell } from './_components/dashboard-shell';
@@ -92,6 +93,9 @@ export default async function PlatformLayout({
           screen, all of which render on the server. One refresher in the layout
           keeps every one of them current without each page arranging its own. */}
       <QuoteRefresher />
+      {/* Push shares the support configuration: device registrations live beside
+          the conversations, so a deployment without one cannot store the other. */}
+      {configured ? <PushBridge userId={user.id} /> : null}
       {children}
       {configured ? (
         <SupportWidget

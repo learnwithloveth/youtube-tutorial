@@ -4,9 +4,9 @@ import { revalidatePath } from 'next/cache';
 
 import { presentLedgerError } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
 import { requireAdmin } from '@/server/auth';
 import { getApprovalQueue, ledger } from '@/server/ledger';
+import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
@@ -79,7 +79,7 @@ export async function decideWithdrawalAction(
     // happened to this account", and an approval is something that happened to
     // them; the operator is named in the reference so the decision is still
     // attributable.
-    await recordActivity({
+    await recordAndPush({
       userId: subject.userId as UserId,
       kind: result.value.status === 'approved' ? 'withdrawal-approved' : 'withdrawal-rejected',
       reference: `${withdrawalId} by ${operator.email}`,

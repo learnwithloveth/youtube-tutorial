@@ -1,62 +1,128 @@
 /* =============================================================================
- * Firebase Cloud Messaging service worker.
+ * Push notification service worker.
  *
- * ── Why the config arrives in the query string ───────────────────────────────
- * This file is served straight from `public/`, so nothing substitutes environment
- * variables into it at build time. The registration in `use-push.ts` therefore
- * passes the project's config as search params and this reads them back.
+ * ── No Firebase SDK in here, on purpose ──────────────────────────────────────
+ * The browser subscribes through Firebase — `getToken` in `use-push.ts` — and
+ * messages travel through Firebase Cloud Messaging, but *receiving* one is the
+ * plain Push API: a `push` event carrying the JSON the server sent.
  *
- * That is a documented FCM pattern, not a workaround, and it is what lets one
- * committed file serve development and production without a hardcoded project id.
- * Everything passed this way is public by design — see `shared/firebase/client.ts`.
+ * This file used to load Firebase's worker SDK from a CDN, and that SDK added one
+ * behaviour of its own: whenever any tab of the site was visible, it handed the
+ * message to that page instead of showing a notification. No page listened for
+ * it. So anybody looking at the site when a message arrived — which, while testing
+ * notifications, is everybody — got nothing at all.
  *
- * ── The compat SDK, deliberately ─────────────────────────────────────────────
- * A service worker cannot import from `node_modules`; it gets `importScripts` and
- * a URL. The compat builds on gstatic are the only Firebase distribution shaped
- * for that, and pinning an exact version keeps a silent upstream change from
- * breaking notifications with no deploy of ours behind it.
+ * Handling the event directly also removes a CDN fetch at install, an SDK version
+ * to keep in step with the app's, and the project config that had to be passed in
+ * through this file's URL.
+ *
+ * ── Shown unless the screen already shows it ──────────────────────────────────
+ * Every message becomes a system notification, in the foreground as much as the
+ * background, with one exception: a message whose screen is focused and live. An
+ * agent working the support queue, or a customer with the chat open, sees the
+ * message arrive there; a notification on top of it is noise. The worker cannot
+ * see a page's DOM, so it asks the focused tab — see `showsLive`.
  * ========================================================================== */
 
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
+/** The screens a message can name as already showing it. Anything else is shown. */
+const LIVE_SURFACES = ['support-queue', 'support-thread'];
 
-const params = new URL(self.location.href).searchParams;
+/** How long a tab gets to answer before the notification is shown anyway. */
+const ANSWER_TIMEOUT_MS = 400;
 
-const config = {
-  apiKey: params.get('apiKey'),
-  authDomain: params.get('authDomain'),
-  projectId: params.get('projectId'),
-  appId: params.get('appId'),
-  messagingSenderId: params.get('messagingSenderId'),
-};
+self.addEventListener('install', () => {
+  // Nothing is cached here, so a new version has no reason to wait for every old
+  // tab to close before it takes over.
+  self.skipWaiting();
+});
 
-if (config.apiKey && config.projectId && config.appId) {
-  firebase.initializeApp(config);
-  const messaging = firebase.messaging();
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
-  /*
-   * Background messages.
-   *
-   * The server sends a `data`-only payload with no `notification` block, which is
-   * what puts this handler in charge of what appears. With a notification block the
-   * browser draws its own alert *and* this fires — which is how one message becomes
-   * two notifications on the screen.
-   */
-  messaging.onBackgroundMessage((payload) => {
-    const data = payload.data || {};
+self.addEventListener('push', (event) => {
+  event.waitUntil(receive(event));
+});
 
-    self.registration.showNotification(data.title || 'Novex', {
-      body: data.body || '',
-      icon: '/favicon.ico',
-      /*
-       * Tagged by conversation, so a customer sending four messages replaces one
-       * notification rather than stacking four. `renotify` keeps the replacement
-       * audible — silently swapping the text is a message nobody notices.
-       */
-      tag: data.conversationId ? `support-${data.conversationId}` : 'support',
-      renotify: true,
-      data: { link: data.link || '/' },
-    });
+async function receive(event) {
+  const message = readMessage(event);
+  if (message === null) return;
+
+  const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+  // Every open tab hears about it, so a bell count or a list can update in place
+  // instead of waiting for the next navigation.
+  for (const tab of tabs) {
+    tab.postMessage({ type: 'novex:push', surface: message.surface });
+  }
+
+  if (LIVE_SURFACES.includes(message.surface)) {
+    for (const tab of tabs) {
+      if (tab.focused && (await showsLive(tab, message.surface))) return;
+    }
+  }
+
+  await self.registration.showNotification(message.title, {
+    body: message.body,
+    icon: '/favicon.ico',
+    // A tag replaces an earlier notification with the same one: one per support
+    // conversation, one per price alert. `renotify` keeps the replacement audible —
+    // silently swapping the text is a message nobody notices — and is only allowed
+    // alongside a tag.
+    ...(message.tag ? { tag: message.tag, renotify: true } : {}),
+    data: { link: message.link },
+  });
+}
+
+/**
+ * The payload, or null when this is not one of ours.
+ *
+ * FCM wraps what the server sent: `{ data: { title, body, link, … }, from, … }`.
+ * The server only ever sends `data`; a `notification` block is read too, so a
+ * message sent by hand from the Firebase console still shows as something.
+ */
+function readMessage(event) {
+  if (!event.data) return null;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    return null;
+  }
+
+  const data = (payload && payload.data) || {};
+  const notification = (payload && payload.notification) || {};
+  const title = data.title || notification.title;
+  if (!title) return null;
+
+  return {
+    title,
+    body: data.body || notification.body || '',
+    link: data.link || '/',
+    tag: data.tag || null,
+    surface: data.surface || null,
+  };
+}
+
+/**
+ * Asks a tab whether it is showing this surface live right now.
+ *
+ * Over a `MessageChannel`, with a short deadline: a tab that never answers — a
+ * page that does not listen, or one busy rendering — gets the notification rather
+ * than silence. Missing a message is worse than seeing it twice.
+ */
+function showsLive(tab, surface) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(false), ANSWER_TIMEOUT_MS);
+
+    channel.port1.onmessage = (answer) => {
+      clearTimeout(timer);
+      resolve(answer.data === true);
+    };
+
+    tab.postMessage({ type: 'novex:shows-live', surface }, [channel.port2]);
   });
 }
 
@@ -68,18 +134,28 @@ if (config.apiKey && config.projectId && config.appId) {
  */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  const link = (event.notification.data && event.notification.data.link) || '/';
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ('focus' in client) {
-          if ('navigate' in client) client.navigate(link);
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(link);
-    }),
-  );
+  event.waitUntil(open((event.notification.data && event.notification.data.link) || '/'));
 });
+
+async function open(link) {
+  // A path from the server, resolved against the site this worker belongs to — and
+  // held to it, so a notification can only ever open this site.
+  const resolved = new URL(link, self.location.origin);
+  const href =
+    resolved.origin === self.location.origin ? resolved.href : `${self.location.origin}/`;
+
+  const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const tab = tabs.find((candidate) => candidate.url === href) || tabs[0];
+  if (!tab) return self.clients.openWindow(href);
+
+  // `navigate` is only allowed on a tab this worker controls, and one opened before
+  // the worker was installed is not. Either failure opens the link in a new window
+  // rather than leaving the click doing nothing.
+  try {
+    const focused = await tab.focus();
+    if (focused.url === href) return focused;
+    return await focused.navigate(href);
+  } catch {
+    return self.clients.openWindow(href);
+  }
+}

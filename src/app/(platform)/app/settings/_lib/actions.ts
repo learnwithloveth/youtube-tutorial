@@ -3,11 +3,13 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 
 import { presentIdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
 import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, revokeAllSessions, SESSION_COOKIE } from '@/server/auth';
+import { forgetPushDevicesFor, PUSH_DEVICE_COOKIE } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import { isCountryCode } from '@/shared/lib/countries';
 import type { UserId } from '@/shared/kernel/ids';
@@ -44,9 +46,16 @@ export async function revokeAllSessionsAction(): Promise<void> {
 
   logger.info({ event: 'sessions_revoked', module: 'identity', revoked });
 
+  // Every browser stops receiving the account's notifications as well. A device
+  // somebody else registered while they held a session would otherwise go on
+  // reading its alerts and support replies after they lost the session itself.
+  after(() => forgetPushDevicesFor(user.id as UserId));
+
   // The rows are already revoked, so the cookie is inert — clearing it only saves
   // the next request a pointless lookup.
-  (await cookies()).delete(SESSION_COOKIE);
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+  store.delete(PUSH_DEVICE_COOKIE);
 
   redirect('/login?signedout=1');
 }

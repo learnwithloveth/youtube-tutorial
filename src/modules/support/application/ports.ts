@@ -95,18 +95,51 @@ export interface DeviceRegistration {
  * announcing. A customer's question must land whether or not an operator's phone
  * can be reached, and a push that fails is a notification nobody got — not a
  * conversation nobody had.
+ *
+ * ── Not only support's ─────────────────────────────────────────────────────────
+ * The device registry lives in this module because support was the first thing to
+ * push. Account notifications — a price alert firing, a withdrawal decided — are
+ * sent through the same port from `server/notifications.ts`, so a browser has one
+ * registration and one switch, whatever the message is about.
  */
 export interface PushSender {
   register(device: DeviceRegistration): Promise<void>;
   forget(token: string): Promise<void>;
+  /** Every device registered to one account. Returns how many there were. */
+  forgetAllFor(userId: UserId): Promise<number>;
   /** Returns how many devices accepted it, for the log. Never throws. */
-  notify(input: {
-    audience: 'operators' | { userId: UserId };
-    title: string;
-    body: string;
-    conversationId: string;
-  }): Promise<number>;
+  notify(input: PushMessage): Promise<number>;
 }
+
+export interface PushMessage {
+  readonly audience: 'operators' | { userId: UserId };
+  readonly title: string;
+  readonly body: string;
+  /**
+   * Where a click lands, as a path on this site — `/app/alerts`.
+   *
+   * A path, not a URL: the service worker resolves it against the origin it was
+   * installed from, so a notification always opens the site that registered the
+   * browser rather than whichever origin `APP_URL` happens to name.
+   */
+  readonly link: string;
+  /**
+   * Notifications sharing a tag replace one another on the device instead of
+   * stacking — one per conversation, one per alert. Left out when every message
+   * deserves to be seen on its own, as two withdrawals do.
+   */
+  readonly tag?: string | undefined;
+  /**
+   * The screen that already shows this message live, if there is one.
+   *
+   * A device skips the system notification while somebody is looking at that
+   * screen: an agent working the queue does not need their operating system to
+   * announce the message that just appeared in front of them.
+   */
+  readonly surface?: PushSurface | undefined;
+}
+
+export type PushSurface = 'support-queue' | 'support-thread';
 
 /** One stored image, as the serving route needs it. */
 export interface StoredAttachment {

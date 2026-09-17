@@ -265,7 +265,14 @@ export function SupportConsole({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div
+        // Tells the push service worker this queue is on screen and updating itself,
+        // so a new customer message is not also announced by the operating system.
+        // Only while the listener is live: a console that is polling, or not
+        // updating at all, still needs the notification.
+        data-live-surface={status === 'live' ? 'support-queue' : undefined}
+        className="mb-4 flex flex-wrap items-center justify-between gap-3"
+      >
         <SegmentedControl
           ariaLabel="Filter conversations"
           size="sm"
@@ -274,7 +281,7 @@ export function SupportConsole({
           onChange={setView}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <PushToggle />
+          <PushToggle operatorId={operatorId} />
           <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
             <span
               aria-hidden
@@ -418,8 +425,8 @@ export function SupportConsole({
  * a gesture is denied by the person and increasingly blocked by the browser — and
  * a denial is sticky, curable only by the operator finding a setting.
  */
-function PushToggle() {
-  const { state, enable } = usePush();
+function PushToggle({ operatorId }: { operatorId: string }) {
+  const { state, error, enable } = usePush(operatorId);
 
   if (state === 'unconfigured') return null;
 
@@ -452,19 +459,28 @@ function PushToggle() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void enable()}
-      disabled={state === 'working'}
-      className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-2xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-40"
-    >
-      {state === 'working' ? (
-        <Loader2 className="size-3 animate-spin" />
-      ) : (
-        <Bell className="size-3" />
-      )}
-      Notify me
-    </button>
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      <button
+        type="button"
+        onClick={() => void enable()}
+        disabled={state === 'working'}
+        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-2xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-40"
+      >
+        {state === 'working' ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <Bell className="size-3" />
+        )}
+        Notify me
+      </button>
+      {/* Said, not swallowed. A button that quietly returned to "Notify me" after a
+          failed attempt was indistinguishable from one that was never pressed. */}
+      {error !== null ? (
+        <span role="alert" className="text-2xs text-down">
+          {error}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

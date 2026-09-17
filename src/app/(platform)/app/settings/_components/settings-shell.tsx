@@ -123,8 +123,8 @@ function Toggle({
  * has refused permission cannot be talked into it from JavaScript, which is why
  * the denied state explains itself rather than offering a switch that will not move.
  */
-function PushNotificationToggle() {
-  const { state, enable, disable } = usePush();
+function PushNotificationToggle({ userId }: { userId: string }) {
+  const { state, error, enable, disable } = usePush(userId);
 
   if (state === 'unconfigured') {
     return (
@@ -153,13 +153,24 @@ function PushNotificationToggle() {
   }
 
   return (
-    <Toggle
-      label="Support replies"
-      description="A notification on this device when an agent answers you."
-      checked={state === 'granted'}
-      disabled={state === 'working'}
-      onChange={(next) => void (next ? enable() : disable())}
-    />
+    <>
+      <Toggle
+        // Was "Support replies — a notification on this device when an agent answers
+        // you". True when support was the only thing that pushed; this switch now also
+        // controls price alerts, deposit and withdrawal decisions and security events,
+        // so the old wording described a fraction of what turning it on does.
+        label="Push notifications"
+        description="Price alerts, deposits, withdrawals, sign-ins and support replies, on this device."
+        checked={state === 'granted'}
+        disabled={state === 'working'}
+        onChange={(next) => void (next ? enable() : disable())}
+      />
+      {error !== null ? (
+        <p role="alert" className="pb-3.5 text-xs leading-relaxed text-down">
+          {error}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -330,7 +341,7 @@ export function SettingsShell({
             <Panel>
               <PanelHeader title="Notifications" subtitle="Per device, not per account" />
               <div className="divide-y divide-line/60">
-                <PushNotificationToggle />
+                <PushNotificationToggle userId={user.id} />
               </div>
               <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
                 This setting belongs to the browser you are using, not to your account:

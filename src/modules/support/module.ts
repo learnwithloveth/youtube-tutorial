@@ -47,8 +47,6 @@ export interface RegisterSupportOptions {
    * missing Firebase project does.
    */
   db: Database;
-  /** Origin used to build the link a notification opens. */
-  appUrl: string;
   ids?: IdGenerator;
   clock?: Clock;
 }
@@ -61,7 +59,7 @@ export function registerSupport(options: RegisterSupportOptions): SupportModule 
     conversations: new FirestoreConversationRepository(handles.firestore),
     messages: new FirestoreMessageRepository(handles.firestore),
     realtime: new FirebaseRealtimeAuth(handles.auth),
-    push: new FirebasePushSender(handles.firestore, handles.messaging, options.appUrl),
+    push: new FirebasePushSender(handles.firestore, handles.messaging),
     attachments: new PostgresAttachmentStorage(options.db),
     ids: options.ids ?? systemIdGenerator,
     clock: options.clock ?? systemClock,

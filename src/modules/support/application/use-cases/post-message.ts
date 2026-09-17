@@ -178,7 +178,9 @@ async function announce(
       audience: 'operators',
       title: opened ? 'New support conversation' : 'New message from a customer',
       body: preview,
-      conversationId: conversation.id,
+      link: `/admin/support?conversation=${encodeURIComponent(conversation.id)}`,
+      tag: `support-${conversation.id}`,
+      surface: 'support-queue',
     });
     return;
   }
@@ -187,6 +189,8 @@ async function announce(
     audience: { userId: conversation.userId },
     title: 'Novex support replied',
     body: preview,
-    conversationId: conversation.id,
+    link: '/app',
+    tag: `support-${conversation.id}`,
+    surface: 'support-thread',
   });
 }

@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import type { IdentityError } from '@/modules/identity';
 import { logger } from '@/platform/observability/logger';
-import { recordActivity } from '@/server/activity';
 import { getCurrentUser, identity, SESSION_COOKIE } from '@/server/auth';
+import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import { sessionCookieOptions } from '@/server/session-cookie';
 import type { UserId } from '@/shared/kernel/ids';
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   );
 
   try {
-    await recordActivity({
+    await recordAndPush({
       userId: result.value.userId as UserId,
       kind: 'sign-in',
       detail: 'with Google',

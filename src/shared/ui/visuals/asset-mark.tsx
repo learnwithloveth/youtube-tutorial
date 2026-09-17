@@ -33,19 +33,50 @@ export function AssetMark({
   symbol,
   glyph,
   hue,
+  network,
   size = 'md',
   className,
 }: {
   symbol: string;
   glyph: string;
   hue: string;
-  size?: 'sm' | 'md' | 'lg';
+  /**
+   * The ledger network, where the screen is about one chain in particular.
+   *
+   * Price screens leave it out: a price is the same on every chain. The deposit
+   * and withdrawal screens pass it, and an asset with a logo per network — USDT on
+   * Ethereum, USDT on Tron — then shows that chain's badge on the coin.
+   */
+  network?: string | null | undefined;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
 }) {
   const dimension =
-    size === 'sm' ? 'size-8 text-sm' : size === 'lg' ? 'size-14 text-2xl' : 'size-10 text-base';
+    size === 'xs'
+      ? 'size-5 text-[10px]'
+      : size === 'sm'
+        ? 'size-8 text-sm'
+        : size === 'lg'
+          ? 'size-14 text-2xl'
+          : 'size-10 text-base';
 
-  const logo = assetLogoFor(symbol);
+  const logo = assetLogoFor(symbol, network);
+
+  if (logo !== null && logo.composite) {
+    // Shown whole. The file is already a coin with a chain badge overlapping its
+    // edge, on a transparent canvas; the circular clip below would cut that badge
+    // off, and the badge is what this variant exists to show.
+    return (
+      <span
+        aria-hidden
+        data-symbol={symbol}
+        data-network={network ?? undefined}
+        className={cn('relative grid shrink-0 place-items-center', dimension, className)}
+      >
+        <Image src={logo.src} alt="" width={64} height={64} className="size-full object-contain" />
+      </span>
+    );
+  }
 
   if (logo !== null) {
     return (
@@ -63,7 +94,7 @@ export function AssetMark({
         )}
       >
         <Image
-          src={logo}
+          src={logo.src}
           alt=""
           width={64}
           height={64}
