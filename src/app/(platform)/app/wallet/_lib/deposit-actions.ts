@@ -6,7 +6,7 @@ import { presentLedgerError, MAX_PROOF_BYTES } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
 import { recordForAdmins } from '@/server/admin-alerts';
 import { getCurrentUser } from '@/server/auth';
-import { ledger } from '@/server/ledger';
+import { emailCustomerAbout, ledger } from '@/server/ledger';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
@@ -78,6 +78,10 @@ export async function submitDepositAction(
     agent: request.agent,
     ipDigest: request.ipDigest,
   });
+
+  // The customer's written copy of what they reported — said to be under review,
+  // never credited, until an operator decides.
+  emailCustomerAbout('deposit', result.value.claimId);
 
   revalidatePath('/app/wallet');
 

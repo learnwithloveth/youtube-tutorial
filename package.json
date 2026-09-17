@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 4009",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 4009",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "lint:boundaries": "depcruise src --config .dependency-cruiser.cjs",
@@ -23,6 +23,9 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm lint:boundaries && pnpm test",
     "admin:grant": "node --conditions=react-server --import tsx scripts/grant-admin.ts",
     "admin:revoke": "node --conditions=react-server --import tsx scripts/grant-admin.ts --revoke"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

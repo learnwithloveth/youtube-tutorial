@@ -18,6 +18,7 @@ import { CatalogueAssetRegistry } from '../../infrastructure/catalogue/assets';
 import type { DepositClaim, DepositClaimStatus } from '../../domain/deposit-claim';
 import type { ProofContentType } from '../../domain/proof-image';
 import type {
+  CustomerDirectory,
   DecisionTally,
   DepositClaimRepository,
   FeedPageQuery,
@@ -25,9 +26,11 @@ import type {
   LedgerRepository,
   PriceOracle,
   ProofStorage,
+  ReceiptSender,
   WithdrawalRepository,
 } from '../ports';
 import { createDecideWithdrawal } from '../use-cases/decide-withdrawal';
+import { createSendReceipt, createSendTransactionEmail } from '../use-cases/send-receipt';
 import { createDecideDepositClaim } from '../use-cases/decide-deposit-claim';
 import { createRecordDeposit } from '../use-cases/record-deposit';
 import { createSubmitDepositClaim } from '../use-cases/submit-deposit-claim';
@@ -278,6 +281,9 @@ const priceOracle: PriceOracle = {
   },
 };
 
+/** Mail, captured rather than sent. `outbox` is what the assertions read. */
+const SITE = 'Aurum Exchange';
+
 function build(prices: PriceOracle = priceOracle) {
   const accounts = new FakeLedger();
   const withdrawals = new FakeWithdrawals();
@@ -285,12 +291,28 @@ function build(prices: PriceOracle = priceOracle) {
   const claims = new FakeClaims();
   const proofs = new FakeProofs();
 
+  const outbox: { to: string; subject: string; text: string; html: string }[] = [];
+  const receipts: ReceiptSender = {
+    async send(message) {
+      outbox.push(message);
+      return { sent: true };
+    },
+  };
+  const directory: CustomerDirectory = {
+    async emailFor(userId) {
+      return `${userId.slice(0, 8)}@example.com`;
+    },
+  };
+
   const deps: LedgerDependencies = {
     accounts,
     withdrawals,
     claims,
     proofs,
     prices,
+    receipts,
+    directory,
+    siteName: SITE,
     assets: new CatalogueAssetRegistry(),
     ids: sequentialIdGenerator(),
     clock: fixedClock(NOW),
@@ -302,11 +324,16 @@ function build(prices: PriceOracle = priceOracle) {
     withdrawals,
     claims,
     proofs,
+    outbox,
     deposit: createRecordDeposit(deps),
     submitClaim: createSubmitDepositClaim(deps),
     decideClaim: createDecideDepositClaim(deps),
     request: createRequestWithdrawal(deps),
     decide: createDecideWithdrawal(deps),
+    /** Sent by itself at every step — the customer's copy. */
+    email: createSendTransactionEmail(deps),
+    /** The console's button, for sending a decided record again. */
+    resend: createSendReceipt(deps),
   };
 }
 
@@ -810,5 +837,193 @@ describe('deposit claims', () => {
     });
 
     expect(again.ok).toBe(false);
+  });
+});
+
+/**
+ * What lands in a customer's inbox at each step.
+ *
+ * The rule under test is that the wording follows the record's *state*, not the
+ * caller's intention: a request still waiting must never read as a receipt, and a
+ * refusal must never say money was taken. Both were sent by hand before and are now
+ * sent for every request and every decision, so a wrong word reaches everybody
+ * rather than whoever an operator pressed the button for.
+ */
+describe('emails to the customer', () => {
+  const PNG_CLAIM = {
+    userId: ALICE,
+    asset: 'BTC',
+    network: 'bitcoin',
+    amount: '0.25',
+    reference: '0xdeadbeefcafe',
+    proof: (() => {
+      const bytes = new Uint8Array(512);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+      return bytes;
+    })(),
+  } as Parameters<ReturnType<typeof createSubmitDepositClaim>>[0];
+
+  async function withdrawing(amount: string) {
+    const ctx = build();
+    await ctx.deposit({
+      userId: ALICE,
+      asset: 'BTC',
+      amount: '1.0',
+      reference: 'seed',
+      recordedBy: BOB,
+    });
+    const requested = await ctx.request({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      destination: BTC_ADDRESS,
+      amount,
+    });
+    if (!requested.ok) throw new Error(`setup failed: ${requested.error.kind}`);
+
+    return { ctx, id: requested.value.withdrawalId };
+  }
+
+  it('acknowledges a withdrawal request in words that cannot be read as a receipt', async () => {
+    const { ctx, id } = await withdrawing('0.05');
+
+    const sent = await ctx.email({ kind: 'withdrawal', recordId: id });
+
+    expect(sent.ok).toBe(true);
+    const mail = ctx.outbox.at(-1);
+    expect(mail?.to).toBe(`${ALICE.slice(0, 8)}@example.com`);
+    expect(mail?.subject).toBe('Your withdrawal request is being reviewed — 0.05 BTC');
+    expect(mail?.text).toContain('Awaiting a decision.');
+    expect(mail?.text).toContain('Nothing has left your account yet.');
+    expect(mail?.text).toContain('It is not a receipt');
+    // Held, not taken, and the document has to say which.
+    expect(mail?.text).toContain('Total on hold');
+    expect(mail?.text).not.toContain('Total debited');
+    expect(mail?.text).not.toContain('Amount sent');
+  });
+
+  it('reads the record, so one signature of two still reads as under review', async () => {
+    const { ctx, id } = await withdrawing('0.15'); // $15,000 — two signatures
+
+    const first = await ctx.decide({ withdrawalId: id, operatorId: BOB, decision: 'approve' });
+    expect(first.ok).toBe(true);
+
+    await ctx.email({ kind: 'withdrawal', recordId: id });
+    expect(ctx.outbox.at(-1)?.subject).toContain('is being reviewed');
+
+    await ctx.decide({ withdrawalId: id, operatorId: CAROL, decision: 'approve' });
+    await ctx.email({ kind: 'withdrawal', recordId: id });
+    expect(ctx.outbox.at(-1)?.subject).toBe('Receipt for your withdrawal — 0.15 BTC');
+  });
+
+  it('sends the receipt once a withdrawal is approved', async () => {
+    const { ctx, id } = await withdrawing('0.05');
+    await ctx.decide({ withdrawalId: id, operatorId: BOB, decision: 'approve' });
+
+    await ctx.email({ kind: 'withdrawal', recordId: id });
+
+    const mail = ctx.outbox.at(-1);
+    expect(mail?.subject).toBe('Receipt for your withdrawal — 0.05 BTC');
+    expect(mail?.text).toContain('Completed.');
+    expect(mail?.text).toContain('Amount sent');
+    expect(mail?.text).toContain('Total debited');
+    expect(mail?.text).toContain(BTC_ADDRESS);
+  });
+
+  it('tells a refused customer why, and that nothing was debited', async () => {
+    const { ctx, id } = await withdrawing('0.05');
+    await ctx.decide({
+      withdrawalId: id,
+      operatorId: BOB,
+      decision: 'reject',
+      reason: 'The destination address is on a sanctions list',
+    });
+
+    await ctx.email({ kind: 'withdrawal', recordId: id });
+
+    const mail = ctx.outbox.at(-1);
+    expect(mail?.subject).toBe(`Your withdrawal was not accepted — ${id}`);
+    expect(mail?.text).toContain('Reason: The destination address is on a sanctions list');
+    expect(mail?.text).toContain('Total released');
+    // Nothing was ever taken, so the document must not say it was.
+    expect(mail?.text).not.toContain('Total debited');
+  });
+
+  it('says a reported deposit is not credited yet, then that it is', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(PNG_CLAIM);
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.email({ kind: 'deposit', recordId: submitted.value.claimId });
+    const acknowledged = ctx.outbox.at(-1);
+    expect(acknowledged?.subject).toBe('Your deposit is being reviewed — 0.25 BTC');
+    expect(acknowledged?.text).toContain('Nothing has been credited yet.');
+    expect(acknowledged?.text).toContain('Amount you reported');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+      creditedAmount: '0.2498',
+    });
+    await ctx.email({ kind: 'deposit', recordId: submitted.value.claimId });
+
+    const credited = ctx.outbox.at(-1);
+    // The figure an operator verified, which is the one that reached the balance.
+    expect(credited?.subject).toBe('Receipt for your deposit — 0.2498 BTC');
+    expect(credited?.text).toContain('Amount credited: 0.2498 BTC');
+    expect(credited?.text).toContain('Amount you reported: 0.25 BTC');
+  });
+
+  it('carries a refused deposit’s reason', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim(PNG_CLAIM);
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'reject',
+      reason: 'No matching transaction on chain',
+    });
+    await ctx.email({ kind: 'deposit', recordId: submitted.value.claimId });
+
+    const mail = ctx.outbox.at(-1);
+    expect(mail?.subject).toContain('was not accepted');
+    expect(mail?.text).toContain('Not accepted.');
+    expect(mail?.text).toContain('Reason: No matching transaction on chain');
+  });
+
+  it('still refuses the console’s button while a record is undecided', async () => {
+    const { ctx, id } = await withdrawing('0.05');
+
+    const pressed = await ctx.resend({ kind: 'withdrawal', recordId: id });
+
+    expect(pressed.ok).toBe(false);
+    if (!pressed.ok) expect(pressed.error.kind).toBe('receipt-not-yet-available');
+    expect(ctx.outbox).toHaveLength(0);
+  });
+
+  it('signs the mail with the deployment’s name, not a fixed brand', async () => {
+    const { ctx, id } = await withdrawing('0.05');
+
+    await ctx.email({ kind: 'withdrawal', recordId: id });
+
+    const mail = ctx.outbox.at(-1);
+    expect(mail?.text.startsWith(SITE)).toBe(true);
+    expect(mail?.html).toContain(SITE.toUpperCase());
+    expect(mail?.html).not.toContain('NOVEX');
+  });
+
+  it('masks the address it reports back to the caller', async () => {
+    const { ctx, id } = await withdrawing('0.05');
+
+    const sent = await ctx.email({ kind: 'withdrawal', recordId: id });
+
+    expect(sent.ok).toBe(true);
+    if (sent.ok) {
+      expect(sent.value.reference).toBe(id);
+      expect(sent.value.sentTo).toBe(`${ALICE.slice(0, 1)}•••••••@example.com`);
+    }
   });
 });

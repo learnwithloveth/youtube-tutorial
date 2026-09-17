@@ -6,7 +6,7 @@ import { presentLedgerError } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
 import { recordForAdmins } from '@/server/admin-alerts';
 import { getCurrentUser } from '@/server/auth';
-import { ledger } from '@/server/ledger';
+import { emailCustomerAbout, ledger } from '@/server/ledger';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
 
@@ -79,6 +79,9 @@ export async function requestWithdrawalAction(
     agent: context_.agent,
     ipDigest: context_.ipDigest,
   });
+
+  // The customer's written copy of what they asked for, and what is now on hold.
+  emailCustomerAbout('withdrawal', result.value.withdrawalId);
 
   // The balance and the pending list both changed, and the page reads them on the
   // server — without this the customer would see their old available balance until

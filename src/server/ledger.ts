@@ -1,7 +1,9 @@
 import 'server-only';
 
+import { after } from 'next/server';
 import { cache } from 'react';
 
+import { BRAND } from '@/modules/content';
 import type { ApprovalQueueDto, StatementDto, StatementOptions, WalletDto } from '@/modules/ledger';
 import type { CustomerDirectory, ReceiptSender } from '@/modules/ledger/server';
 import {
@@ -52,8 +54,59 @@ export const ledger = cache((): LedgerModule | null => {
     prices: marketPriceOracle,
     receipts: smtpReceiptSender,
     directory: identityDirectory,
+    siteName: BRAND.name,
   });
 });
+
+/**
+ * Emails a customer where one of their deposits or withdrawals now stands.
+ *
+ * Called by each action that moves one along — a withdrawal requested, a deposit
+ * submitted, an operator's final decision on either — once that step has committed.
+ * What the message says is decided by the ledger from the record as stored; see
+ * `sendTransactionEmail`.
+ *
+ * ── After the response, and never a reason to fail ────────────────────────────
+ * It runs in `after`, so a slow mail server holds up neither the customer's form
+ * nor the operator's queue. And a failure is only logged: the step happened whether
+ * or not the message arrived, and an action that reported an error for a withdrawal
+ * already on hold would invite the customer to submit it again.
+ */
+export function emailCustomerAbout(kind: 'deposit' | 'withdrawal', recordId: string): void {
+  const send = async (): Promise<void> => {
+    try {
+      const context = ledger();
+      if (context === null) return;
+
+      const result = await context.sendTransactionEmail({ kind, recordId });
+      if (result.ok) {
+        logger.info({
+          event: 'transaction_email_sent',
+          module: 'ledger',
+          kind,
+          reference: result.value.reference,
+        });
+      } else {
+        logger.warn({
+          event: 'transaction_email_failed',
+          module: 'ledger',
+          kind,
+          recordId,
+          reason: result.error.kind,
+        });
+      }
+    } catch (error) {
+      logger.warn({ event: 'transaction_email_failed', module: 'ledger', kind, recordId }, error);
+    }
+  };
+
+  // `after` throws outside a request, where there is no response to wait for.
+  try {
+    after(send);
+  } catch {
+    void send();
+  }
+}
 
 /**
  * Values an amount in USD using the live market.

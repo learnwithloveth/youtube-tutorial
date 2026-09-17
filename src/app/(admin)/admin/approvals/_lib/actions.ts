@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { presentLedgerError } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
 import { requireAdmin } from '@/server/auth';
-import { getApprovalQueue, ledger } from '@/server/ledger';
+import { emailCustomerAbout, getApprovalQueue, ledger } from '@/server/ledger';
 import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
@@ -91,6 +91,12 @@ export async function decideWithdrawalAction(
       ipDigest: request.ipDigest,
     });
   }
+
+  // Only a final decision. A first signature under dual control leaves the request
+  // pending, and the customer already has the acknowledgement that says so. Not
+  // gated on `subject` like the trail entry above: the email reads the record
+  // itself, so it does not need the queue's copy.
+  if (result.value.status !== 'pending') emailCustomerAbout('withdrawal', withdrawalId);
 
   // The queue and the customer's wallet both changed.
   revalidatePath('/admin/approvals');

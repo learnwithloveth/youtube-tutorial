@@ -30,7 +30,12 @@ import {
   createRequestWithdrawal,
   type RequestWithdrawal,
 } from './application/use-cases/request-withdrawal';
-import { createSendReceipt, type SendReceipt } from './application/use-cases/send-receipt';
+import {
+  createSendReceipt,
+  createSendTransactionEmail,
+  type SendReceipt,
+  type SendTransactionEmail,
+} from './application/use-cases/send-receipt';
 import {
   createDecideRiskSignal,
   type DecideRiskSignal,
@@ -69,8 +74,13 @@ export interface LedgerModule {
   readonly submitDepositClaim: SubmitDepositClaim;
   /** An operator confirms or refuses that evidence. This is what credits. */
   readonly decideDepositClaim: DecideDepositClaim;
-  /** Emails a customer the record of a decided movement. */
+  /** Emails a customer the record of a decided movement. The console's button. */
   readonly sendReceipt: SendReceipt;
+  /**
+   * Emails a customer where a deposit or withdrawal now stands — acknowledged while
+   * pending, the receipt once decided. Sent at every step without anyone asking.
+   */
+  readonly sendTransactionEmail: SendTransactionEmail;
   /** An operator clears or escalates one risk finding. Records, never acts. */
   readonly decideRiskSignal: DecideRiskSignal;
   /** Passed to the module's queries, which are free functions over these ports. */
@@ -84,6 +94,8 @@ export interface RegisterLedgerOptions {
   /** Both optional: a deployment without mail still runs, and says so on the page. */
   receipts?: ReceiptSender | undefined;
   directory?: CustomerDirectory | undefined;
+  /** The deployment's name, for the head of every email. */
+  siteName: string;
   ids?: IdGenerator;
   clock?: Clock;
 }
@@ -99,6 +111,7 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     prices: options.prices,
     receipts: options.receipts,
     directory: options.directory,
+    siteName: options.siteName,
     assets: new CatalogueAssetRegistry(),
     risk: new SqlRiskScanner(options.db),
     dispositions: new DrizzleRiskDispositionStore(options.db),
@@ -113,6 +126,7 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     submitDepositClaim: createSubmitDepositClaim(dependencies),
     decideDepositClaim: createDecideDepositClaim(dependencies),
     sendReceipt: createSendReceipt(dependencies),
+    sendTransactionEmail: createSendTransactionEmail(dependencies),
     decideRiskSignal: createDecideRiskSignal(dependencies),
     dependencies,
   };

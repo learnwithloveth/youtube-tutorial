@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { presentLedgerError } from '@/modules/ledger';
 import { logger } from '@/platform/observability/logger';
 import { requireAdmin } from '@/server/auth';
-import { getPendingDepositClaims, ledger } from '@/server/ledger';
+import { emailCustomerAbout, getPendingDepositClaims, ledger } from '@/server/ledger';
 import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import type { UserId } from '@/shared/kernel/ids';
@@ -83,6 +83,10 @@ export async function decideDepositAction(
       // filed themselves, recorded under the same kind, does not.
     });
   }
+
+  // The receipt, or the refusal with its reason. A claim is decided in one step, so
+  // every successful decision is final.
+  emailCustomerAbout('deposit', claimId);
 
   revalidatePath('/admin/approvals');
   revalidatePath('/app/wallet');

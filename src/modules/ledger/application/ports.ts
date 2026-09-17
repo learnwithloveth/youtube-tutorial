@@ -335,6 +335,14 @@ export interface LedgerDependencies {
   /** Optional: a deployment with no mail transport still runs, and says so. */
   receipts?: ReceiptSender | undefined;
   directory?: CustomerDirectory | undefined;
+  /**
+   * The deployment's name, which heads every email the ledger sends.
+   *
+   * Passed in rather than imported: the name belongs to the content context, and the
+   * ledger does not reach into another context for it — the same arrangement
+   * support uses.
+   */
+  siteName: string;
   ids: IdGenerator;
   clock: Clock;
 }

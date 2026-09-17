@@ -29,7 +29,10 @@ export type { DecideWithdrawalCommand } from './application/use-cases/decide-wit
 export type { RecordDepositCommand } from './application/use-cases/record-deposit';
 export type { SubmitDepositClaimCommand } from './application/use-cases/submit-deposit-claim';
 export type { DecideDepositClaimCommand } from './application/use-cases/decide-deposit-claim';
-export type { SendReceiptCommand } from './application/use-cases/send-receipt';
+export type {
+  SendReceiptCommand,
+  SendTransactionEmailCommand,
+} from './application/use-cases/send-receipt';
 export type { CustomerDirectory, ReceiptSender } from './application/ports';
 
 export { LEDGER_ASSETS } from './infrastructure/catalogue/assets';

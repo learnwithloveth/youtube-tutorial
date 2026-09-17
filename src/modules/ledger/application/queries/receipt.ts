@@ -193,7 +193,8 @@ export async function getReceipt(
       counterpartyLabel: 'To',
       lines: [
         {
-          label: 'Amount sent',
+          // "Sent" only once it was: a request still waiting, or refused, sent nothing.
+          label: snapshot.status === 'approved' ? 'Amount sent' : 'Amount requested',
           value: amountText(snapshot.amount, snapshot.asset),
           mono: true,
         },
@@ -203,10 +204,9 @@ export async function getReceipt(
           mono: true,
         },
         {
-          label: 'Total debited',
+          ...WITHDRAWAL_TOTAL[snapshot.status],
           value: amountText(total, snapshot.asset),
           mono: true,
-          note: 'Amount plus fee, held on your account from the moment you asked.',
         },
         { label: 'Network', value: network },
         { label: 'Destination', value: snapshot.destination, mono: true },
@@ -236,6 +236,32 @@ export async function getReceipt(
     return null;
   }
 }
+
+/**
+ * What a withdrawal's total line says, by what happened to the money.
+ *
+ * ── Changed from the approved copy, because it was false ──────────────────────
+ * The line used to read "Total debited" whatever the status. True of an approval;
+ * false of a request still waiting, where the total is held and nothing is debited,
+ * and false of a rejection, where the hold was released and nothing was ever taken.
+ * It was rarely seen while receipts were sent by hand. Now every request and every
+ * decision is emailed, and a document telling a refused customer that their money
+ * was taken is the one they would forward to a lawyer.
+ */
+const WITHDRAWAL_TOTAL = {
+  approved: {
+    label: 'Total debited',
+    note: 'Amount plus fee, held on your account from the moment you asked.',
+  },
+  pending: {
+    label: 'Total on hold',
+    note: 'Amount plus fee, held on your account until the request is decided.',
+  },
+  rejected: {
+    label: 'Total released',
+    note: 'Amount plus fee, returned to your available balance. Nothing was debited.',
+  },
+} as const satisfies Record<ReceiptDto['status'], { label: string; note: string }>;
 
 /**
  * How one amount reads on the document.
