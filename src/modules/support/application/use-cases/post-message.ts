@@ -77,11 +77,15 @@ export function createPostMessage(deps: SupportDependencies): PostMessage {
     // The check is part of the write, so two requests racing one id cannot both
     // win — see `AttachmentStorage.attach`.
     if (attachmentId !== null) {
-      const claimed = await deps.attachments.attach(
-        attachmentId,
-        conversation.id,
-        command.authorId,
-      );
+      const claimed = await deps.attachments.attach({
+        id: attachmentId,
+        conversationId: conversation.id,
+        uploadedBy: command.authorId,
+        // The thread's customer, which is the author only when a customer is
+        // writing. An operator's image belongs to the conversation they sent it
+        // to, and that is who has to be able to open it.
+        customerId: conversation.userId,
+      });
       if (!claimed) return err(SupportErrors.attachmentUnavailable());
     }
 

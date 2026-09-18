@@ -153,8 +153,18 @@ export type RegistrationOutcome = 'registered' | 'stale-token';
 /** One stored image, as the serving route needs it. */
 export interface StoredAttachment {
   readonly id: string;
-  /** Who uploaded it. The authorisation check on the serving route reads this. */
+  /** Who uploaded it — a customer on one side of a conversation, an operator on the other. */
   readonly userId: UserId;
+  /** The conversation it was claimed by, or null while it is still an orphan. */
+  readonly conversationId: string | null;
+  /**
+   * The customer whose conversation it is, or null while it is unclaimed.
+   *
+   * This, not `userId`, is what the serving route authorises a customer against:
+   * an operator's reply carries their own id as the uploader, and the customer it
+   * was sent to has to be able to see it.
+   */
+  readonly customerId: UserId | null;
   readonly contentType: AttachmentContentType;
   readonly bytes: Uint8Array;
   readonly byteLength: number;
@@ -191,8 +201,19 @@ export interface AttachmentStorage {
    * already been claimed — which is the check that stops one customer attaching
    * another's image to their own thread by guessing an id. It has to be part of
    * the write, not a read beforehand, or two requests racing one id both win.
+   *
+   * `customerId` is recorded rather than derived later: the caller is holding the
+   * conversation, and the route that serves the bytes would otherwise have to read
+   * it from Firestore on every request for every image.
    */
-  attach(id: string, conversationId: string, userId: UserId): Promise<boolean>;
+  attach(input: {
+    id: string;
+    conversationId: string;
+    /** The uploader. Scopes the claim.  */
+    uploadedBy: UserId;
+    /** Whose conversation it is. Decides who may later see the bytes. */
+    customerId: UserId;
+  }): Promise<boolean>;
 
   /** Uploads that never became a message: somebody picked a file and left. */
   deleteOrphansBefore(cutoff: Date, limit: number): Promise<number>;

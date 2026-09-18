@@ -89,18 +89,36 @@ class FakeMessages implements MessageRepository {
  * rather than wave it through.
  */
 class FakeAttachments implements AttachmentStorage {
-  readonly store = new Map<string, { userId: UserId; conversationId: string | null }>();
+  readonly store = new Map<
+    string,
+    { userId: UserId; conversationId: string | null; customerId: UserId | null }
+  >();
 
   async put(input: { id: string; userId: UserId }) {
-    this.store.set(input.id, { userId: input.userId, conversationId: null });
+    this.store.set(input.id, {
+      userId: input.userId,
+      conversationId: null,
+      customerId: null,
+    });
   }
   async get() {
     return null;
   }
-  async attach(id: string, conversationId: string, userId: UserId) {
-    const row = this.store.get(id);
-    if (row === undefined || row.userId !== userId || row.conversationId !== null) return false;
-    this.store.set(id, { ...row, conversationId });
+  async attach(input: {
+    id: string;
+    conversationId: string;
+    uploadedBy: UserId;
+    customerId: UserId;
+  }) {
+    const row = this.store.get(input.id);
+    if (row === undefined || row.userId !== input.uploadedBy || row.conversationId !== null) {
+      return false;
+    }
+    this.store.set(input.id, {
+      ...row,
+      conversationId: input.conversationId,
+      customerId: input.customerId,
+    });
     return true;
   }
   async deleteOrphansBefore() {
@@ -359,6 +377,59 @@ describe('support conversations', () => {
     expect(result.error.kind).toBe('attachment-unavailable');
     // Nothing was written: no thread, no message.
     expect(harness.messages.store).toHaveLength(0);
+  });
+
+  it("records the thread's customer on an operator's image, not the operator", async () => {
+    /*
+     * The bug this exists to stop coming back.
+     *
+     * The serving route decides who may open an image, and it used to ask only
+     * whether the viewer had uploaded it. For a customer's screenshot that is the
+     * customer, and everything worked. For an operator's reply it is the operator
+     * — so the customer the image was sent to was refused their own thread's
+     * attachment, and the widget drew a broken image.
+     *
+     * Claiming is the moment the answer is known, because the conversation is in
+     * hand. So it is written down here, and the route compares against it.
+     */
+    const opened = await harness.post({
+      author: 'customer',
+      authorId: CUSTOMER,
+      body: 'My card was declined',
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    await harness.attachments.put({ id: 'img-from-agent', userId: OPERATOR });
+
+    const replied = await harness.post({
+      conversationId: opened.value.conversation.id,
+      author: 'operator',
+      authorId: OPERATOR,
+      body: 'Try this',
+      attachmentId: 'img-from-agent',
+    });
+
+    expect(replied.ok).toBe(true);
+    const row = harness.attachments.store.get('img-from-agent');
+    // The uploader is still the operator — that is what scopes the claim.
+    expect(row?.userId).toBe(OPERATOR);
+    // And the customer is the one who can now open it.
+    expect(row?.customerId).toBe(CUSTOMER);
+  });
+
+  it("records the customer on their own image too", async () => {
+    await harness.attachments.put({ id: 'img-mine', userId: CUSTOMER });
+
+    const result = await harness.post({
+      author: 'customer',
+      authorId: CUSTOMER,
+      body: 'Here it is',
+      attachmentId: 'img-mine',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(harness.attachments.store.get('img-mine')?.customerId).toBe(CUSTOMER);
   });
 
   it('refuses to attach the same image twice', async () => {

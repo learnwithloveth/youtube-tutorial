@@ -44,8 +44,27 @@ export const attachments = supportSchema.table(
 
     /** The Firestore conversation this belongs to. Null until the message is sent. */
     conversationId: text('conversation_id'),
-    /** Opaque `UserId` of whoever uploaded it. The authorisation check reads this. */
+    /**
+     * Opaque `UserId` of whoever uploaded it. Scopes the claim in `attach`, so
+     * nobody can bind somebody else's upload to their own thread.
+     */
     userId: text('user_id').notNull(),
+    /**
+     * The customer whose conversation this ended up in. Null until it is claimed.
+     *
+     * ── Why this is not the same as `user_id` ─────────────────────────────────
+     * Both sides of a conversation send images, so the uploader is the customer
+     * for some rows and an operator for others. Serving the bytes asks a different
+     * question from claiming them — not "did you upload this" but "is this in your
+     * conversation" — and answering it from `user_id` meant an operator's image was
+     * refused to the only customer entitled to see it.
+     *
+     * Recorded here rather than looked up, because the conversation lives in
+     * Firestore: authorising by reading it would be a document read on every
+     * render of every image, on a database billed by the document. The claim
+     * already knows the answer, so it writes it down.
+     */
+    customerId: text('customer_id'),
 
     /** Sniffed from the bytes, never taken from the upload's declared type. */
     contentType: text('content_type', {

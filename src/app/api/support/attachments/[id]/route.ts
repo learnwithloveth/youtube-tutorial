@@ -29,9 +29,16 @@ import { support } from '@/server/support';
  * set.
  *
  * ── Who may see it ───────────────────────────────────────────────────────────
- * The customer who uploaded it, and operators. 404 rather than 403 for an image
- * that exists but is not theirs: telling somebody an id is real is the first thing
- * worth knowing if you are guessing them.
+ * Operators, whoever uploaded it, and the customer whose conversation it is in.
+ * 404 rather than 403 for an image that exists but is not theirs: telling somebody
+ * an id is real is the first thing worth knowing if you are guessing them.
+ *
+ * That third case is not a widening, it is the fix for a hole in the first two.
+ * The check used to be "operator, or the uploader" — which works perfectly for a
+ * customer's own screenshot and fails completely for an operator's reply, because
+ * the uploader there is the operator. The customer it was sent to got a 404 and a
+ * broken image, in the one thread where they were waiting for it. See
+ * `StoredAttachment.customerId`.
  */
 
 export const dynamic = 'force-dynamic';
@@ -51,7 +58,15 @@ export async function GET(
 
   const attachment = await context.dependencies.attachments.get(id);
   if (attachment === null) notFound();
-  if (attachment.userId !== user.id && user.role !== 'admin') notFound();
+
+  const maySee =
+    user.role === 'admin' ||
+    // Their own upload — including one still unclaimed, which is what makes the
+    // preview work between picking the file and sending the message.
+    attachment.userId === user.id ||
+    // Or it was sent into their conversation, by whoever.
+    attachment.customerId === user.id;
+  if (!maySee) notFound();
 
   return new Response(attachment.bytes as unknown as BodyInit, {
     status: 200,

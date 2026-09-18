@@ -134,6 +134,13 @@
       "when": 1789717393680,
       "tag": "0018_demonic_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789739697375,
+      "tag": "0019_bizarre_grim_reaper",
+      "breakpoints": true
     }
   ]
 }

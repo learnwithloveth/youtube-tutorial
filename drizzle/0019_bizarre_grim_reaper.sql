@@ -1,0 +1,1 @@
+ALTER TABLE "support"."attachments" ADD COLUMN "customer_id" text;

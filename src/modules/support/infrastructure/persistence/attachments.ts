@@ -54,24 +54,34 @@ export class PostgresAttachmentStorage implements AttachmentStorage {
     return {
       id: row.id,
       userId: row.userId as UserId,
+      conversationId: row.conversationId,
+      customerId: (row.customerId as UserId | null) ?? null,
       contentType: row.contentType,
       bytes: row.bytes,
       byteLength: row.byteLength,
     };
   }
 
-  async attach(id: string, conversationId: string, userId: UserId): Promise<boolean> {
+  async attach(input: {
+    id: string;
+    conversationId: string;
+    uploadedBy: UserId;
+    customerId: UserId;
+  }): Promise<boolean> {
     // Scoped to the uploader and to a row not already claimed. That is the check
     // that stops one customer attaching another's image to their own thread by
     // guessing an id — done as part of the write rather than as a read beforehand,
     // so two requests racing the same id cannot both win.
+    //
+    // The customer is written in the same statement: an attachment that is claimed
+    // but has no owner recorded would be one the customer could not open.
     const claimed = await this.db
       .update(attachments)
-      .set({ conversationId })
+      .set({ conversationId: input.conversationId, customerId: input.customerId })
       .where(
         and(
-          eq(attachments.id, id),
-          eq(attachments.userId, userId),
+          eq(attachments.id, input.id),
+          eq(attachments.userId, input.uploadedBy),
           isNull(attachments.conversationId),
         ),
       )
