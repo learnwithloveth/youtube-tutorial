@@ -25,6 +25,8 @@ config({ path: '.env.local' });
  * generated diff would have dropped and recreated every table, and the whole point
  * of that change was to keep the rows.
  */
+
+console.log('Drizzle config: connecting to', process.env.DATABASE_URL);
 export default defineConfig({
   schema: ['./src/modules/*/infrastructure/persistence/schema.ts'],
   out: './drizzle',

@@ -299,16 +299,21 @@ export interface DocumentStorage {
 /**
  * What an identity provider tells us about the person who just signed in.
  *
- * Deliberately three fields. A use case decides whether to create an account, link
- * to an existing one, or refuse — and none of those decisions gets better with a
- * profile picture. `emailVerified` is the one that carries weight: it is what makes
- * linking to an existing account safe, and a provider that says false must not be
- * able to reach somebody else's account.
+ * `emailVerified` is the field that carries weight: it is what makes linking to an
+ * existing account safe, and a provider that says false must not be able to reach
+ * somebody else's account. None of the decisions this drives — create, link, or
+ * refuse — is improved by a profile picture, so there is none.
+ *
+ * The name is here because sign-up asks for one, and an account that arrives this
+ * way is never asked. Optional, because a provider may not send it and because
+ * nothing may depend on it being there.
  */
 export interface ProviderProfile {
   readonly providerAccountId: string;
   readonly email: string;
   readonly emailVerified: boolean;
+  readonly firstName?: string | undefined;
+  readonly lastName?: string | undefined;
 }
 
 /**

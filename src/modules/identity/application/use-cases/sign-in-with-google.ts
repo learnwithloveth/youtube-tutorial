@@ -4,6 +4,7 @@ import { err, ok, type Result } from '@/shared/kernel/result';
 
 import { PROVIDER_LABELS, type AuthProvider } from '../../domain/connected-account';
 import { EmailAddress } from '../../domain/email-address';
+import { Profile } from '../../domain/profile';
 import { User } from '../../domain/user';
 import { IdentityErrors, type IdentityError } from '../errors';
 import type { IdentityDependencies, ProviderProfile } from '../ports';
@@ -127,7 +128,45 @@ export function createSignInWithGoogle(deps: IdentityDependencies) {
       user.verifyEmail(now);
       await deps.users.save(user);
 
+      await recordName(user);
+
       return ok(await issueSession(deps, user, command, now));
+    }
+
+    /**
+     * Stores the name Google sent, for an account that has none.
+     *
+     * ── Only when the account is silent on the matter ─────────────────────────
+     * Never over the top of a name already there. Somebody who corrected theirs in
+     * Settings has said what they want to be called, and signing in again is not a
+     * request to undo it — this runs on every Google sign-in, not just the first.
+     *
+     * ── And never at the cost of the sign-in ──────────────────────────────────
+     * A profile write that fails must not turn a successful authentication into an
+     * error: the person is who they say they are either way, and the field they
+     * would have been given is one they can fill in themselves.
+     */
+    async function recordName(user: User): Promise<void> {
+      if (profile.firstName === undefined && profile.lastName === undefined) return;
+
+      try {
+        const existing = await deps.profiles.find(user.id);
+        if (existing !== null && (existing.firstName !== null || existing.lastName !== null)) {
+          return;
+        }
+
+        const target = existing ?? Profile.empty(user.id, now);
+        const problems = target.update(
+          { firstName: profile.firstName, lastName: profile.lastName },
+          now,
+        );
+        // A name Google considers valid and this context does not — too long — is
+        // dropped rather than reported: nobody typed it here, so there is nobody to
+        // tell, and the account is registered either way.
+        if (problems.length === 0) await deps.profiles.save(target);
+      } catch {
+        // See above: a profile is not worth failing a sign-in over.
+      }
     }
   };
 }

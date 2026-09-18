@@ -4,6 +4,7 @@ import { fixedClock } from '@/shared/kernel/clock';
 
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
+import { Profile } from '../../domain/profile';
 import { User } from '../../domain/user';
 import type { IdentityDependencies, ProviderProfile } from '../ports';
 import {
@@ -43,7 +44,7 @@ function makeDeps(now = NOW) {
     clock: fixedClock(now),
   } as unknown as IdentityDependencies;
 
-  return { deps, users, sessions, connectedAccounts };
+  return { deps, users, sessions, connectedAccounts, profiles: deps.profiles as FakeProfiles };
 }
 
 function profile(overrides: Partial<ProviderProfile> = {}): ProviderProfile {
@@ -65,6 +66,57 @@ async function seedPasswordUser(users: FakeUsers, email: string): Promise<User> 
   await users.insertIfEmailFree(user);
   return user;
 }
+
+/**
+ * The name Google sends.
+ *
+ * Sign-up asks everybody else for one, so an account arriving this way was the only
+ * kind with an empty name field — and the person had just handed that name to
+ * Google on the consent screen.
+ */
+describe('the name from the provider', () => {
+  it('is stored on a profile for an account created this way', async () => {
+    const { deps, profiles } = makeDeps();
+
+    const result = await createSignInWithGoogle(deps)({
+      profile: profile({ firstName: 'Ada', lastName: 'Lovelace' }),
+    });
+
+    expect(result.ok).toBe(true);
+    const [stored] = [...profiles.store.values()];
+    expect(stored?.firstName).toBe('Ada');
+    expect(stored?.lastName).toBe('Lovelace');
+  });
+
+  /* This runs on every Google sign-in, not only the first. A name corrected in
+     Settings is what the account holder asked to be called. */
+  it('never overwrites a name the account already has', async () => {
+    const { deps, users, profiles } = makeDeps();
+    const user = await seedPasswordUser(users, 'ada@example.com');
+
+    const existing = Profile.empty(user.id, NOW);
+    existing.update({ firstName: 'Augusta', lastName: 'King' }, NOW);
+    await profiles.save(existing);
+
+    await createSignInWithGoogle(deps)({
+      profile: profile({ firstName: 'Ada', lastName: 'Lovelace' }),
+    });
+
+    const [stored] = [...profiles.store.values()];
+    expect(stored?.firstName).toBe('Augusta');
+    expect(stored?.lastName).toBe('King');
+  });
+
+  it('writes no profile when the provider sent no name', async () => {
+    const { deps, profiles } = makeDeps();
+
+    const result = await createSignInWithGoogle(deps)({ profile: profile() });
+
+    expect(result.ok).toBe(true);
+    // A row per account with nothing in it is what the on-demand profile avoids.
+    expect(profiles.store.size).toBe(0);
+  });
+});
 
 describe('signing in with Google', () => {
   it('creates an account with no password and an already-confirmed address', async () => {

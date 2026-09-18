@@ -44,6 +44,9 @@ interface GoogleClaims {
   readonly nonce?: unknown;
   readonly email?: unknown;
   readonly email_verified?: unknown;
+  readonly given_name?: unknown;
+  readonly family_name?: unknown;
+  readonly name?: unknown;
 }
 
 export class GoogleOAuthClient implements OAuthClient {
@@ -54,10 +57,11 @@ export class GoogleOAuthClient implements OAuthClient {
     url.searchParams.set('client_id', this.config.clientId);
     url.searchParams.set('redirect_uri', this.config.redirectUri);
     url.searchParams.set('response_type', 'code');
-    // Only what is used. `profile` would add a name and a picture this context has
-    // no field for, and every extra scope is another thing to justify on a consent
-    // screen for no gain.
-    url.searchParams.set('scope', 'openid email');
+    // `profile` was left out while there was nowhere to put a name. Sign-up now
+    // asks every other account holder for one, and an account created here was the
+    // only kind that arrived without one — leaving somebody to fill in a field they
+    // had just handed to Google. The picture that comes with the scope is ignored.
+    url.searchParams.set('scope', 'openid email profile');
     url.searchParams.set('state', input.state);
     url.searchParams.set('nonce', input.nonce);
     url.searchParams.set('code_challenge', input.codeChallenge);
@@ -125,14 +129,53 @@ export class GoogleOAuthClient implements OAuthClient {
       throw new Error('The id_token carries no subject or address.');
     }
 
+    const [firstName, lastName] = nameFrom(claims);
+
     return {
       providerAccountId: sub,
       email,
       // Google sends a boolean; some providers send the string. Anything else is
       // treated as unverified, which is the safe direction to be wrong in.
       emailVerified: claims.email_verified === true || claims.email_verified === 'true',
+      ...(firstName === undefined ? {} : { firstName }),
+      ...(lastName === undefined ? {} : { lastName }),
     };
   }
+}
+
+/**
+ * The name, in two halves.
+ *
+ * `given_name` and `family_name` when Google sends them, which it does for most
+ * accounts. Otherwise `name` is split on the last space: an imperfect guess, but
+ * the alternative is putting somebody's full name in the first-name box, and both
+ * are corrected in the same place — Settings.
+ *
+ * Nothing is invented. An account with a single-word name gives a first name and no
+ * last, and one with neither gives neither.
+ */
+export function nameFrom(claims: {
+  given_name?: unknown;
+  family_name?: unknown;
+  name?: unknown;
+}): [string | undefined, string | undefined] {
+  const text = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.replace(/\s+/g, ' ').trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  };
+
+  const given = text(claims.given_name);
+  const family = text(claims.family_name);
+  if (given !== undefined || family !== undefined) return [given, family];
+
+  const whole = text(claims.name);
+  if (whole === undefined) return [undefined, undefined];
+
+  const split = whole.lastIndexOf(' ');
+  return split === -1
+    ? [whole, undefined]
+    : [whole.slice(0, split), whole.slice(split + 1)];
 }
 
 /** The payload of a JWT, with no signature check — see the note at the top. */
