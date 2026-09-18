@@ -51,6 +51,64 @@ export type RealtimeStatus = 'connecting' | 'live' | 'polling' | 'unavailable';
 /** How often the fallback asks. Fast enough for a conversation, see the route. */
 const POLL_MS = 4_000;
 
+/**
+ * A listener that could not attach, and the sentence for whoever can fix it.
+ *
+ * ── Why this is not swallowed ─────────────────────────────────────────────────
+ * Every `onSnapshot` here used to take an error callback that discarded the error
+ * — `() => undefined`, or worse, one that set the thread to null. Signing in was
+ * treated as proof that the listeners worked, so the header said "Connected"
+ * while Firestore was refusing every read, and the polling fallback, which exists
+ * for exactly this, never ran because the status was never `polling`.
+ *
+ * That is not hypothetical. The customer's transcript listener queried a
+ * conversation's `messages` with no `userId` filter, which the rules cannot
+ * satisfy for a customer — a query is refused unless every document it could
+ * return is provably readable — so the widget was dead in the water for every
+ * customer, silently, while the operator's console (whose rule does not look at
+ * the document) worked fine.
+ *
+ * So a listener that fails now says so, and the hook drops to polling. Slower,
+ * working, and the reason travels to the operator console's status line.
+ */
+function describeListenerFailure(error: unknown): string {
+  const code = (error as { code?: string }).code ?? '';
+
+  if (code === 'permission-denied') {
+    return 'Firestore refused the listener. The deployed security rules do not allow this read — run `pnpm firebase:deploy`.';
+  }
+  if (code === 'failed-precondition') {
+    return 'This listener needs a Firestore index that does not exist yet — run `pnpm firebase:deploy`.';
+  }
+  if (code === 'unauthenticated') {
+    return 'The Firestore session expired before the listener attached.';
+  }
+  return `The listener stopped${code ? ` (${code})` : ''}.`;
+}
+
+/**
+ * Tracks whichever listener gave up first.
+ *
+ * One flag per hook rather than per listener: a screen with half its subscriptions
+ * attached is wrong in the same way as one with none, and the fallback reads
+ * everything anyway.
+ */
+function useListenerFailure(): {
+  failure: string | null;
+  onFailure: (error: unknown) => void;
+} {
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const onFailure = useCallback((error: unknown) => {
+    // For whoever opens the console. Firestore's own message names the rule or the
+    // index, and is worth more than anything this could paraphrase.
+    console.warn('[novex] support listener', error);
+    setFailure(describeListenerFailure(error));
+  }, []);
+
+  return { failure, onFailure };
+}
+
 /** Firestore hands back `Timestamp`; the DTOs this app passes around use ISO strings. */
 function isoOf(value: unknown, fallback: string): string {
   const timestamp = value as Timestamp | undefined;
@@ -200,7 +258,9 @@ export function useOwnConversation(input: {
   reason: string | null;
 } {
   const { status, reason } = useFirebaseSession(input.enabled);
-  const session = status;
+  const { failure, onFailure } = useListenerFailure();
+  // Signed in but refused: the conversation keeps working, on the timer below.
+  const session = status === 'live' && failure !== null ? 'polling' : status;
   const [conversation, setConversation] = useState(input.initialConversation);
   const [messages, setMessages] = useState<readonly MessageDto[]>(input.initialMessages);
 
@@ -251,13 +311,14 @@ export function useOwnConversation(input: {
         const document = snapshot.docs[0];
         setConversation(document === undefined ? null : toConversation(document));
       },
-      // Swallowed to a null thread rather than thrown: a rules rejection here is a
-      // configuration problem, and it must not take down the page around it.
-      () => setConversation(null),
+      // Recorded, never rendered as "no thread". A rules rejection is a
+      // configuration problem, and answering it with an empty conversation told
+      // a customer their thread did not exist. The poller takes over from here.
+      onFailure,
     );
 
     return unsubscribe;
-  }, [session, input.userId]);
+  }, [session, input.userId, onFailure]);
 
   const conversationId = conversation?.id ?? null;
 
@@ -270,15 +331,30 @@ export function useOwnConversation(input: {
     return onSnapshot(
       query(
         collection(db, 'conversations', conversationId, 'messages'),
+        /*
+         * Not redundant, even though every message in this subcollection belongs
+         * to this conversation and therefore to this customer.
+         *
+         * Firestore does not filter a query by the security rules — it refuses
+         * one it cannot prove is entirely readable. The customer's rule is
+         * `request.auth.uid == resource.data.userId`, which it can only satisfy
+         * if the query itself says so. Without this line the whole listener is
+         * rejected with `permission-denied`, which is why `userId` is
+         * denormalised onto every message document — see `firestore.rules`.
+         *
+         * The operator's listener below needs no such clause: `isOperator()`
+         * never looks at the document, so any query satisfies it.
+         */
+        where('userId', '==', input.userId),
         orderBy('sentAt', 'asc'),
         limitTo(200),
       ),
       (snapshot) => setMessages(snapshot.docs.map(toMessage)),
-      () => undefined,
+      onFailure,
     );
-  }, [session, conversationId]);
+  }, [session, conversationId, input.userId, onFailure]);
 
-  return { conversation, messages, status: session, reason };
+  return { conversation, messages, status: session, reason: reason ?? failure };
 }
 
 /** The operator's inbox: every conversation, newest activity first. */
@@ -291,7 +367,8 @@ export function useConversationInbox(input: {
   reason: string | null;
 } {
   const { status, reason } = useFirebaseSession(input.enabled);
-  const session = status;
+  const { failure, onFailure } = useListenerFailure();
+  const session = status === 'live' && failure !== null ? 'polling' : status;
   const [conversations, setConversations] = useState(input.initial);
 
   // The whole list every time, because there is no cheap "what changed" for a
@@ -319,11 +396,11 @@ export function useConversationInbox(input: {
     return onSnapshot(
       query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'), limitTo(50)),
       (snapshot) => setConversations(snapshot.docs.map(toConversation)),
-      () => undefined,
+      onFailure,
     );
-  }, [session]);
+  }, [session, onFailure]);
 
-  return { conversations, status: session, reason };
+  return { conversations, status: session, reason: reason ?? failure };
 }
 
 /** One thread's transcript, for whichever conversation the operator has open. */
@@ -332,7 +409,9 @@ export function useConversationMessages(input: {
   conversationId: string | null;
   initial: readonly MessageDto[];
 }): readonly MessageDto[] {
-  const { status: session } = useFirebaseSession(input.enabled);
+  const { status } = useFirebaseSession(input.enabled);
+  const { failure, onFailure } = useListenerFailure();
+  const session = status === 'live' && failure !== null ? 'polling' : status;
 
   /**
    * The transcript, tagged with the thread it belongs to.
@@ -364,9 +443,9 @@ export function useConversationMessages(input: {
           conversationId: input.conversationId,
           messages: snapshot.docs.map(toMessage),
         }),
-      () => undefined,
+      onFailure,
     );
-  }, [session, input.conversationId]);
+  }, [session, input.conversationId, onFailure]);
 
   const shown = loaded.conversationId === input.conversationId ? loaded.messages : [];
 

@@ -50,6 +50,26 @@
         { "fieldPath": "assignedTo", "order": "ASCENDING" },
         { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "__comment": [
+        "The customer widget's transcript listener.",
+        "",
+        "The userId clause is not a filter anybody asked for — every message in the",
+        "subcollection already belongs to the one customer. It is there because the",
+        "security rule for a customer reads resource.data.userId, and Firestore",
+        "refuses a query it cannot prove is entirely readable rather than filtering",
+        "it. Without the clause the listener is denied; with it, this index.",
+        "",
+        "The operator's listener over the same subcollection needs neither, because",
+        "isOperator() never looks at the document."
+      ],
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "sentAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

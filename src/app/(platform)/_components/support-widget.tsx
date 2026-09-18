@@ -7,7 +7,7 @@ import { BRAND } from '@/modules/content';
 import type { ConversationDto, MessageDto } from '@/modules/support';
 import { useOwnConversation } from '@/shared/firebase/use-support-realtime';
 import { cn } from '@/shared/lib/cn';
-import { ChatComposer } from '@/shared/ui/chat/chat-composer';
+import { ChatComposer, type ComposerAttachment } from '@/shared/ui/chat/chat-composer';
 import { useAttachment } from '@/shared/ui/chat/use-attachment';
 
 import { CHAT_WALLPAPER, dayLabelFor, utcDayKey } from './chat-surface';
@@ -57,7 +57,8 @@ export function SupportWidget({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
+  /** How many sends are in flight. A count, because more than one can be. */
+  const [inFlight, setInFlight] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
 
   /**
@@ -68,6 +69,39 @@ export function SupportWidget({
    * message and produces a second copy of it.
    */
   const [pending, setPending] = useState<MessageDto[]>([]);
+  /** Optimistic ids whose POST came back refused. Shown as not sent, not pending. */
+  const [undelivered, setUndelivered] = useState<readonly string[]>([]);
+
+  /**
+   * Sends, queued behind one another.
+   *
+   * ── Why a queue and not a busy flag ───────────────────────────────────────────
+   * There was a busy flag, and `send` returned early while it was raised. Posting
+   * a message is not fast — it writes the message, folds it into the thread's
+   * summary and pushes a notification, which against a Firestore in another
+   * region measured between four and twelve seconds from here. For that whole
+   * window, every Enter did nothing at all: no bubble, no error, the text still
+   * sitting in the box. The send button showed it was busy; the Enter key, which
+   * is how people actually send, went through the disabled button and returned.
+   *
+   * So a second message typed during the first one's round trip was simply lost,
+   * and the obvious thing to do about a chat that has swallowed what you typed is
+   * to reload the page — where the first message, which did send, is waiting.
+   * That is the "I have to refresh to see my message" this fixes.
+   *
+   * Serialised rather than parallel, because a conversation is ordered: two posts
+   * in flight at once can be written in either order, and the transcript would
+   * show the reply before the question.
+   */
+  const queue = useRef<Promise<void>>(Promise.resolve());
+
+  /**
+   * The live values `send` needs when its turn comes round, rather than the ones
+   * that existed when Enter was pressed — a queued send may start ten seconds
+   * later, by which time the thread exists and the box holds something else.
+   */
+  const conversationId = useRef<string | null>(initialConversation?.id ?? null);
+  const draftRef = useRef('');
 
   const { attachment, setAttachment, uploading, error: uploadError, attach } = useAttachment();
   const threadRef = useRef<HTMLDivElement>(null);
@@ -82,10 +116,19 @@ export function SupportWidget({
   });
 
   const shown = useMemo(() => {
-    const confirmed = new Set(messages.map((message) => message.body));
-    // Dropped by body rather than by id: the server assigns the real id, so the
-    // optimistic copy can never match one.
-    return [...messages, ...pending.filter((message) => !confirmed.has(message.body))];
+    const confirmed = new Set(messages.map((message) => message.id));
+    /*
+     * Dropped by id. The optimistic copy starts with one of its own and takes the
+     * server's the moment the POST answers, so the listener's echo of that id is
+     * what removes it.
+     *
+     * It used to compare bodies, on the reasoning that the server assigns the id
+     * so an optimistic copy could never match one. The cost was that saying the
+     * same thing twice — "hello", "ok", "any update?" — showed nothing at all the
+     * second time, because the first copy was already in the transcript and the
+     * new bubble was filtered out before it could be drawn.
+     */
+    return [...messages, ...pending.filter((message) => !confirmed.has(message.id))];
   }, [messages, pending]);
 
   /**
@@ -107,15 +150,133 @@ export function SupportWidget({
     if (node) node.scrollTop = node.scrollHeight;
   }, [shown.length, open]);
 
-  const send = useCallback(async () => {
+  // Kept current for the queued sends above, in effects rather than during render:
+  // a ref written while rendering is what React's compiler refuses, and rightly.
+  useEffect(() => {
+    if (conversation !== null) conversationId.current = conversation.id;
+  }, [conversation]);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  /**
+   * A send the server would not take.
+   *
+   * The text goes back in the box when the box is free, along with the image —
+   * somebody typed the one and chose the other, and the upload is still stored and
+   * still unclaimed. When it is not free, because a queued message is sitting
+   * there, the bubble stays on screen marked as not sent instead: overwriting what
+   * somebody has just typed to hand back what they typed a minute ago loses one to
+   * save the other.
+   */
+  const refuse = useCallback(
+    (
+      optimistic: MessageDto,
+      body: string,
+      sentAttachment: ComposerAttachment | null,
+      problem: string,
+    ) => {
+      setFailed(problem);
+
+      if (draftRef.current.length > 0) {
+        setUndelivered((ids) => [...ids, optimistic.id]);
+        return;
+      }
+
+      setDraft(body);
+      setAttachment(sentAttachment);
+      setPending((queued) => queued.filter((message) => message.id !== optimistic.id));
+    },
+    [setAttachment],
+  );
+
+  const deliver = useCallback(
+    async (
+      optimistic: MessageDto,
+      body: string,
+      sentAttachment: ComposerAttachment | null,
+    ) => {
+      try {
+        const response = await fetch('/api/support/messages', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            body,
+            // Read now rather than when Enter was pressed: the first message of a
+            // thread creates it, and the second — queued behind it — belongs in
+            // the same one. Still optional; with no id the server finds the
+            // customer's open thread, which is the same answer.
+            ...(conversationId.current !== null
+              ? { conversationId: conversationId.current }
+              : {}),
+            ...(sentAttachment !== null ? { attachmentId: sentAttachment.id } : {}),
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          refuse(
+            optimistic,
+            body,
+            sentAttachment,
+            payload.error ?? 'That did not send. Try again.',
+          );
+          return;
+        }
+
+        // The id the server gave it, adopted by the copy already on screen. That
+        // is what lets the listener's echo replace this bubble instead of
+        // appearing beside it, and it turns the pending tick into a sent one
+        // without waiting for the round trip back through Firestore.
+        const created = (await response.json().catch(() => null)) as {
+          conversation?: { id?: unknown };
+          message?: { id?: unknown; conversationId?: unknown };
+        } | null;
+        const confirmedId = typeof created?.message?.id === 'string' ? created.message.id : null;
+        if (typeof created?.conversation?.id === 'string') {
+          conversationId.current = created.conversation.id;
+        }
+
+        setPending((queued) =>
+          queued.flatMap((message) => {
+            if (message.id !== optimistic.id) return [message];
+            // No id to adopt — a 201 whose body would not parse. Dropping the copy
+            // is right: the message is written, and the listener or the poller is
+            // about to deliver the real one.
+            if (confirmedId === null) return [];
+            return [
+              {
+                ...message,
+                id: confirmedId,
+                conversationId:
+                  typeof created?.message?.conversationId === 'string'
+                    ? created.message.conversationId
+                    : message.conversationId,
+              },
+            ];
+          }),
+        );
+      } catch {
+        refuse(
+          optimistic,
+          body,
+          sentAttachment,
+          'That did not send. Check your connection and try again.',
+        );
+      }
+    },
+    [refuse],
+  );
+
+  const send = useCallback(() => {
     const body = draft.trim();
     // An image on its own is a message: somebody who screenshots the error has said
     // something, and demanding a caption would be a field between them and the point.
-    if ((body.length === 0 && attachment === null) || sending) return;
+    if (body.length === 0 && attachment === null) return;
 
     const optimistic: MessageDto = {
-      id: `${OPTIMISTIC_PREFIX}${Date.now()}`,
-      conversationId: conversation?.id ?? '',
+      id: `${OPTIMISTIC_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      conversationId: conversationId.current ?? '',
       author: 'customer',
       authorId: userId,
       body,
@@ -124,41 +285,18 @@ export function SupportWidget({
     };
 
     const sentAttachment = attachment;
+    // The box is emptied and the bubble drawn on the keystroke, whatever the
+    // network is doing. Nothing below this waits for a round trip.
     setDraft('');
     setAttachment(null);
-    setPending((queue) => [...queue, optimistic]);
-    setSending(true);
+    setPending((queued) => [...queued, optimistic]);
+    setInFlight((count) => count + 1);
     setFailed(null);
 
-    try {
-      const response = await fetch('/api/support/messages', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          body,
-          ...(conversation !== null ? { conversationId: conversation.id } : {}),
-          ...(sentAttachment !== null ? { attachmentId: sentAttachment.id } : {}),
-        }),
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        setFailed(payload.error ?? 'That did not send. Try again.');
-        // Both go back rather than being lost. Somebody typed the one and chose the
-        // other, and the upload is still stored and still unclaimed.
-        setDraft(body);
-        setAttachment(sentAttachment);
-        setPending((queue) => queue.filter((message) => message.id !== optimistic.id));
-      }
-    } catch {
-      setFailed('That did not send. Check your connection and try again.');
-      setDraft(body);
-      setAttachment(sentAttachment);
-      setPending((queue) => queue.filter((message) => message.id !== optimistic.id));
-    } finally {
-      setSending(false);
-    }
-  }, [draft, sending, conversation, userId, attachment, setAttachment]);
+    queue.current = queue.current
+      .then(() => deliver(optimistic, body, sentAttachment))
+      .finally(() => setInFlight((count) => count - 1));
+  }, [draft, userId, attachment, setAttachment, deliver]);
 
   const unread = conversation?.unreadForCustomer ?? 0;
   // Either source, one line. A rejected upload and a failed send are the same
@@ -269,7 +407,7 @@ export function SupportWidget({
               </p>
             </div>
           ) : (
-            <Thread messages={shown} readBoundary={readBoundary} />
+            <Thread messages={shown} readBoundary={readBoundary} undelivered={undelivered} />
           )}
         </div>
       </div>
@@ -288,7 +426,7 @@ export function SupportWidget({
         attachment={attachment}
         onClearAttachment={() => setAttachment(null)}
         uploading={uploading}
-        sending={sending}
+        sending={inFlight > 0}
       />
     </div>
   );
@@ -306,9 +444,12 @@ export function SupportWidget({
 function Thread({
   messages,
   readBoundary,
+  undelivered,
 }: {
   messages: readonly MessageDto[];
   readBoundary: number;
+  /** Optimistic ids the server refused. Marked, rather than quietly removed. */
+  undelivered: readonly string[];
 }) {
   // Fixed for the render, so every separator in one paint agrees about "today".
   const now = useMemo(() => new Date(), []);
@@ -363,7 +504,12 @@ function Thread({
             </div>
           ) : null}
 
-          <Bubble message={row.message} grouped={row.grouped} read={row.read} />
+          <Bubble
+            message={row.message}
+            grouped={row.grouped}
+            read={row.read}
+            undelivered={undelivered.includes(row.message.id)}
+          />
         </div>
       ))}
     </>
@@ -381,10 +527,12 @@ function Bubble({
   message,
   grouped,
   read,
+  undelivered,
 }: {
   message: MessageDto;
   grouped: boolean;
   read: boolean;
+  undelivered: boolean;
 }) {
   if (message.author === 'system') {
     return (
@@ -397,6 +545,8 @@ function Bubble({
   }
 
   const mine = message.author === 'customer';
+  // Still on its way, or refused. Both are "not in the transcript yet"; only the
+  // second is final, and saying so is what stops a failed message looking sent.
   const unsent = message.id.startsWith(OPTIMISTIC_PREFIX);
 
   return (
@@ -442,7 +592,9 @@ function Bubble({
           <span className="float-right ml-2 mt-1 inline-flex select-none items-center gap-0.5 text-[10px] leading-none text-fg-subtle">
             {TIME.format(new Date(message.sentAt))}
             {mine ? (
-              unsent ? (
+              undelivered ? (
+                <span className="font-medium text-down">Not sent</span>
+              ) : unsent ? (
                 <Check className="size-3 opacity-50" />
               ) : read ? (
                 <CheckCheck className="size-3 text-accent" />
