@@ -38,6 +38,21 @@ export interface LedgerAsset {
 export interface AssetNetwork {
   readonly id: string;
   readonly label: string;
+  /**
+   * The chain's own coin — what its fees are actually paid in.
+   *
+   * ── Why a network has to declare this ─────────────────────────────────────
+   * A token does not pay its own way. Moving USDT on Ethereum costs ETH and
+   * moving it on Tron costs TRX, because the fee belongs to the chain rather than
+   * to the thing being moved. A balance of ten thousand USDT and no ETH is a
+   * balance that cannot be withdrawn at all, and the customer has no way of
+   * knowing that from anything else on the screen.
+   *
+   * For a coin on its own chain this is the asset itself — bitcoin pays bitcoin
+   * miners — which is why the rule below compares rather than special-casing a
+   * list of tokens.
+   */
+  readonly nativeAsset: string;
   /** Flat fee charged for this route, as a decimal string in the asset's units. */
   readonly fee: string;
   /** Rough time to finality, shown on the withdrawal form. */
@@ -55,4 +70,16 @@ export interface AssetNetwork {
 /** True when the address looks like it belongs on this network. */
 export function matchesNetwork(network: AssetNetwork, destination: string): boolean {
   return network.addressPattern.test(destination.trim());
+}
+
+/**
+ * True when withdrawing this asset over this network needs a *separate* balance
+ * to pay the fee with.
+ *
+ * False for a coin on its own chain: the fee comes out of the same asset, and the
+ * balance check already covers it. True for a token on somebody else's chain,
+ * where the fee is payable in a coin the customer may not hold at all.
+ */
+export function requiresGasToken(asset: LedgerAsset, network: AssetNetwork): boolean {
+  return network.nativeAsset !== asset.code;
 }

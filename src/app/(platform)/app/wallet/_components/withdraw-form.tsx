@@ -149,11 +149,7 @@ export function WithdrawForm({
             onCopy={copy}
           />
           {deposit !== null ? (
-            <ProofForm
-              assetCode={assetCode}
-              networkId={network?.id ?? ''}
-              networkLabel={network?.label ?? ''}
-            />
+            <ProofForm assetCode={assetCode} networkId={network?.id ?? ''} />
           ) : null}
         </div>
       ) : (
@@ -421,18 +417,14 @@ function NetworkChooser({
 function ProofForm({
   assetCode,
   networkId,
-  networkLabel,
 }: {
   assetCode: string;
   networkId: string;
-  networkLabel: string;
 }) {
   const [state, submit, pending] = useActionState(submitDepositAction, IDLE_DEPOSIT_STATE);
   const [fileName, setFileName] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
-  const [reference, setReference] = useState('');
-
-  const ready = fileName !== null && amount.trim().length > 0 && reference.trim().length > 0;
+  const ready = fileName !== null && amount.trim().length > 0;
 
   return (
     <form action={submit} className="space-y-4 border-t border-line pt-5">
@@ -442,8 +434,8 @@ function ProofForm({
       <div>
         <p className="text-sm text-fg">Already sent it?</p>
         <p className="mt-0.5 text-2xs leading-relaxed text-fg-subtle">
-          Tell us the amount and the transaction, and attach a screenshot. An operator
-          checks it against the chain before your balance moves.
+          Tell us the amount and attach a screenshot. An operator checks it against
+          the chain before your balance moves.
         </p>
       </div>
 
@@ -456,21 +448,6 @@ function ProofForm({
           inputMode="decimal"
           autoComplete="off"
           placeholder="0.00"
-          className="h-11 w-full rounded-lg border border-line bg-surface px-4 font-mono text-sm text-fg placeholder:text-fg-subtle focus:border-line-strong focus:outline-none"
-        />
-      </label>
-
-      <label className="block">
-        <span className="mb-2 block text-xs text-fg-subtle">
-          Transaction hash or bank reference
-        </span>
-        <input
-          name="reference"
-          value={reference}
-          onChange={(event) => setReference(event.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          placeholder={`Your ${networkLabel} transaction`}
           className="h-11 w-full rounded-lg border border-line bg-surface px-4 font-mono text-sm text-fg placeholder:text-fg-subtle focus:border-line-strong focus:outline-none"
         />
       </label>
@@ -535,7 +512,7 @@ function ProofForm({
 
       {!ready ? (
         <p className="text-center text-2xs text-fg-subtle">
-          Add the amount, the reference and a screenshot to continue.
+          Add the amount and a screenshot to continue.
         </p>
       ) : null}
     </form>

@@ -46,14 +46,20 @@ export function createSubmitDepositClaim(deps: LedgerDependencies) {
       return err(LedgerErrors.networkNotSupported(asset.code, command.network));
     }
 
+    /*
+     * Optional, and usually empty.
+     *
+     * The form asked for a transaction hash and no longer does: people pasted the
+     * wrong one, truncated it, or typed something plausible, and an operator who
+     * trusted it was trusting the same person the screenshot came from. What
+     * actually decides a claim is the operator finding the transfer on the chain
+     * or in the bank — see `decideDepositClaim`, where the amount credited is the
+     * one *they* verified, not the one claimed here.
+     *
+     * The field stays on the command and on the record so an operator can still
+     * write one in, and so every claim already stored keeps what it was given.
+     */
     const reference = command.reference.trim();
-    if (reference.length === 0) {
-      return err(
-        LedgerErrors.amountInvalid(
-          'Enter the transaction hash or bank reference for your transfer.',
-        ),
-      );
-    }
 
     let amount: Money;
     try {

@@ -2,7 +2,7 @@ import { Money, err, ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { userOwner } from '../../domain/account';
-import { matchesNetwork } from '../../domain/asset';
+import { matchesNetwork, requiresGasToken } from '../../domain/asset';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
 import { checkDailyLimit, limitsFor, tierFor } from '../../domain/limits';
 import { Withdrawal } from '../../domain/withdrawal';
@@ -101,6 +101,40 @@ export function createRequestWithdrawal(deps: LedgerDependencies) {
       return err(
         LedgerErrors.insufficientFunds(account.available.toDecimalString(), asset.code),
       );
+    }
+
+    /*
+     * A token cannot pay its own network fee.
+     *
+     * USDT on Ethereum is moved by an Ethereum transaction, and Ethereum charges
+     * ETH for it; on Tron the same token costs TRX. So a customer holding nothing
+     * but USDT has a balance that cannot leave, and until now the request was
+     * accepted, held, queued, and only discovered to be unsendable by the operator
+     * who tried to send it — or worse, not discovered at all.
+     *
+     * Checked here rather than at approval time because the answer does not need
+     * an operator: it is a fact about the customer's own balances, and telling
+     * them at the form is the difference between "add some ETH" and a rejection
+     * they cannot interpret days later.
+     *
+     * Any positive balance passes. The exact fee is the chain's to decide at
+     * broadcast time and this platform does not hold the customer's gas — what is
+     * being caught is the case of *none at all*, which is the one that is
+     * unambiguously fatal.
+     */
+    if (requiresGasToken(asset, network)) {
+      const held = await deps.accounts.listForOwner(owner);
+      const gas = held.find((candidate) => candidate.asset === network.nativeAsset);
+
+      if (gas === undefined || gas.available.isZero || gas.available.isNegative) {
+        return err(
+          LedgerErrors.gasTokenRequired({
+            nativeAsset: network.nativeAsset,
+            asset: asset.code,
+            network: network.label,
+          }),
+        );
+      }
     }
 
     const valuedAtUsd = await deps.prices.valueInUsd(amount);

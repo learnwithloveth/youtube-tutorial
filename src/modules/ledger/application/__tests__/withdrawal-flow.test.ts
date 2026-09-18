@@ -55,6 +55,7 @@ const BOB = '22222222-2222-4222-8222-222222222222' as UserId;
 const CAROL = '33333333-3333-4333-8333-333333333333' as UserId;
 
 const BTC_ADDRESS = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+const TRON_ADDRESS = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
 
 class FakeLedger implements LedgerRepository {
   readonly store = new Map<AccountId, LedgerAccount>();
@@ -540,6 +541,110 @@ describe('requesting a withdrawal', () => {
   });
 });
 
+/**
+ * A token is moved by the chain it lives on, and the chain charges its own coin.
+ *
+ * These read a little oddly next to the rest of the file, because the customer in
+ * them is rich in the thing they are withdrawing and holds none of the thing that
+ * pays for it — which is exactly the position somebody is in after buying USDT and
+ * nothing else, and exactly the request that used to be accepted and then sit in
+ * the queue waiting for an operator to discover it could not be sent.
+ */
+describe('a token that cannot pay its own network fee', () => {
+  /** Prices what the catalogue actually offers here; the default one knows only BTC. */
+  const stablePrices: PriceOracle = {
+    async valueInUsd(amount: Money) {
+      if (amount.currency === 'USD') return amount.withScale(2);
+      if (amount.currency === 'USDT') return Money.of(amount.minorUnits / 10_000n, 'USD', 2);
+      if (amount.currency === 'TRX') return Money.of(amount.minorUnits / 100_000n, 'USD', 2);
+      return null;
+    },
+  };
+
+  async function withBalances(usdt: string, trx: string | null) {
+    const ctx = build(stablePrices);
+    await ctx.deposit({
+      userId: ALICE,
+      asset: 'USDT',
+      amount: usdt,
+      reference: 'seed-usdt',
+      recordedBy: BOB,
+    });
+    if (trx !== null) {
+      await ctx.deposit({
+        userId: ALICE,
+        asset: 'TRX',
+        amount: trx,
+        reference: 'seed-trx',
+        recordedBy: BOB,
+      });
+    }
+    return ctx;
+  }
+
+  const request = (ctx: ReturnType<typeof build>) =>
+    ctx.request({
+      userId: ALICE,
+      asset: 'USDT',
+      network: 'tron',
+      destination: TRON_ADDRESS,
+      amount: '20',
+    });
+
+  it('refuses USDT on Tron when the customer holds no TRX', async () => {
+    const ctx = await withBalances('50', null);
+
+    const result = await request(ctx);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('gas-token-required');
+    // The coin to go and get, named — "you need gas" is not an instruction.
+    if (result.error.kind === 'gas-token-required') {
+      expect(result.error.nativeAsset).toBe('TRX');
+      expect(result.error.asset).toBe('USDT');
+    }
+    // And nothing was reserved: a refused request must leave the balance alone.
+    expect(ctx.withdrawals.store).toHaveLength(0);
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT'));
+    expect(alice?.available.toDecimalString()).toBe('50.000000');
+  });
+
+  it('accepts the same request once there is TRX to pay the fee', async () => {
+    const ctx = await withBalances('50', '25');
+
+    const result = await request(ctx);
+
+    expect(result.ok).toBe(true);
+    // Queued for an operator, exactly like any other withdrawal.
+    expect(ctx.withdrawals.store).toHaveLength(1);
+  });
+
+  it('asks for no second balance when the coin pays its own way', async () => {
+    // BTC over Bitcoin: the fee comes out of the same asset, so a customer holding
+    // nothing else is not blocked. Guards against the rule being applied to every
+    // withdrawal rather than to tokens on somebody else's chain.
+    const ctx = build();
+    await ctx.deposit({
+      userId: ALICE,
+      asset: 'BTC',
+      amount: '1.0',
+      reference: 'seed',
+      recordedBy: BOB,
+    });
+
+    const result = await ctx.request({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      destination: BTC_ADDRESS,
+      amount: '0.05',
+    });
+
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe('deciding a withdrawal', () => {
   async function seeded(amount: string) {
     const ctx = build();
@@ -714,12 +819,37 @@ describe('deposit claims', () => {
     expect(ctx.proofs.store.size).toBe(0);
   });
 
-  it('refuses a claim with no transaction reference', async () => {
+  /*
+   * The form stopped asking for a transaction hash.
+   *
+   * It used to be required, and the requirement bought nothing: the string came
+   * from the same person as the screenshot, and what actually settles a claim is
+   * the operator finding the transfer themselves and crediting the amount *they*
+   * verified. Refusing the claim only stopped somebody who could not find their
+   * hash from reporting a transfer that had genuinely happened.
+   */
+  it('accepts a claim with no transaction reference', async () => {
     const ctx = build();
     const result = await ctx.submitClaim(claim({ reference: '   ' }));
 
+    expect(result.ok).toBe(true);
+    // Still stored against the claim, and still nothing credited until an operator
+    // decides — see the approval test below.
+    expect(ctx.proofs.store.size).toBe(1);
+    if (result.ok) {
+      const stored = await ctx.claims.find(result.value.claimId);
+      expect(stored?.snapshot().reference).toBe('');
+    }
+  });
+
+  it('still refuses a claim with no screenshot behind it', async () => {
+    // The evidence that does matter. Dropping the reference must not be read as
+    // dropping the proof.
+    const ctx = build();
+    const result = await ctx.submitClaim(claim({ proof: new Uint8Array([1, 2, 3]) }));
+
     expect(result.ok).toBe(false);
-    // Nothing stored: a rejected claim should not leave an orphan image behind.
+    if (!result.ok) expect(result.error.kind).toBe('proof-invalid');
     expect(ctx.proofs.store.size).toBe(0);
   });
 

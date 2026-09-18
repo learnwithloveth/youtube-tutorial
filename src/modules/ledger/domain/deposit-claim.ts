@@ -44,6 +44,8 @@ export interface DepositClaimSnapshot {
   /**
    * The customer's own reference — a transaction hash, a bank reference.
    *
+   * Empty on anything submitted since the form stopped asking for one.
+   *
    * Required. It is the thing an operator checks the screenshot against, and a
    * claim that cannot be looked up independently is a claim backed only by a
    * picture, which is the easiest kind to forge.
@@ -110,10 +112,19 @@ export class DepositClaim {
       throw new RangeError('A deposit claim must state a positive amount.');
     }
 
+    /*
+     * A reference is welcome and no longer required.
+     *
+     * It was an invariant here, which is the right place for an invariant — but it
+     * was never one: a claim with no hash is perfectly approvable, because what
+     * approves it is an operator finding the transfer and crediting the amount
+     * they verified. The proof below is the thing a claim genuinely cannot be
+     * without, and that check stays.
+     *
+     * The length bound stays too. It is an untrusted string of unbounded size,
+     * which is a different concern from whether it is present.
+     */
     const reference = input.reference.trim();
-    if (reference.length === 0) {
-      throw new RangeError('A deposit claim requires a transaction reference.');
-    }
     if (reference.length > MAX_REFERENCE_LENGTH) {
       throw new RangeError('The reference is too long.');
     }

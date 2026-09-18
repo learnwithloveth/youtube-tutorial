@@ -158,15 +158,22 @@ export default async function ApprovalsPage() {
                         </Field>
                         <Field label="Network">{claim.network}</Field>
                         <Field label="Submitted">{formatDate(claim.submittedAt)}</Field>
-                        <Field label="Reference" wide>
-                          <span className="font-mono break-all">{claim.reference}</span>
-                        </Field>
+                        {/* Only when there is one. The customer's form stopped
+                            asking for a transaction hash, so most claims carry
+                            none, and an empty row under a "Reference" label reads
+                            as a value that failed to load. */}
+                        {claim.reference.trim().length === 0 ? null : (
+                          <Field label="Reference" wide>
+                            <span className="font-mono break-all">{claim.reference}</span>
+                          </Field>
+                        )}
                       </dl>
 
                       <p className="mt-3 flex items-start gap-2 text-2xs leading-relaxed text-fg-subtle">
                         <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warn" />
-                        Check the reference on chain before crediting. The screenshot is
-                        the customer&rsquo;s claim, not evidence on its own.
+                        Find the transfer on chain before crediting, and credit what you
+                        find. The screenshot is the customer&rsquo;s claim, not evidence
+                        on its own.
                       </p>
                     </div>
 

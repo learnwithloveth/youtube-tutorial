@@ -51,6 +51,7 @@ const ASSETS: readonly LedgerAsset[] = [
       {
         id: 'bitcoin',
         label: 'Bitcoin',
+        nativeAsset: 'BTC',
         fee: '0.00004000',
         eta: '~20 min',
         // Legacy (1), P2SH (3) and bech32 (bc1). Deliberately permissive on length.
@@ -59,6 +60,7 @@ const ASSETS: readonly LedgerAsset[] = [
       {
         id: 'lightning',
         label: 'Lightning',
+        nativeAsset: 'BTC',
         fee: '0.00000001',
         eta: 'Instant',
         // A BOLT-11 invoice, not an address — which is why Lightning cannot reuse
@@ -76,6 +78,7 @@ const ASSETS: readonly LedgerAsset[] = [
       {
         id: 'ethereum',
         label: 'Ethereum',
+        nativeAsset: 'ETH',
         fee: '0.001200000000000000',
         eta: '~3 min',
         addressPattern: /^0x[0-9a-fA-F]{40}$/,
@@ -95,6 +98,9 @@ const ASSETS: readonly LedgerAsset[] = [
       {
         id: 'ethereum',
         label: 'Ethereum (ERC-20)',
+        // Gas is ETH. A customer holding only USDT cannot move it — see
+        // `requiresGasToken`.
+        nativeAsset: 'ETH',
         fee: '6.000000',
         eta: '~3 min',
         addressPattern: /^0x[0-9a-fA-F]{40}$/,
@@ -102,6 +108,8 @@ const ASSETS: readonly LedgerAsset[] = [
       {
         id: 'tron',
         label: 'Tron (TRC-20)',
+        // Energy and bandwidth are paid in TRX, whoever is sending what.
+        nativeAsset: 'TRX',
         // A fraction of the Ethereum fee, which is why most USDT settles here.
         fee: '1.000000',
         eta: '~1 min',
@@ -119,6 +127,7 @@ const ASSETS: readonly LedgerAsset[] = [
       {
         id: 'tron',
         label: 'Tron',
+        nativeAsset: 'TRX',
         fee: '1.100000',
         eta: '~1 min',
         addressPattern: TRON_ADDRESS,

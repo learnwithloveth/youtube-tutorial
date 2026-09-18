@@ -18,6 +18,22 @@ export type LedgerError =
   | { readonly kind: 'amount-below-minimum'; readonly minimum: string; readonly asset: string }
   | { readonly kind: 'destination-invalid'; readonly reason: string }
   | { readonly kind: 'insufficient-funds'; readonly available: string; readonly asset: string }
+  /**
+   * The balance is there, but nothing to pay the chain's fee with.
+   *
+   * Carries the coin that is missing and the network that wants it, because
+   * "you need gas" is not an instruction anybody can act on — the customer has to
+   * know *which* coin to go and get.
+   */
+  | {
+      readonly kind: 'gas-token-required';
+      /** The coin the network charges its fee in: ETH, TRX. */
+      readonly nativeAsset: string;
+      /** The token being withdrawn, which cannot pay for itself. */
+      readonly asset: string;
+      /** How the network is named on the form — "Tron (TRC-20)". */
+      readonly network: string;
+    }
   | {
       readonly kind: 'daily-limit-exceeded';
       readonly remainingUsd: string;
@@ -64,6 +80,12 @@ export const LedgerErrors = {
     kind: 'destination-invalid',
     reason,
   }),
+  gasTokenRequired: (input: {
+    nativeAsset: string;
+    asset: string;
+    network: string;
+  }): LedgerError => ({ kind: 'gas-token-required', ...input }),
+
   insufficientFunds: (available: string, asset: string): LedgerError => ({
     kind: 'insufficient-funds',
     available,
@@ -116,6 +138,10 @@ export function presentLedgerError(error: LedgerError): string {
       return error.reason;
     case 'insufficient-funds':
       return `You have ${error.available} ${error.asset} available.`;
+    case 'gas-token-required':
+      // Says the coin, the chain and what to do with it. A customer who has only
+      // ever held USDT has no reason to know that sending it costs something else.
+      return `Sending ${error.asset} over ${error.network} costs a network fee paid in ${error.nativeAsset}, and you have none. Add some ${error.nativeAsset} to your wallet and try again.`;
     case 'daily-limit-exceeded':
       return `That is over today's remaining limit of ${error.remainingUsd} of ${error.capUsd}.`;
     case 'valuation-unavailable':

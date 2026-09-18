@@ -56,7 +56,9 @@ export async function submitDepositAction(
     // A string all the way down; parsing to a number here would defeat every
     // precaution the ledger takes below it.
     amount: String(formData.get('amount') ?? ''),
-    reference: String(formData.get('reference') ?? ''),
+    // No longer collected: the screenshot and the operator's own check of the
+    // chain are what decide a claim. See `submitDepositClaim`.
+    reference: '',
     proof: new Uint8Array(await file.arrayBuffer()),
   });
 
