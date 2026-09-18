@@ -9,6 +9,7 @@ import { CONSOLE_APP, pushScopeFor } from '../_lib/console-app';
 
 import { AdminProvider } from './_data/store';
 import { AdminShell } from './_components/admin-shell';
+import { ConsoleReadinessGate } from './_components/console-readiness-gate';
 
 /**
  * The console is installable as an app, and the customer site is not: this is the
@@ -57,6 +58,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         {/* Here as well as in the app, because an operator may never open the
             customer side — their registration has to be kept current from this one. */}
         <PushBridge userId={user.id} scope={pushScopeFor(user.role)} />
+        {/* Over everything below it, and only here: the console is the one area
+            whose usefulness depends on the device being reachable. */}
+        <ConsoleReadinessGate operatorId={user.id} />
         {children}
       </AdminShell>
     </AdminProvider>

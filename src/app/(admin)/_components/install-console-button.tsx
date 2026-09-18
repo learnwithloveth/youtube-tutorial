@@ -1,9 +1,10 @@
 'use client';
 
 import { MonitorDown } from 'lucide-react';
-import { useSyncExternalStore } from 'react';
 
 import { cn } from '@/shared/lib/cn';
+
+import { promptInstall, useInstallOffer } from '../_lib/console-install';
 
 /**
  * Installs the console as an app, when the browser offers to.
@@ -18,61 +19,19 @@ import { cn } from '@/shared/lib/cn';
  * The browser announces it with `beforeinstallprompt`: Chromium browsers only, and
  * never once the console is installed or inside the installed app. Firefox and
  * Safari never send it, so they never show the button; Safari on iOS installs
- * from its Share menu instead.
+ * from its Share menu instead. `_lib/console-install.ts` catches the event and
+ * explains why it is caught outside React.
  *
- * ── Why the event is caught outside React ─────────────────────────────────────
- * It fires once per page load, whenever the browser has decided the page
- * qualifies, which can be before this component mounts. A listener added when the
- * module loads hears it either way, and the component reads what it heard.
+ * This is the quiet way in. `ConsoleReadinessGate` is the insistent one.
  */
-
-interface InstallPromptEvent extends Event {
-  prompt(): Promise<unknown>;
-}
-
-let offered: InstallPromptEvent | null = null;
-const listeners = new Set<() => void>();
-
-function publish(event: InstallPromptEvent | null): void {
-  offered = event;
-  for (const listener of listeners) listener();
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeinstallprompt', (event) => publish(event as InstallPromptEvent));
-  window.addEventListener('appinstalled', () => publish(null));
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-function install(): void {
-  const event = offered;
-  if (event === null) return;
-
-  // Straight from the click, because the browser opens its dialog only during a
-  // user gesture. An event can prompt once, so the button goes until the browser
-  // offers again — on a later page load, if this one is dismissed.
-  void event.prompt().catch(() => undefined);
-  publish(null);
-}
-
 export function InstallConsoleButton({ className }: { className?: string }) {
-  const available = useSyncExternalStore(
-    subscribe,
-    () => offered !== null,
-    () => false,
-  );
+  const available = useInstallOffer();
   if (!available) return null;
 
   return (
     <button
       type="button"
-      onClick={install}
+      onClick={promptInstall}
       aria-label="Install the console as an app"
       title="Install the console as an app"
       className={cn(

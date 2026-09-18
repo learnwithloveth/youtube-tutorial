@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ShieldCheck, Terminal, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 
 import { requireAdmin } from '@/server/auth';
 import { getTeam } from '@/server/team';

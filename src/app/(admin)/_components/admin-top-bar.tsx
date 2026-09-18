@@ -38,10 +38,7 @@ export function AdminTopBar({
           <Menu className="size-4" />
         </button>
 
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-warn/40 bg-warn/12 px-2.5 py-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-warn">
-          <span aria-hidden className="size-1.5 rounded-full bg-warn" />
-          Production
-        </span>
+        
 
         <label className="relative hidden max-w-sm flex-1 md:block">
           <span className="sr-only">Search users, transactions, tickets and markets</span>
