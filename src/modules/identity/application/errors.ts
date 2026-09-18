@@ -194,7 +194,16 @@ export function presentIdentityError(error: IdentityError): string {
     case 'SessionInvalid':
       return 'Your session has ended. Please sign in again.';
     case 'StepUpRequired':
-      return 'Confirm your password to continue.';
+      /*
+       * Never "confirm your password".
+       *
+       * This is raised in exactly one place — setting a *first* password on an
+       * account that has none, where the recent-sign-in proof stands in for the
+       * current password nobody has. Asking somebody to confirm a password they do
+       * not have is an instruction that cannot be followed, and it was on screen
+       * for every Google-only account whose session was more than five minutes old.
+       */
+      return 'For your security, sign in again before setting a password.';
     case 'CurrentPasswordIncorrect':
       return 'That is not your current password.';
     case 'PasswordUnchanged':

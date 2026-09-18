@@ -58,7 +58,12 @@ export async function changePasswordAction(
 
   if (!result.ok) {
     logger.info({ event: 'password_change_rejected', module: 'identity', reason: result.error._tag });
-    return { status: 'error', message: presentIdentityError(result.error) };
+    return {
+      status: 'error',
+      message: presentIdentityError(result.error),
+      // The one refusal the person cannot act on from this form alone.
+      ...(result.error._tag === 'StepUpRequired' ? { reauth: true } : {}),
+    };
   }
 
   // Pushed: a password changed is what every *other* device on the account needs

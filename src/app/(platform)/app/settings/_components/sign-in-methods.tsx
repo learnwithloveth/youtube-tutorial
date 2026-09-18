@@ -9,7 +9,7 @@ import { formatDate } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { Button } from '@/shared/ui/primitives/button';
 import { ButtonLink } from '@/shared/ui/primitives/button-link';
-import { TextField } from '@/shared/ui/primitives/field';
+import { PasswordField } from '@/shared/ui/primitives/field';
 
 import { Panel, PanelHeader } from '../../../../_console/components/page-header';
 import { IDLE_SECURITY_FORM } from '../_lib/form-state';
@@ -27,6 +27,9 @@ import { changePasswordAction, disconnectGoogleAction } from '../_lib/security-a
  * Not disabled, not greyed out: absent. A control that looks like it works and does
  * not is the thing this codebase keeps deleting.
  */
+
+/** Where a re-authentication comes back to: this form, still open. */
+const SECURITY_TAB = '/app/settings?tab=security';
 
 const GOOGLE_NOTICES: Readonly<Record<string, { tone: 'up' | 'down'; message: string }>> = {
   connected: { tone: 'up', message: 'Google connected.' },
@@ -145,7 +148,7 @@ export function SignInMethods({
             </li>
           </ul>
 
-          <PasswordForm hasPassword={methods.hasPassword} />
+          <PasswordForm hasPassword={methods.hasPassword} googleEmail={google?.email ?? null} />
         </>
       )}
     </Panel>
@@ -186,7 +189,14 @@ function DisconnectGoogle({ canDisconnect }: { canDisconnect: boolean }) {
   );
 }
 
-function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
+function PasswordForm({
+  hasPassword,
+  googleEmail,
+}: {
+  hasPassword: boolean;
+  /** The linked Google address, when there is one. The only way back in here. */
+  googleEmail: string | null;
+}) {
   const [state, submit, pending] = useActionState(changePasswordAction, IDLE_SECURITY_FORM);
   const [open, setOpen] = useState(false);
 
@@ -210,10 +220,9 @@ function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
   return (
     <form action={submit} className="mt-5 space-y-4 border-t border-line pt-5">
       {hasPassword ? (
-        <TextField
+        <PasswordField
           label="Current password"
           name="currentPassword"
-          type="password"
           required
           autoComplete="current-password"
         />
@@ -227,19 +236,17 @@ function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
+        <PasswordField
           label="New password"
           name="newPassword"
-          type="password"
           required
           autoComplete="new-password"
           minLength={PASSWORD_MIN_LENGTH}
           placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
         />
-        <TextField
+        <PasswordField
           label="Repeat new password"
           name="confirmPassword"
-          type="password"
           required
           autoComplete="new-password"
         />
@@ -253,6 +260,25 @@ function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
           {state.message}
         </p>
       )}
+
+      {/*
+        The way out of a stale sign-in, offered rather than described.
+
+        Setting a first password needs identity proved in the last few minutes, and
+        an account with no password can only prove it by signing in again. Google
+        brings them back to this tab, where the window is fresh and the form is
+        where they left it — the alternative was signing out, signing in, and
+        finding their way back here on their own.
+      */}
+      {state.reauth === true && googleEmail !== null ? (
+        <ButtonLink
+          href={`/api/auth/google/start?next=${encodeURIComponent(SECURITY_TAB)}`}
+          size="sm"
+          variant="secondary"
+        >
+          Sign in with Google again
+        </ButtonLink>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" size="sm" disabled={pending}>

@@ -23,6 +23,15 @@ export const IDLE_PROFILE_FORM: ProfileFormState = { status: 'idle', message: nu
 export interface SecurityFormState {
   readonly status: 'idle' | 'saved' | 'error';
   readonly message: string | null;
+  /**
+   * True when the only thing standing in the way is a stale sign-in.
+   *
+   * Carried separately from the message because the remedy is a link, not a
+   * sentence: setting a first password needs proof of identity from the last few
+   * minutes, and on an account with no password the only way to give it is to sign
+   * in again. Without this the form said so and left the person to work out how.
+   */
+  readonly reauth?: boolean | undefined;
 }
 
 export const IDLE_SECURITY_FORM: SecurityFormState = { status: 'idle', message: null };

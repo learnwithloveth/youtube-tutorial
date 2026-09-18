@@ -1,6 +1,7 @@
 'use client';
 
-import { forwardRef, useId } from 'react';
+import { forwardRef, useId, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -92,6 +93,55 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     </FieldShell>
   );
 });
+
+/**
+ * A password box with a reveal toggle.
+ *
+ * ── Why a component and not three more copies of the same eight lines ─────────
+ * The eye lived inline in the sign-up, sign-in and reset forms, spelled the same
+ * way each time. Adding it to the three boxes in Settings would have made six,
+ * and the sixth is where the label stops saying "Show password" and the icon
+ * stops being the same size as the others.
+ *
+ * ── Why it is worth having at all ─────────────────────────────────────────────
+ * A password nobody can read is a password typed wrong, and the place that hurts
+ * most is exactly this form: three boxes, one of which has to match another, with
+ * a mistake reported only after a round trip. Revealing is the person's own
+ * choice about their own screen.
+ *
+ * ── `type` is what changes, not the value ─────────────────────────────────────
+ * The input stays uncontrolled, so this works the same inside a Server Action
+ * form — where the value is read from the submitted FormData and never lives in
+ * React state — as it does in a controlled one.
+ */
+export type PasswordFieldProps = Omit<TextFieldProps, 'type' | 'adornment'>;
+
+export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
+  function PasswordField(props, ref) {
+    const [visible, setVisible] = useState(false);
+
+    return (
+      <TextField
+        ref={ref}
+        {...props}
+        type={visible ? 'text' : 'password'}
+        adornment={
+          <button
+            type="button"
+            // Never a submit button: this sits inside a form, and the default type
+            // would send it on every click of the eye.
+            onClick={() => setVisible((shown) => !shown)}
+            aria-label={visible ? 'Hide password' : 'Show password'}
+            aria-pressed={visible}
+            className="transition-colors hover:text-fg"
+          >
+            {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        }
+      />
+    );
+  },
+);
 
 export interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
