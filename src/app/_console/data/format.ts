@@ -26,7 +26,6 @@ export const signedPercent = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v
 //      `timeZone` resolves to the *host* zone. These screens are rendered on a
 //      server (UTC in most deployments) and rehydrated in the operator's
 //      browser (anything). The two strings differ — 23:30 UTC is "Sep 9" on
-//      the server and "Sep 10" in Lagos — React discards the server HTML for
 //      that subtree and logs hydration error #418.
 //   2. Operational correctness. An audit log, an approval queue and an incident
 //      timeline are cross-timezone artefacts; two operators in different

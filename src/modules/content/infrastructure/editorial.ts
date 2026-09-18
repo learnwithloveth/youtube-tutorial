@@ -89,7 +89,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     date: '2026-06-21',
     readingMinutes: 7,
     body: [
-      'The exchange app was designed on office fibre and tested on office fibre. Then we looked at the session data and found that a quarter of our users in Lagos, Jakarta and São Paulo were on connections where a single round trip could take two seconds.',
+      'The exchange app was designed on office fibre and tested on office fibre. Then we looked at the session data and found that a quarter of our users in Paris, Jakarta and São Paulo were on connections where a single round trip could take two seconds.',
       'For one quarter, every designer and mobile engineer worked with a network conditioner pinned to 3G with 400 ms of added latency. Not for a sprint. For a quarter.',
       'Three things changed immediately. Optimistic UI went from a nice-to-have to the default, because a spinner that runs for two seconds reads as a broken app. Every screen got a meaningful skeleton derived from cached data rather than a grey rectangle. And we deleted about 40% of the animation budget, because motion that waits on a network response is worse than no motion at all.',
       'The deeper change was to what the interface was allowed to promise. A button labelled "Buy" that might not have worked yet is a lie on a slow connection. We now show the order as pending with a clear state and a real cancel affordance, rather than pretending it completed.',
@@ -120,7 +120,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     slug: 'stablecoin-settlement-in-emerging-markets',
     title: 'What stablecoin settlement actually looks like in emerging markets',
     excerpt:
-      'Corridor-level data from 14 months of flows through Lagos, Nairobi, Manila and Buenos Aires — and why the remittance framing misses the point.',
+      'Corridor-level data from 14 months of flows through Paris, Nairobi, Manila and Buenos Aires — and why the remittance framing misses the point.',
     category: 'Research',
     author: 'Amara Okonkwo',
     role: 'Head of Market Structure',
@@ -130,7 +130,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     readingMinutes: 10,
     body: [
       'The remittance story is the one everyone tells: a worker abroad sends money home, and stablecoins cut a 6% fee to something near zero. It is true, and it is a small fraction of what we actually observe.',
-      'The dominant flow in our corridor data is business-to-business working capital. An importer in Lagos paying a supplier in Shenzhen is not solving a fee problem. They are solving a settlement-time problem and, more often, an access problem.',
+      'The dominant flow in our corridor data is business-to-business working capital. An importer in Paris paying a supplier in Shenzhen is not solving a fee problem. They are solving a settlement-time problem and, more often, an access problem.',
       'Median settlement in that corridor through correspondent banking was four business days when it worked. Through USDC on a low-fee chain it is under three minutes. The fee saving is real but secondary; the working-capital saving of not having four days of inventory in transit is an order of magnitude larger.',
       'The second pattern is dollar savings rather than dollar payments. In markets with 30%+ annual currency depreciation, a stablecoin balance is a savings account, and the on-ramp fee is amortised over months rather than charged per transaction.',
       'Both patterns imply a different product than the remittance framing does. They need deep local-currency liquidity at the edges, predictable on-ramp pricing, and business account features — not a cheaper Western Union.',
@@ -145,7 +145,7 @@ export const ROLES: readonly Role[] = [
   { title: 'iOS Engineer', team: 'Engineering', location: 'Remote (global)', type: 'Full-time', level: 'Senior' },
   { title: 'Security Engineer, Detection', team: 'Security', location: 'Zurich', type: 'Full-time', level: 'Senior' },
   { title: 'Threat Intelligence Analyst', team: 'Security', location: 'Remote (Americas)', type: 'Full-time', level: 'Mid' },
-  { title: 'Product Designer, Trading', team: 'Design', location: 'Lagos / Remote', type: 'Full-time', level: 'Senior' },
+  { title: 'Product Designer, Trading', team: 'Design', location: 'Paris / Remote', type: 'Full-time', level: 'Senior' },
   { title: 'Design Systems Engineer', team: 'Design', location: 'Remote (global)', type: 'Full-time', level: 'Mid–Senior' },
   { title: 'Quantitative Researcher, Market Structure', team: 'Research', location: 'Singapore / London', type: 'Full-time', level: 'Senior' },
   { title: 'Compliance Manager, EEA', team: 'Legal & Compliance', location: 'Zurich', type: 'Full-time', level: 'Manager' },
@@ -187,7 +187,7 @@ export const LEARN_TRACKS: readonly Track[] = [
 ];
 
 export const PRESS_ITEMS: readonly PressItem[] = [
-  { date: '2026-08-24', outlet: 'Financial Times', headline: `${BRAND.name} opens Lagos engineering hub as African volumes triple`, href: '#' },
+  { date: '2026-08-24', outlet: 'Financial Times', headline: `${BRAND.name} opens Paris engineering hub as African volumes triple`, href: '#' },
   { date: '2026-07-11', outlet: 'Bloomberg', headline: 'Exchange publishes third-party liability attestation, raising the bar on reserves', href: '#' },
   { date: '2026-06-02', outlet: 'The Block', headline: `${BRAND.name} matching engine benchmark: 1.4M orders per second, independently replicated`, href: '#' },
   { date: '2026-04-18', outlet: 'CoinDesk', headline: `MiCA authorisation granted; ${BRAND.name} passports into 27 EEA markets`, href: '#' },

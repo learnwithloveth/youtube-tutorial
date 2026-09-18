@@ -24,7 +24,7 @@ const PALETTE = [
 const FACTS = [
   { k: 'Founded', v: '2019, Zurich' },
   { k: 'Employees', v: '840 across 9 timezones' },
-  { k: 'Offices', v: 'Zurich · Singapore · Lagos' },
+  { k: 'Offices', v: 'Zurich · Singapore · Paris' },
   { k: 'Licences', v: '14 jurisdictions' },
   { k: 'Listed assets', v: '340+' },
   { k: 'Legal entity', v: `${BRAND.name} Technologies AG` },

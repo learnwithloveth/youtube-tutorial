@@ -48,11 +48,11 @@ describe('pushFor', () => {
         kind: 'sign-in',
         browser: 'Chrome',
         device: 'desktop',
-        location: { city: 'Lagos', country: 'NG' },
+        location: { city: 'Paris', country: 'France' },
       }),
     );
 
-    expect(push?.body).toBe('Chrome · desktop · Lagos, NG');
+    expect(push?.body).toBe('Chrome · desktop · Paris, France');
     expect(push?.link).toBe('/app/settings?tab=security');
   });
 
@@ -147,10 +147,10 @@ describe('adminCopyFor', () => {
 
   it('names the customer and where a sign-in came from', () => {
     const copy = adminCopyFor(
-      event({ kind: 'sign-in', browser: 'Chrome', device: 'desktop', location: { city: 'Lagos', country: 'NG' } }),
+      event({ kind: 'sign-in', browser: 'Chrome', device: 'desktop', location: { city: 'Paris', country: 'FR' } }),
       customer,
     );
-    expect(copy?.body).toBe('ada@example.com · Chrome · desktop · Lagos, NG');
+    expect(copy?.body).toBe('ada@example.com · Chrome · desktop · Paris, FR');
   });
 
   it('copies every customer notification the bell shows, except what an operator sent', () => {

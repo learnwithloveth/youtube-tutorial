@@ -46,7 +46,7 @@ export function FaqSection({
   title?: string;
 }) {
   return (
-    <Section>
+    <Section id="faq">
       <div className="shell grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-20">
         <SectionHeading
           align="left"

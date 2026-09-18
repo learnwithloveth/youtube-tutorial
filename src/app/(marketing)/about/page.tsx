@@ -26,7 +26,6 @@ const TIMELINE = [
   { year: '2023', title: `${BRAND.name} Wallet`, body: 'MPC self-custody ships with no seed phrase. One million wallets created in the first quarter.' },
   { year: '2024', title: 'The Rust rewrite', body: 'The new matching core goes live after five months of shadow replay. Tail latency falls 94%.' },
   { year: '2025', title: 'MiCA authorisation', body: 'Passporting into 27 EEA markets. Institutional custody crosses $100B.' },
-  { year: '2026', title: 'Lagos engineering hub', body: 'Third engineering site opens as African volume triples year over year.' },
 ];
 
 const LEADERS = [

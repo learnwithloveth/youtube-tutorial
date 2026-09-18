@@ -16,7 +16,7 @@ const BENEFITS = [
   { icon: HeartPulse, title: 'Health, everywhere', body: 'Private medical cover for you and dependants in every country we employ people in, not just the headquarters.' },
   { icon: GraduationCap, title: '€4,000 learning budget', body: 'Per year, no approval chain, no requirement that it be strictly job-related.' },
   { icon: Plane, title: 'Minimum leave, not unlimited', body: 'Twenty-eight days is a floor we enforce, because "unlimited" reliably means "less".' },
-  { icon: Building, title: 'Three hubs, no mandate', body: 'Zurich, Singapore and Lagos offices if you want one. Nobody is required to be in them.' },
+  { icon: Building, title: 'Three hubs, no mandate', body: 'Zurich, Singapore and Paris offices if you want one. Nobody is required to be in them.' },
 ];
 
 const PROCESS = [

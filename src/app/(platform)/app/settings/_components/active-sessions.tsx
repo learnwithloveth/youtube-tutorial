@@ -11,7 +11,6 @@ import { RevokeSessionsButton } from './revoke-sessions-button';
  * The real session list.
  *
  * ── What it does not show, and why ─────────────────────────────────────────────
- * The panel this replaced listed "MacBook Pro · Lagos · 2 hours ago" from a
  * fixture. This one cannot, and the reason is a deliberate design decision made
  * elsewhere: `identity.sessions` stores a *keyed digest* of the user agent and the
  * connecting address, never the values, because an unkeyed hash of an IPv4 address

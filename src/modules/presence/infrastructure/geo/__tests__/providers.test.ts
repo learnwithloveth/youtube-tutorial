@@ -64,18 +64,18 @@ describe('freeipapi.com', () => {
         ipVersion: 4,
         latitude: 6.50153,
         longitude: 3.35808,
-        countryName: 'Nigeria',
-        countryCode: 'NG',
-        timeZones: ['Africa/Lagos'],
-        cityName: 'Surulere',
-        regionName: 'Lagos',
+        countryName: 'France',
+        countryCode: 'FR',
+        timeZones: ['Europe/Paris'],
+        cityName: 'paris',
+        regionName: 'Paris',
       },
       OBSERVED,
     );
 
-    expect(fix?.place.city).toBe('Surulere');
-    expect(fix?.place.country).toBe('NG');
-    expect(fix?.place.timezone).toBe('Africa/Lagos');
+    expect(fix?.place.city).toBe('paris');
+    expect(fix?.place.country).toBe('FR');
+    expect(fix?.place.timezone).toBe('Europe/Paris');
   });
 
   /* The country's zones, not the address's. Taking the first would put a visitor

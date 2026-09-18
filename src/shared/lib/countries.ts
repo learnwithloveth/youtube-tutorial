@@ -171,7 +171,6 @@ export const COUNTRIES: readonly (readonly [code: string, name: string])[] = [
   ["NZ", "New Zealand"],
   ["NI", "Nicaragua"],
   ["NE", "Niger"],
-  ["NG", "Nigeria"],
   ["NU", "Niue"],
   ["NF", "Norfolk Island"],
   ["KP", "North Korea"],

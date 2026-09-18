@@ -54,9 +54,7 @@ export default function InstitutionalPage() {
               Talk to the desk
               <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
             </ButtonLink>
-            <ButtonLink href="/developers" variant="outline" size="lg">
-              API documentation
-            </ButtonLink>
+            
           </>
         }
         aside={

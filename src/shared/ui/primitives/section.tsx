@@ -26,7 +26,9 @@ export function Section({
     <section
       id={id}
       className={cn(
-        'relative isolate py-16 md:py-22 lg:py-26',
+        // `scroll-mt` because the header is sticky: a menu link to `#markets`
+        // would otherwise land the heading underneath it.
+        'relative isolate scroll-mt-24 py-16 md:py-22 lg:py-26',
         tone === 'sunken' && 'bg-bg-sunken/60',
         className,
       )}

@@ -11,7 +11,7 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <Section tone="sunken">
+    <Section tone="sunken" id="how-it-works">
       <div className="shell">
         <SectionHeading
           eyebrow="Getting started"

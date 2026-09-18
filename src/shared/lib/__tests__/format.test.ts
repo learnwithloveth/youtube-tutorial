@@ -20,7 +20,6 @@ import {
 describe('formatDate', () => {
   it('renders in UTC regardless of the host timezone', () => {
     // 23:30 UTC is already the next day in any zone east of Greenwich. An
-    // unpinned formatter returns "Sep 10" on a machine in Lagos or Tokyo and
     // "Sep 9" on the UTC server that prerendered it.
     //
     // This assertion holds on every machine only because the formatter pins
@@ -101,7 +100,6 @@ describe('formatTimestamp', () => {
   });
 
   it('does not roll the date over on a host east of Greenwich', () => {
-    // Same class of bug as formatDate's: unpinned, this reads "Sep 10" in Lagos
     // and "Sep 9" on the UTC box that prerendered it, and React throws away the
     // subtree.
     expect(formatTimestamp('2026-09-09T23:30:00Z')).toBe('Sep 9, 2026 at 23:30 UTC');

@@ -1,14 +1,13 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
-import { cn } from '@/shared/lib/cn';
 import { useEscape, useScrollLock } from '@/shared/lib/hooks';
 
-import { PRIMARY_NAV } from '../_lib/navigation';
+import { SECTION_NAV } from '../_lib/navigation';
 
 /**
  * `account` is a slot, not an import — the same arrangement `Navbar` uses and for
@@ -17,6 +16,10 @@ import { PRIMARY_NAV } from '../_lib/navigation';
  *
  * The slot's links carry no `onClose`, and do not need one: `Navbar` closes the
  * drawer when the pathname changes, so navigating from inside it already shuts it.
+ * The section links do carry one, because a jump to `/#earn` from the home page
+ * changes no pathname — and the drawer would otherwise stay over the section it
+ * just scrolled to. Closing also releases the scroll lock, which is what lets the
+ * browser move to the anchor at all.
  */
 export function MobileNav({
   open,
@@ -27,7 +30,6 @@ export function MobileNav({
   onClose: () => void;
   account: ReactNode;
 }) {
-  const [expanded, setExpanded] = useState<number | null>(0);
   useScrollLock(open);
   useEscape(onClose, open);
 
@@ -47,54 +49,18 @@ export function MobileNav({
         >
           <div className="shell flex min-h-full flex-col gap-6 py-8">
             <ul className="divide-y divide-line border-y border-line">
-              {PRIMARY_NAV.map((column, index) => {
-                const isOpen = expanded === index;
-                return (
-                  <li key={column.label}>
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      onClick={() => setExpanded(isOpen ? null : index)}
-                      className="flex w-full items-center justify-between py-4 text-left"
-                    >
-                      <span className="font-display text-xl font-semibold">{column.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          'size-5 text-fg-subtle transition-transform duration-300',
-                          isOpen && 'rotate-180',
-                        )}
-                      />
-                    </button>
-                    <AnimatePresence initial={false}>
-                      {isOpen ? (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                          className="overflow-hidden"
-                        >
-                          <div className="grid gap-1 pb-5">
-                            {column.groups
-                              ?.flatMap((group) => group.items)
-                              .map((item) => (
-                                <Link
-                                  key={item.href + item.label}
-                                  href={item.href}
-                                  onClick={onClose}
-                                  className="flex items-center gap-3 rounded-md px-2 py-2.5 text-fg-muted transition-colors hover:bg-surface hover:text-fg"
-                                >
-                                  <item.icon className="size-4 shrink-0 text-brand-soft" />
-                                  <span className="text-sm">{item.label}</span>
-                                </Link>
-                              ))}
-                          </div>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  </li>
-                );
-              })}
+              {SECTION_NAV.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    onClick={onClose}
+                    className="flex items-center justify-between py-4 text-fg transition-colors duration-200 hover:text-brand-soft"
+                  >
+                    <span className="font-display text-xl font-semibold">{link.label}</span>
+                    <ChevronRight className="size-5 text-fg-subtle" />
+                  </Link>
+                </li>
+              ))}
             </ul>
 
             <div className="mt-auto grid gap-3">{account}</div>

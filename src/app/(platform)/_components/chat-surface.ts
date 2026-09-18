@@ -56,7 +56,6 @@ export const CHAT_WALLPAPER = svgUrl(DOODLES);
  * UTC, and that is load-bearing rather than tidy. This component is server-rendered
  * before it hydrates, so a label computed in the *host's* zone differs from one
  * computed in the reader's — 23:30 UTC is "today" on the server and "yesterday" in
- * Lagos — and React discards the mismatched subtree with hydration error #418. The
  * consoles render UTC for the same reason; see `_console/data/format`.
  */
 export function utcDayKey(iso: string): string {

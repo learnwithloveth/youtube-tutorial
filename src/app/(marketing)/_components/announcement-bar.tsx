@@ -30,7 +30,7 @@ export function AnnouncementBar() {
               <span className="sm:hidden"> Up to 12.4% APY</span>
             </span>
             <Link
-              href="/earn"
+              href="/#earn"
               className="inline-flex shrink-0 items-center gap-1 font-semibold text-brand-soft underline-offset-4 hover:underline"
             >
               see rates

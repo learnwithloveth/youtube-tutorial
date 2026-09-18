@@ -19,7 +19,6 @@ const CHANNELS = [
 const OFFICES = [
   { city: 'Zurich', line1: 'Bahnhofstrasse 42', line2: '8001 Zurich, Switzerland', note: 'Registered office' },
   { city: 'Singapore', line1: '9 Battery Road, Level 21', line2: 'Singapore 049910', note: 'APAC headquarters' },
-  { city: 'Lagos', line1: '17 Kingsway Road, Ikoyi', line2: 'Lagos, Nigeria', note: 'Engineering hub' },
 ];
 
 export const metadata: Metadata = {

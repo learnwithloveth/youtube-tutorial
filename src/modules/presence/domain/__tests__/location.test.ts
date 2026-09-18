@@ -43,7 +43,7 @@ describe('LocationFix.fromAddress', () => {
   it('derives precision from what actually resolved', () => {
     const city = LocationFix.fromAddress({
       source: 'network',
-      place: { city: 'Lagos', region: 'Lagos', country: 'NG', timezone: 'Africa/Lagos' },
+      place: { city: 'Paris', region: 'Paris', country: 'NG', timezone: 'europe/paris' },
       observedAt: NOW,
     });
     expect(city?.precision).toBe('city');

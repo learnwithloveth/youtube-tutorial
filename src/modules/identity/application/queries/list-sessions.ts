@@ -9,7 +9,6 @@ import type { IdentityDependencies } from '../ports';
  *
  * ── What is deliberately not here ──────────────────────────────────────────────
  * No device name and no city. The obvious session list on a security page reads
- * "MacBook Pro · Lagos · 2 hours ago", and this one cannot, because `id_sessions`
  * stores a *keyed digest* of the user agent and the address rather than the values
  * — see the schema for why an unkeyed hash of an IPv4 address is worthless.
  *

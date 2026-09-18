@@ -106,7 +106,6 @@ export function formatQuantity(value: string | number, digits = 6): string {
  * `timeZone` is pinned deliberately. An unpinned formatter resolves to the
  * *host* zone: Next prerenders on a server (UTC in most deployments) and
  * rehydrates in the reader's browser (anything). The two strings differ — a
- * 23:30 UTC timestamp is "Sep 9" on the server and "Sep 10" in Lagos — React
  * discards the server HTML for that subtree and logs hydration error #418.
  */
 const dateFormatter = new Intl.DateTimeFormat('en-US', {

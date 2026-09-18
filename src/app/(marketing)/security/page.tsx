@@ -28,7 +28,6 @@ const LICENCES = [
   { region: 'Singapore', licence: 'Major Payment Institution', ref: 'PS20210418' },
   { region: 'United States', licence: 'FinCEN MSB registration', ref: '31000217412' },
   { region: 'United Kingdom', licence: 'FCA cryptoasset registration', ref: '928471' },
-  { region: 'Nigeria', licence: 'SEC Digital Asset Exchange', ref: 'DAX-0031' },
   { region: 'Japan', licence: 'JFSA Crypto Exchange Operator', ref: '00042' },
 ];
 

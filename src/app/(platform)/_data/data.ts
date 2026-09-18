@@ -211,7 +211,6 @@ export const API_KEYS: readonly ApiKey[] = [
 export const SESSIONS: readonly Session[] = [
   { id: 's1', device: 'MacBook Pro · Chrome 141', location: 'Zurich, CH', ip: '203.0.113.24', lastActive: 'Now', current: true },
   { id: 's2', device: `iPhone 17 Pro · ${BRAND.name} iOS`, location: 'Zurich, CH', ip: '203.0.113.51', lastActive: '18 minutes ago', current: false },
-  { id: 's3', device: 'iPad Air · Safari', location: 'Lagos, NG', ip: '198.51.100.32', lastActive: '2 days ago', current: false },
 ];
 
 export const REFERRALS: readonly Referral[] = (() => {

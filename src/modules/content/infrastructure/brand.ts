@@ -28,7 +28,7 @@ export const BRAND: Brand = {
   tagline: 'The exchange that moves at the speed of conviction.',
   description: DESCRIPTION,
   founded: 2019,
-  hq: 'Zurich · Singapore · Lagos',
+  hq: 'Zurich · Singapore · Paris',
   support: 'support@novex.io',
   press: 'press@novex.io',
   social: {

@@ -177,7 +177,6 @@ export const FREEIPAPI: GeoProvider = {
 /**
  * freeipapi returns every zone the *country* uses, not the one the address is in.
  *
- * For Nigeria that is `["Africa/Lagos"]` and genuinely useful; for the United
  * States it is twenty-nine entries, and picking the first would assert that a
  * visitor in Florida is on `America/Adak`. So it is taken only when the list
  * leaves no choice, and is otherwise null — which is what we actually know.
