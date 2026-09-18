@@ -81,6 +81,8 @@ export async function updateProfileAction(
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
+  const firstName = formData.get('firstName');
+  const lastName = formData.get('lastName');
   const displayName = formData.get('displayName');
   const handle = formData.get('handle');
   const country = formData.get('country');
@@ -94,6 +96,8 @@ export async function updateProfileAction(
 
   const result = await identity().updateProfile({
     userId: user.id,
+    firstName: typeof firstName === 'string' ? firstName : undefined,
+    lastName: typeof lastName === 'string' ? lastName : undefined,
     displayName: typeof displayName === 'string' ? displayName : undefined,
     handle: typeof handle === 'string' ? handle : undefined,
     country: typeof country === 'string' ? country : undefined,

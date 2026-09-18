@@ -55,6 +55,34 @@ const VALID = {
   password: 'correct-horse-battery',
 };
 
+describe('registering with a name', () => {
+  it('keeps it on the profile, and renders it as the account holder', async () => {
+    const { deps, profiles } = makeDeps();
+
+    const result = await createRegisterUser(deps)({
+      ...VALID,
+      firstName: ' Ada ',
+      lastName: 'Lovelace',
+    });
+
+    expect(result.ok).toBe(true);
+    const [stored] = [...profiles.store.values()];
+    expect(stored?.firstName).toBe('Ada');
+    expect(stored?.lastName).toBe('Lovelace');
+  });
+
+  /* Sign-up requires both halves; this context does not, because accounts also
+     arrive through Google carrying neither. */
+  it('registers an account that gave none, and writes no profile row', async () => {
+    const { deps, profiles } = makeDeps();
+
+    const result = await createRegisterUser(deps)(VALID);
+
+    expect(result.ok).toBe(true);
+    expect(profiles.store.size).toBe(0);
+  });
+});
+
 describe('registering with a country and a phone number', () => {
   it('keeps both on the profile', async () => {
     const { deps, profiles } = makeDeps();

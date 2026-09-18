@@ -9,11 +9,13 @@ import type { UserId } from '@/shared/kernel/ids';
  * not part of that decision, changes far more often, and is read on every page
  * render by code that has no business near a password hash.
  *
- * ── Both fields are optional, and the app works without either ─────────────────
- * Registration asks for an email and a password. Demanding a name at the door is
- * a field between somebody and the thing they came for, and the email already
- * identifies them — so the whole product renders from the email until the account
- * holder decides otherwise.
+ * ── Every field is optional here, whatever the form asks for ──────────────────
+ * Sign-up now asks for a first and last name, and that is a decision the *form*
+ * makes: it can refuse to submit without them. This context still stores them as
+ * optional, because accounts arrive by other doors — signing in with Google, which
+ * carries no name we have asked for — and because every account registered before
+ * the field existed has none. Code that renders a name therefore falls back, and
+ * `displayNameFor` is the one place that decides how.
  *
  * ── What this deliberately does not carry ──────────────────────────────────────
  * A base currency and a time zone were on the settings form. Neither is here,
@@ -24,6 +26,16 @@ import type { UserId } from '@/shared/kernel/ids';
  */
 
 export const MAX_DISPLAY_NAME = 80;
+
+/**
+ * The longest a first or last name may be.
+ *
+ * Shorter than a display name, which can be anything somebody wants to be called.
+ * These two are what a person is called: long enough for the longest names people
+ * actually have, and short enough that a pasted paragraph is refused rather than
+ * stored and truncated in every table it appears in.
+ */
+export const MAX_PERSON_NAME = 60;
 
 /**
  * Lowercase, 3–24, letters digits and underscore.
@@ -53,6 +65,16 @@ export function normalisePhone(raw: string): string {
 
 export interface ProfileSnapshot {
   readonly userId: UserId;
+  /**
+   * The account holder's name, as they gave it at sign-up.
+   *
+   * Kept in two fields rather than one, because the two are addressed differently:
+   * a greeting uses the first alone, and a name on a document is both in order.
+   * Splitting one stored string back into them is guesswork the moment anybody has
+   * two given names or a compound surname.
+   */
+  readonly firstName: string | null;
+  readonly lastName: string | null;
   readonly displayName: string | null;
   /** Stored without the leading `@`, which is punctuation the UI adds. */
   readonly handle: string | null;
@@ -71,6 +93,7 @@ export interface ProfileSnapshot {
 }
 
 export type ProfileProblem =
+  | 'name-too-long'
   | 'display-name-too-long'
   | 'handle-invalid'
   | 'country-invalid'
@@ -83,6 +106,8 @@ export class Profile {
   static empty(userId: UserId, at: Date): Profile {
     return new Profile({
       userId,
+      firstName: null,
+      lastName: null,
       displayName: null,
       handle: null,
       country: null,
@@ -98,6 +123,12 @@ export class Profile {
 
   get userId(): UserId {
     return this.snap.userId;
+  }
+  get firstName(): string | null {
+    return this.snap.firstName;
+  }
+  get lastName(): string | null {
+    return this.snap.lastName;
   }
   get displayName(): string | null {
     return this.snap.displayName;
@@ -128,6 +159,8 @@ export class Profile {
    */
   update(
     changes: {
+      firstName?: string | undefined;
+      lastName?: string | undefined;
       displayName?: string | undefined;
       handle?: string | undefined;
       country?: string | undefined;
@@ -137,6 +170,17 @@ export class Profile {
   ): ProfileProblem[] {
     const problems: ProfileProblem[] = [];
     let next = this.snap;
+
+    // Both halves of a name, by the same rule and with the same message: what a
+    // person typing can do about either is identical.
+    for (const part of ['firstName', 'lastName'] as const) {
+      const given = changes[part];
+      if (given === undefined) continue;
+
+      const name = given.replace(/\s+/g, ' ').trim();
+      if (name.length > MAX_PERSON_NAME) problems.push('name-too-long');
+      else next = { ...next, [part]: name.length === 0 ? null : name };
+    }
 
     if (changes.displayName !== undefined) {
       // Collapsed, not just trimmed: a name pasted out of a document arrives with
@@ -211,10 +255,18 @@ export class Profile {
  */
 export function displayNameFor(input: {
   displayName?: string | null | undefined;
+  firstName?: string | null | undefined;
+  lastName?: string | null | undefined;
   handle?: string | null | undefined;
   email: string;
 }): string {
+  // A chosen display name first: somebody who set one has said what they want to
+  // be called, and it outranks the name they registered under.
   if (input.displayName) return input.displayName;
+
+  const name = [input.firstName, input.lastName].filter(Boolean).join(' ');
+  if (name.length > 0) return name;
+
   if (input.handle) return `@${input.handle}`;
 
   const local = input.email.split('@')[0] ?? input.email;

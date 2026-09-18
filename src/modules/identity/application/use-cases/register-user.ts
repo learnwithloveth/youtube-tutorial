@@ -25,6 +25,16 @@ export interface RegisterUserCommand {
    */
   country?: string | undefined;
   phone?: string | undefined;
+  /**
+   * The account holder's name, as the sign-up form asks for it.
+   *
+   * Optional here and required by the form: this use case also registers accounts
+   * that arrive with no name at all, and refusing them at the door would be a rule
+   * the form already enforces, applied a second time in a place that cannot show
+   * anybody where to fix it.
+   */
+  firstName?: string | undefined;
+  lastName?: string | undefined;
   userAgent?: string | null;
   ipAddress?: string | null;
 }
@@ -72,7 +82,15 @@ export function createRegisterUser(deps: IdentityDependencies) {
     // its dialling code refuses the form rather than leaving a registered account
     // whose owner never saw the error.
     const profile = Profile.empty(id, now);
-    const [problem] = profile.update({ country: command.country, phone: command.phone }, now);
+    const [problem] = profile.update(
+      {
+        firstName: command.firstName,
+        lastName: command.lastName,
+        country: command.country,
+        phone: command.phone,
+      },
+      now,
+    );
     if (problem !== undefined) return err(fromProfileProblem(problem));
 
     const user = User.register({
@@ -88,9 +106,14 @@ export function createRegisterUser(deps: IdentityDependencies) {
       return err(IdentityErrors.emailAlreadyRegistered());
     }
 
-    // Only when there is something to store. Most accounts set neither, and the
-    // profile row is created on demand for exactly that reason.
-    if (profile.country !== null || profile.phone !== null) {
+    // Only when there is something to store. A row is created on demand, which is
+    // why an account that gave nothing has none.
+    if (
+      profile.firstName !== null ||
+      profile.lastName !== null ||
+      profile.country !== null ||
+      profile.phone !== null
+    ) {
       await deps.profiles.save(profile);
     }
 

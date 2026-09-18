@@ -60,7 +60,11 @@ export default async function SupportPage({
     <>
       <AdminPageHeader
         title="Live support"
-        description="Every conversation carries the customer's account beside it, so an agent never has to ask for a reference."
+        // Was "every conversation carries the customer's account beside it": that
+        // described the context panel, which is gone. The account is a click from
+        // the thread now, and saying otherwise sends an agent looking for a column
+        // that is not there.
+        description="Pick somebody to read the conversation and reply."
       />
 
       {!inbox.configured ? (

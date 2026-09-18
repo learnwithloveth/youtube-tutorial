@@ -131,6 +131,8 @@ export class DrizzleProfileRepository implements ProfileRepository {
         .insert(profiles)
         .values({
           userId: snapshot.userId,
+          firstName: snapshot.firstName,
+          lastName: snapshot.lastName,
           displayName: snapshot.displayName,
           handle: snapshot.handle,
           country: snapshot.country,
@@ -141,6 +143,8 @@ export class DrizzleProfileRepository implements ProfileRepository {
         .onConflictDoUpdate({
           target: profiles.userId,
           set: {
+            firstName: snapshot.firstName,
+            lastName: snapshot.lastName,
             displayName: snapshot.displayName,
             handle: snapshot.handle,
             country: snapshot.country,
@@ -184,6 +188,8 @@ function isUniqueViolation(error: unknown): boolean {
 function profileToDomain(row: typeof profiles.$inferSelect): Profile {
   return Profile.rehydrate({
     userId: row.userId as UserId,
+    firstName: row.firstName,
+    lastName: row.lastName,
     displayName: row.displayName,
     handle: row.handle,
     country: row.country,
@@ -250,7 +256,15 @@ export class DrizzleUserRepository implements UserRepository {
         failedAttempts: snapshot.failedAttempts,
         lockedUntil: snapshot.lockedUntil,
         createdAt: snapshot.createdAt,
-        version: 1,
+        // The aggregate's own version, not a literal.
+        //
+        // This was `1` while `User.register` starts at 0, so a row was born one
+        // version ahead of the object that had just created it, and the next
+        // `save` of that object matched nothing and raised `ConcurrencyError` —
+        // a conflict with a writer that did not exist. Signing in with Google for
+        // the first time did exactly that: insert, then save to confirm the
+        // address, and a 500 on the callback with the account already created.
+        version: snapshot.version,
       })
       .onConflictDoNothing({ target: users.email })
       .returning({ id: users.id });

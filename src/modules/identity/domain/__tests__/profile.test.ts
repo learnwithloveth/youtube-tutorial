@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { UserId } from '@/shared/kernel/ids';
 
-import { displayNameFor, initialsFor, MAX_DISPLAY_NAME, Profile } from '../profile';
+import {
+  displayNameFor,
+  initialsFor,
+  MAX_DISPLAY_NAME,
+  MAX_PERSON_NAME,
+  Profile,
+} from '../profile';
 
 const USER = 'user-1' as UserId;
 const NOW = new Date('2026-09-14T10:00:00.000Z');
@@ -65,6 +71,41 @@ describe('profile', () => {
   });
 });
 
+describe('the name given at sign-up', () => {
+  it('keeps the two halves apart, collapsing whitespace like every other name', () => {
+    const profile = Profile.empty(USER, NOW);
+
+    expect(profile.update({ firstName: '  Ada ', lastName: 'King  Lovelace' }, NOW)).toEqual([]);
+    expect(profile.firstName).toBe('Ada');
+    expect(profile.lastName).toBe('King Lovelace');
+  });
+
+  it('refuses one that is too long, and applies nothing', () => {
+    const profile = Profile.empty(USER, NOW);
+
+    const problems = profile.update(
+      { firstName: 'x'.repeat(MAX_PERSON_NAME + 1), lastName: 'Lovelace' },
+      NOW,
+    );
+
+    expect(problems).toEqual(['name-too-long']);
+    expect(profile.firstName).toBeNull();
+    expect(profile.lastName).toBeNull();
+  });
+
+  /* Google carries no name this form asked for, and every account registered before
+     the field existed has none. Clearing has to stay possible for the same reason
+     the other fields allow it. */
+  it('clears on an empty string and leaves undefined alone', () => {
+    const profile = Profile.empty(USER, NOW);
+    profile.update({ firstName: 'Ada', lastName: 'Lovelace' }, NOW);
+
+    profile.update({ firstName: '' }, NOW);
+    expect(profile.firstName).toBeNull();
+    expect(profile.lastName).toBe('Lovelace');
+  });
+});
+
 describe('displayNameFor', () => {
   it('prefers a name, then a handle, then the email local part', () => {
     expect(displayNameFor({ displayName: 'Amara', handle: 'amara', email: 'a@b.com' })).toBe(
@@ -78,6 +119,16 @@ describe('displayNameFor', () => {
     expect(displayNameFor({ displayName: null, handle: null, email: 'amara@b.com' })).toBe(
       'amara',
     );
+  });
+
+  it('uses the registered name before the handle, and a chosen one before both', () => {
+    const ada = { firstName: 'Ada', lastName: 'Lovelace', handle: 'amara', email: 'a@b.com' };
+
+    expect(displayNameFor(ada)).toBe('Ada Lovelace');
+    // A display name is what somebody asked to be called; it outranks the rest.
+    expect(displayNameFor({ ...ada, displayName: 'Countess' })).toBe('Countess');
+    // Half a name is still a name.
+    expect(displayNameFor({ ...ada, lastName: null })).toBe('Ada');
   });
 });
 

@@ -10,7 +10,7 @@
  * because it contains no secrets and no I/O.
  */
 
-import { MAX_DISPLAY_NAME, type ProfileProblem } from '../domain/profile';
+import { MAX_DISPLAY_NAME, MAX_PERSON_NAME, type ProfileProblem } from '../domain/profile';
 
 export type IdentityError =
   | { _tag: 'EmailMalformed' }
@@ -27,6 +27,7 @@ export type IdentityError =
   | { _tag: 'VerificationTokenInvalid' }
   | { _tag: 'VerificationTokenExpired' }
   | { _tag: 'EmailAlreadyVerified' }
+  | { _tag: 'NameTooLong'; maximum: number }
   | { _tag: 'DisplayNameTooLong'; maximum: number }
   | { _tag: 'HandleInvalid' }
   | { _tag: 'HandleTaken' }
@@ -134,6 +135,7 @@ export const IdentityErrors = {
     _tag: 'DisplayNameTooLong',
     maximum: MAX_DISPLAY_NAME,
   }),
+  nameTooLong: (): IdentityError => ({ _tag: 'NameTooLong', maximum: MAX_PERSON_NAME }),
   handleInvalid: (): IdentityError => ({ _tag: 'HandleInvalid' }),
   handleTaken: (): IdentityError => ({ _tag: 'HandleTaken' }),
   administratorNotFound: (): IdentityError => ({ _tag: 'AdministratorNotFound' }),
@@ -150,6 +152,8 @@ export const IdentityErrors = {
  */
 export function fromProfileProblem(problem: ProfileProblem): IdentityError {
   switch (problem) {
+    case 'name-too-long':
+      return IdentityErrors.nameTooLong();
     case 'handle-invalid':
       return IdentityErrors.handleInvalid();
     case 'country-invalid':
@@ -224,6 +228,9 @@ export function presentIdentityError(error: IdentityError): string {
       return 'That link has expired. Request a new one.';
     case 'EmailAlreadyVerified':
       return 'That address is already confirmed. You can sign in.';
+    case 'NameTooLong':
+      // Both halves share one message: the rule and the remedy are the same.
+      return `A first or last name can be at most ${error.maximum} characters.`;
     case 'DisplayNameTooLong':
       return `That name is longer than ${error.maximum} characters.`;
     case 'HandleInvalid':

@@ -99,6 +99,15 @@ export async function signUpAction(
 ): Promise<AuthFormState> {
   const context = await requestContext();
 
+  // Required here rather than in the identity context, which stores a name as
+  // optional: accounts also arrive through Google, carrying none. What a form can
+  // insist on and a domain cannot is exactly this kind of rule.
+  const firstName = String(formData.get('firstName') ?? '').trim();
+  const lastName = String(formData.get('lastName') ?? '').trim();
+  if (firstName.length === 0 || lastName.length === 0) {
+    return { error: 'Enter your first and last name.', message: null };
+  }
+
   const country = String(formData.get('country') ?? '').trim();
   // Checked against the list here rather than in the domain, which validates the
   // shape only: which codes exist is reference data, and it already lives here.
@@ -111,6 +120,8 @@ export async function signUpAction(
   const result = await identity().registerUser({
     email: String(formData.get('email') ?? ''),
     password: String(formData.get('password') ?? ''),
+    firstName,
+    lastName,
     country,
     phone: String(formData.get('phone') ?? '').trim(),
     ...context,

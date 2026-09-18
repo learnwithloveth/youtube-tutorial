@@ -25,6 +25,9 @@ export interface CurrentUserDto {
   emailVerified: boolean;
   role: UserRole;
   createdAt: string;
+  /** As given at sign-up. Null for an account that arrived another way. */
+  firstName: string | null;
+  lastName: string | null;
   /** What the account holder set, or null. Most never will. */
   displayName: string | null;
   /** Without the leading `@`, which the interface adds. */
@@ -50,6 +53,8 @@ export interface CurrentUserDto {
 export function toCurrentUserDto(user: User, profile?: Profile | null): CurrentUserDto {
   const name = displayNameFor({
     displayName: profile?.displayName,
+    firstName: profile?.firstName,
+    lastName: profile?.lastName,
     handle: profile?.handle,
     email: user.email.value,
   });
@@ -60,6 +65,8 @@ export function toCurrentUserDto(user: User, profile?: Profile | null): CurrentU
     emailVerified: user.isEmailVerified,
     role: user.role,
     createdAt: user.createdAt.toISOString(),
+    firstName: profile?.firstName ?? null,
+    lastName: profile?.lastName ?? null,
     displayName: profile?.displayName ?? null,
     handle: profile?.handle ?? null,
     country: profile?.country ?? null,
@@ -100,6 +107,8 @@ export interface UserSummaryDto {
 export function toUserSummaryDto(user: User, profile?: Profile | null): UserSummaryDto {
   const name = displayNameFor({
     displayName: profile?.displayName,
+    firstName: profile?.firstName,
+    lastName: profile?.lastName,
     handle: profile?.handle,
     email: user.email.value,
   });

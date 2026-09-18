@@ -29,6 +29,9 @@ import type { IdentityDependencies } from '../ports';
 
 export interface UpdateProfileCommand {
   readonly userId: UserId;
+  /** As given at sign-up, and editable afterwards like everything else here. */
+  readonly firstName?: string | undefined;
+  readonly lastName?: string | undefined;
   readonly displayName?: string | undefined;
   readonly handle?: string | undefined;
   /** ISO-3166-1 alpha-2, or an empty string to clear it. */
@@ -53,6 +56,8 @@ export function createUpdateProfile(deps: IdentityDependencies): UpdateProfile {
 
     const problems = profile.update(
       {
+        firstName: command.firstName,
+        lastName: command.lastName,
         displayName: command.displayName,
         handle: command.handle,
         country: command.country,

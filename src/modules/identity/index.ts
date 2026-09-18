@@ -15,7 +15,13 @@
 
 export type { CurrentUserDto, SessionDto, UserSummaryDto } from './application/dto';
 export type { UserRole, UserStatus } from './domain/user';
-export { displayNameFor, initialsFor, HANDLE_PATTERN, MAX_DISPLAY_NAME } from './domain/profile';
+export {
+  displayNameFor,
+  initialsFor,
+  HANDLE_PATTERN,
+  MAX_DISPLAY_NAME,
+  MAX_PERSON_NAME,
+} from './domain/profile';
 export type { ListUsersOptions, UserListDto } from './application/queries/list-users';
 export type {
   AdministratorDto,

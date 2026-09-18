@@ -67,6 +67,26 @@ export function SignupForm({
       <form action={formAction} className="space-y-5">
         <FormFeedback state={state} />
 
+        {/* Side by side above the address, which is the order these are asked for
+            on every form anybody has filled in before this one. They stack on a
+            phone, where two half-width fields would be two cramped ones. */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField
+            label="First name"
+            name="firstName"
+            required
+            autoComplete="given-name"
+            placeholder="Ada"
+          />
+          <TextField
+            label="Last name"
+            name="lastName"
+            required
+            autoComplete="family-name"
+            placeholder="Lovelace"
+          />
+        </div>
+
         <TextField
           label="Email address"
           type="email"

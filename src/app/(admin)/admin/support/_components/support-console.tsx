@@ -6,9 +6,8 @@ import {
   Bell,
   BellOff,
   Check,
+  ChevronLeft,
   Loader2,
-  MapPin,
-  MessageSquare,
   UserPlus,
 } from 'lucide-react';
 
@@ -27,8 +26,8 @@ import {
 } from '@/shared/firebase/use-support-realtime';
 import { formatClock, formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
+import { useMediaQuery } from '@/shared/lib/hooks';
 import { Badge } from '@/shared/ui/primitives/badge';
-import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
 
 import { ConfirmButton, QuietButton } from '../../../_components/admin-ui';
 import { Panel } from '../../../../_console/components/page-header';
@@ -37,31 +36,24 @@ import { CONSOLE_APP } from '../../../../_lib/console-app';
 /**
  * Live support, on real conversations.
  *
- * ── What changed under the design ──────────────────────────────────────────────
- * The layout is the approved one: list, thread, customer context. What is behind
- * it is different. It used to reduce over an in-memory fixture — invented
- * customers, invented balances, a risk score from `Math.random()`, and a reload
- * that reset every reply. Now the conversations are Firestore documents, the
- * customer beside them is this platform's own identity record, and whether they
- * are online and what page they are reading comes from the presence heartbeat
- * that already runs.
+ * ── Two panes: who is waiting, and what they said ─────────────────────────────
+ * The design had three — list, thread, and a context panel about the customer —
+ * and filters above them for Open, Mine and All. Both are gone. An inbox this size
+ * is read by looking at it, and the account details had one useful line ("on the
+ * site now, reading…") which now sits in the thread where an agent is already
+ * looking; the rest was a second place to keep facts the account page owns.
  *
- * Three fields from the original context panel are gone rather than
- * reimplemented — 30-day volume, open orders and a risk score. There is no trading
- * engine and no surveillance context, so all three were constants, and a number an
- * agent might repeat to a customer is the worst place to keep one.
+ * What is behind it: the conversations are Firestore documents, the customer beside
+ * them is this platform's own identity record, and whether they are online and what
+ * page they are reading comes from the presence heartbeat that already runs.
  *
- * ── Filtering happens here, not in Firestore ───────────────────────────────────
- * One listener over the whole inbox, and Open/Mine/All filter it in memory. An
- * inbox is tens of rows; three queries would be three listeners, three composite
- * indexes, and a tab switch that waits for a network round trip.
+ * ── One pane at a time on a phone ─────────────────────────────────────────────
+ * Two columns side by side is a desktop layout. Narrow, the list is the screen
+ * until a conversation is opened, and the thread is the screen after that, with a
+ * way back. Which pane shows is CSS, not JavaScript, so the first paint is right
+ * at every width; `wide` is read only to decide whether a thread is actually in
+ * front of somebody, which is what clearing its unread badge should depend on.
  */
-
-const VIEWS = [
-  { value: 'open', label: 'Open' },
-  { value: 'mine', label: 'Mine' },
-  { value: 'all', label: 'All' },
-] as const;
 
 const PRIORITY_TONE: Record<ConversationPriority, 'down' | 'warn' | 'neutral' | 'accent'> = {
   urgent: 'down',
@@ -87,8 +79,16 @@ export function SupportConsole({
   initialCustomers: Readonly<Record<string, SupportCustomerDto>>;
   initialThread: { conversationId: string | null; messages: readonly MessageDto[] };
 }) {
-  const [view, setView] = useState<'open' | 'mine' | 'all'>('open');
   const [selectedId, setSelectedId] = useState<string | null>(initialThread.conversationId);
+  /**
+   * Whether the thread is the pane in front of somebody on a narrow screen.
+   *
+   * False on arrival, so a phone opens on the list rather than on whichever
+   * conversation the server happened to prefill. Irrelevant above `lg`, where both
+   * panes are on screen at once.
+   */
+  const [opened, setOpened] = useState(false);
+  const wide = useMediaQuery('(min-width: 1024px)');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [customers, setCustomers] = useState(initialCustomers);
@@ -112,16 +112,10 @@ export function SupportConsole({
     initial: initialConversations,
   });
 
-  const visible = useMemo(() => {
-    if (view === 'all') return conversations;
-    if (view === 'mine') {
-      return conversations.filter((conversation) => conversation.assignedTo === operatorId);
-    }
-    return conversations.filter((conversation) => conversation.status === 'open');
-  }, [conversations, view, operatorId]);
-
   const selected =
-    conversations.find((conversation) => conversation.id === selectedId) ?? visible[0] ?? null;
+    conversations.find((conversation) => conversation.id === selectedId) ??
+    conversations[0] ??
+    null;
 
   const confirmed = useConversationMessages({
     enabled: true,
@@ -195,6 +189,14 @@ export function SupportConsole({
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages.length, selected?.id]);
 
+  // Opening a thread on a phone leaves the page scrolled where the list was, with
+  // the page header above it eating the screen. Bring the pane to the top so the
+  // conversation and the reply box are what is in front of somebody.
+  useEffect(() => {
+    if (wide || !opened) return;
+    threadRef.current?.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [wide, opened, selected?.id]);
+
   const act = useCallback(async (conversationId: string, action: string) => {
     await fetch(`/api/support/conversations/${conversationId}`, {
       method: 'POST',
@@ -206,14 +208,17 @@ export function SupportConsole({
     // this operator a result the others do not have yet.
   }, []);
 
-  // Opening a thread clears its badge. Fired once per selection, not per render.
+  // Opening a thread clears its badge. Fired once per selection, not per render —
+  // and only while the thread is actually on screen, which on a phone means the
+  // operator tapped it. A badge cleared behind the list is a message nobody read.
   const read = useRef<string | null>(null);
   useEffect(() => {
+    if (!wide && !opened) return;
     if (selected === null || selected.unreadForOperator === 0) return;
     if (read.current === selected.id) return;
     read.current = selected.id;
     void act(selected.id, 'mark-read');
-  }, [selected, act]);
+  }, [selected, act, wide, opened]);
 
   const send = useCallback(async () => {
     const body = draft.trim();
@@ -274,13 +279,6 @@ export function SupportConsole({
         data-live-surface={status === 'live' ? 'support-queue' : undefined}
         className="mb-4 flex flex-wrap items-center justify-between gap-3"
       >
-        <SegmentedControl
-          ariaLabel="Filter conversations"
-          size="sm"
-          segments={VIEWS}
-          value={view}
-          onChange={setView}
-        />
         <div className="flex flex-wrap items-center gap-3">
           <PushToggle operatorId={operatorId} />
           <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
@@ -305,28 +303,31 @@ export function SupportConsole({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[19rem_1fr_18rem] 2xl:grid-cols-[21rem_1fr_20rem]">
+      <div className="grid gap-4 lg:grid-cols-[19rem_1fr] xl:grid-cols-[21rem_1fr]">
         <Panel
           padded={false}
-          className="min-w-0 overflow-hidden xl:max-h-[calc(100dvh-13rem)] xl:overflow-y-auto"
+          className={cn(
+            'min-w-0 overflow-hidden lg:max-h-[calc(100dvh-12rem)] lg:overflow-y-auto',
+            // On a phone the thread takes the screen, and this is what it takes it
+            // from. One display utility at a time: `hidden` and `block` together
+            // resolve by stylesheet order, not by the order written here.
+            opened ? 'hidden lg:block' : 'block',
+          )}
         >
-          {visible.length === 0 ? (
-            <p className="px-4 py-10 text-center text-xs text-fg-subtle">
-              {view === 'open'
-                ? 'No open conversations.'
-                : view === 'mine'
-                  ? 'Nothing assigned to you.'
-                  : 'No conversations yet.'}
-            </p>
+          {conversations.length === 0 ? (
+            <p className="px-4 py-10 text-center text-xs text-fg-subtle">No conversations yet.</p>
           ) : (
             <ul className="divide-y divide-line/60">
-              {visible.map((conversation) => (
+              {conversations.map((conversation) => (
                 <li key={conversation.id}>
                   <ConversationRow
                     conversation={conversation}
                     customer={customers[conversation.userId]}
                     active={selected?.id === conversation.id}
-                    onSelect={() => setSelectedId(conversation.id)}
+                    onSelect={() => {
+                      setSelectedId(conversation.id);
+                      setOpened(true);
+                    }}
                   />
                 </li>
               ))}
@@ -335,23 +336,57 @@ export function SupportConsole({
         </Panel>
 
         {selected ? (
-          <Panel padded={false} className="flex min-w-0 flex-col xl:max-h-[calc(100dvh-13rem)]">
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+          <Panel
+            padded={false}
+            className={cn(
+              'min-w-0 flex-col lg:max-h-[calc(100dvh-12rem)]',
+              // `flex` and `hidden` in one class list is decided by stylesheet
+              // order rather than by this one — which is how the back button came
+              // to leave the thread on screen. Exactly one of them applies.
+              opened ? 'flex' : 'hidden lg:flex',
+            )}
+          >
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setOpened(false)}
+                aria-label="Back to conversations"
+                className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-fg-muted transition-colors hover:bg-surface hover:text-fg lg:hidden"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-semibold text-fg">{selected.subject}</h2>
-                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-fg-subtle">
-                  <span>Live chat</span>
-                  <span aria-hidden>·</span>
+                {/* Who, then what about: the context panel used to carry the name,
+                    and an agent replying to somebody should see it without it. */}
+                <h2 className="truncate text-sm font-semibold text-fg">
+                  {customer?.email ?? selected.userId}
+                </h2>
+                {/* One line that truncates, rather than a wrapping row: narrow, the
+                    wrapping version stacked three words into a column. */}
+                <p className="mt-0.5 truncate text-2xs text-fg-subtle">
+                  <span>{selected.subject}</span>
+                  <span aria-hidden> · </span>
                   <span>opened {formatDate(selected.openedAt)}</span>
                   {selected.status === 'resolved' ? (
                     <>
-                      <span aria-hidden>·</span>
+                      <span aria-hidden> · </span>
                       <span className="text-up">resolved</span>
                     </>
                   ) : null}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              {/* Their own row on a phone, where three buttons beside the name left
+                  it four characters wide. Inline again once there is room. */}
+              <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 lg:w-auto">
+                {/* The one link the removed panel is missed for: everything else it
+                    held is on the account page this opens. */}
+                <Link
+                  href={`/admin/users/${selected.userId}`}
+                  className="text-2xs font-medium text-brand-soft hover:underline"
+                >
+                  Account
+                </Link>
                 {selected.assignedTo !== operatorId ? (
                   <QuietButton onClick={() => void act(selected.id, 'claim')}>
                     <UserPlus className="size-3.5" />
@@ -367,7 +402,13 @@ export function SupportConsole({
               </div>
             </div>
 
-            <div ref={threadRef} className="min-h-64 flex-1 space-y-3 overflow-y-auto p-4">
+            {/* Capped on a phone so the reply box stays on screen under it: the
+                transcript scrolls inside this box rather than growing the page
+                until the composer is below the fold. */}
+            <div
+              ref={threadRef}
+              className="min-h-64 max-h-[52dvh] flex-1 space-y-3 overflow-y-auto p-4 lg:max-h-none"
+            >
               {messages.map((message) => (
                 <Bubble key={message.id} message={message} />
               ))}
@@ -406,14 +447,10 @@ export function SupportConsole({
             />
           </Panel>
         ) : (
-          <Panel className="grid place-items-center text-xs text-fg-subtle">
+          <Panel className="hidden place-items-center text-xs text-fg-subtle lg:grid">
             Select a conversation.
           </Panel>
         )}
-
-        {selected ? (
-          <CustomerContext conversation={selected} customer={customer} />
-        ) : null}
       </div>
     </>
   );
@@ -586,112 +623,6 @@ function Bubble({ message }: { message: MessageDto }) {
           {mine ? 'Agent' : 'Customer'} · {formatClock(message.sentAt)}
         </p>
       </div>
-    </div>
-  );
-}
-
-function CustomerContext({
-  conversation,
-  customer,
-}: {
-  conversation: ConversationDto;
-  customer: SupportCustomerDto | undefined;
-}) {
-  return (
-    <div className="space-y-4">
-      <Panel>
-        <div className="flex items-center gap-3">
-          <span
-            aria-hidden
-            className="grid size-11 place-items-center rounded-full bg-brand/20 text-sm font-semibold text-brand-soft"
-          >
-            {(customer?.email ?? '?').slice(0, 2).toUpperCase()}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-fg">
-              {customer?.email ?? 'Directory unavailable'}
-            </p>
-            <p className="truncate font-mono text-2xs text-fg-subtle">{conversation.userId}</p>
-          </div>
-        </div>
-
-        <dl className="mt-5 space-y-2.5 border-t border-line pt-4 text-xs">
-          <Row label="Account" value={customer?.status ?? '—'} />
-          <Row
-            label="On the site"
-            value={
-              customer?.live
-                ? customer.live.activity === 'active'
-                  ? 'Active now'
-                  : 'Idle'
-                : 'Not right now'
-            }
-          />
-          {customer?.live ? (
-            <Row label="Reading" value={customer.live.path} />
-          ) : null}
-          {customer?.live?.city || customer?.live?.country ? (
-            <Row
-              label="Location"
-              value={[customer.live.city, customer.live.country].filter(Boolean).join(', ')}
-              icon={<MapPin className="size-3" />}
-            />
-          ) : null}
-          <Row label="Conversation" value={conversation.status} />
-          <Row label="Opened" value={formatDate(conversation.openedAt)} />
-        </dl>
-
-        <div className="mt-4 flex flex-col gap-1.5">
-          <Link
-            href={`/admin/users/${conversation.userId}`}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-soft hover:underline"
-          >
-            Open full account
-          </Link>
-          <Link
-            href="/admin/transactions"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-soft hover:underline"
-          >
-            Their transactions
-          </Link>
-        </div>
-      </Panel>
-
-      <Panel>
-        <h2 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold text-fg">
-          <MessageSquare className="size-3.5 text-brand-soft" />
-          What is not here
-        </h2>
-        {/* Said plainly rather than filled with plausible numbers. The panel used
-            to show a 30-day volume, open orders and a risk score; there is no
-            trading engine and no surveillance context, so every one of them was a
-            constant an agent might have repeated to a customer. */}
-        <p className="text-2xs leading-relaxed text-fg-subtle">
-          Trading volume, open orders and risk scoring are not shown because nothing
-          on this platform measures them yet. Balances, deposits and withdrawals are
-          real — open the full account to see them.
-        </p>
-      </Panel>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="shrink-0 text-fg-subtle">{label}</dt>
-      <dd className="flex min-w-0 items-center gap-1 truncate text-right font-mono text-fg-muted">
-        {icon}
-        {value}
-      </dd>
     </div>
   );
 }

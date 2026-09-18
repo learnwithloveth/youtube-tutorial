@@ -4,7 +4,7 @@ import { useActionState } from 'react';
 import { BadgeCheck, TriangleAlert } from 'lucide-react';
 
 import type { CurrentUserDto } from '@/modules/identity';
-import { MAX_DISPLAY_NAME } from '@/modules/identity';
+import { MAX_DISPLAY_NAME, MAX_PERSON_NAME } from '@/modules/identity';
 import { COUNTRIES } from '@/shared/lib/countries';
 import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
@@ -77,13 +77,31 @@ export function ProfileForm({ user }: { user: CurrentUserDto }) {
       </div>
 
       <form action={submit} className="grid gap-4 sm:grid-cols-2">
+        {/* Given at sign-up, and correctable here — along with the rest. An account
+            that arrived through Google was never asked, and this is where it can
+            answer. */}
+        <TextField
+          label="First name"
+          name="firstName"
+          defaultValue={user.firstName ?? ''}
+          maxLength={MAX_PERSON_NAME}
+          autoComplete="given-name"
+        />
+        <TextField
+          label="Last name"
+          name="lastName"
+          defaultValue={user.lastName ?? ''}
+          maxLength={MAX_PERSON_NAME}
+          autoComplete="family-name"
+        />
+
         <TextField
           label="Display name"
           name="displayName"
           defaultValue={user.displayName ?? ''}
           maxLength={MAX_DISPLAY_NAME}
-          placeholder="Optional"
-          autoComplete="name"
+          placeholder="Optional — overrides the name above"
+          autoComplete="nickname"
         />
         <TextField
           label="Handle"

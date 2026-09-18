@@ -103,6 +103,10 @@ export const profiles = identitySchema.table(
       .primaryKey()
       .references(() => users.id, { onDelete: 'cascade' }),
 
+    /** The name given at sign-up. Null for accounts that arrived another way. */
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+
     displayName: text('display_name'),
     /** Stored without the leading `@`, which is punctuation the interface adds. */
     handle: text('handle'),
