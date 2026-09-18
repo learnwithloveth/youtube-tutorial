@@ -139,6 +139,7 @@ export function SignupForm({
           label="Phone number"
           type="tel"
           name="phone"
+          required
           autoComplete="tel"
           // Pre-filled with the dialling code for the detected country when this
           // application knows it, and left empty when it does not — an invented
@@ -148,7 +149,7 @@ export function SignupForm({
           // Says what it is not, where somebody is deciding whether to hand it
           // over: there is no SMS in this application, so a number here is not a
           // second factor and not a recovery route.
-          hint="Optional. Include your dialling code. Nothing is sent to it yet."
+          hint="Include your dialling code. Nothing is sent to it yet."
         />
 
         <label className="flex items-start gap-3 text-sm text-fg-muted">

@@ -108,6 +108,14 @@ export async function signUpAction(
     return { error: 'Enter your first and last name.', message: null };
   }
 
+  // Required on this form, like the name above it. The identity context still
+  // treats a number as optional, because an account arriving through Google is
+  // never asked for one — a form can insist where a domain cannot.
+  const phone = String(formData.get('phone') ?? '').trim();
+  if (phone.length === 0) {
+    return { error: 'Enter your phone number, with its dialling code.', message: null };
+  }
+
   const country = String(formData.get('country') ?? '').trim();
   // Checked against the list here rather than in the domain, which validates the
   // shape only: which codes exist is reference data, and it already lives here.
@@ -123,7 +131,7 @@ export async function signUpAction(
     firstName,
     lastName,
     country,
-    phone: String(formData.get('phone') ?? '').trim(),
+    phone,
     ...context,
   });
 
