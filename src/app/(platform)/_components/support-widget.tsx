@@ -1,12 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCheck, Headset, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
+  Headset,
+  Maximize2,
+  Minimize2,
+  X,
+} from 'lucide-react';
 
 import { BRAND } from '@/modules/content';
 import type { ConversationDto, MessageDto } from '@/modules/support';
 import { useOwnConversation } from '@/shared/firebase/use-support-realtime';
 import { cn } from '@/shared/lib/cn';
+import { useEscape, useScrollLock } from '@/shared/lib/hooks';
 import { ChatComposer, type ComposerAttachment } from '@/shared/ui/chat/chat-composer';
 import { useAttachment } from '@/shared/ui/chat/use-attachment';
 
@@ -46,6 +56,37 @@ import { CHAT_WALLPAPER, dayLabelFor, utcDayKey } from './chat-surface';
 
 const OPTIMISTIC_PREFIX = 'pending:';
 
+/**
+ * How much room the chat is taking.
+ *
+ * ── Three states, because they answer three different questions ───────────────
+ *  - `normal`  — the docked panel. The default, and what most conversations want.
+ *  - `full`    — the whole viewport. A long transcript, a screenshot somebody is
+ *                reading, or a phone, where a 23rem panel over a page nobody is
+ *                looking at is wasted screen.
+ *  - `collapsed` — the title bar alone, still docked. "Not now, but do not put it
+ *                away": the conversation stays open, the connection stays up, and
+ *                the unread count stays where it can be seen.
+ *
+ * Closing to the bubble is the fourth, and it already existed.
+ */
+type ChatWindow = 'normal' | 'full' | 'collapsed';
+
+/**
+ * The preferred size, remembered per browser.
+ *
+ * Only `normal` and `full` are kept. Collapsing is a gesture about this moment,
+ * not a preference — reopening tomorrow into a title bar with no visible reason
+ * would read as the chat being broken.
+ */
+const WINDOW_KEY = 'novex.support.window';
+
+/**
+ * How far the server's clock may sit behind this browser's and still count as
+ * "after". Only used to tell a fresh echo from an identical older message.
+ */
+const CLOCK_SKEW_MS = 2 * 60_000;
+
 export function SupportWidget({
   userId,
   initialConversation,
@@ -56,6 +97,7 @@ export function SupportWidget({
   initialMessages: readonly MessageDto[];
 }) {
   const [open, setOpen] = useState(false);
+  const [windowMode, setWindowMode] = useState<ChatWindow>('normal');
   const [draft, setDraft] = useState('');
   /** How many sends are in flight. A count, because more than one can be. */
   const [inFlight, setInFlight] = useState(0);
@@ -116,19 +158,48 @@ export function SupportWidget({
   });
 
   const shown = useMemo(() => {
-    const confirmed = new Set(messages.map((message) => message.id));
     /*
-     * Dropped by id. The optimistic copy starts with one of its own and takes the
-     * server's the moment the POST answers, so the listener's echo of that id is
-     * what removes it.
+     * An optimistic bubble stops being drawn once the transcript is carrying it.
      *
-     * It used to compare bodies, on the reasoning that the server assigns the id
-     * so an optimistic copy could never match one. The cost was that saying the
-     * same thing twice — "hello", "ok", "any update?" — showed nothing at all the
-     * second time, because the first copy was already in the transcript and the
-     * new bubble was filtered out before it could be drawn.
+     * ── Two ways to know that, because one is not enough ──────────────────────
+     * By id, once the POST answers and the copy on screen has adopted the id the
+     * server gave it. That is exact — but it is also the *slow* half, because the
+     * POST does not answer until the message, the thread summary and the push are
+     * all written, and the Firestore listener has usually delivered the message
+     * seconds before that. For those seconds the same message is on screen twice.
+     *
+     * So also by content, against messages the transcript did not have when this
+     * one was typed. Each confirmed message is consumed by at most one optimistic
+     * copy, so saying "ok" twice needs two echoes to clear two bubbles.
+     *
+     * Matching on body alone was the original rule and it was wrong the other way:
+     * an "ok" already in the transcript from an hour ago swallowed the new one
+     * before it could be drawn. `sentAt` is what separates the two cases.
      */
-    return [...messages, ...pending.filter((message) => !confirmed.has(message.id))];
+    const byId = new Set(messages.map((message) => message.id));
+    const claimed = new Set<number>();
+
+    const unconfirmed = pending.filter((optimistic) => {
+      if (byId.has(optimistic.id)) return false;
+
+      const echo = messages.findIndex(
+        (message, index) =>
+          !claimed.has(index) &&
+          message.author === 'customer' &&
+          message.body === optimistic.body &&
+          (message.attachmentId ?? null) === (optimistic.attachmentId ?? null) &&
+          // Not an older identical message. The allowance is for a client clock
+          // that disagrees with the server's; when it is wider than that, the id
+          // check above still clears the bubble a moment later.
+          Date.parse(message.sentAt) >= Date.parse(optimistic.sentAt) - CLOCK_SKEW_MS,
+      );
+
+      if (echo === -1) return true;
+      claimed.add(echo);
+      return false;
+    });
+
+    return [...messages, ...unconfirmed];
   }, [messages, pending]);
 
   /**
@@ -145,10 +216,75 @@ export function SupportWidget({
     [shown, unreadFromMe],
   );
 
+  const collapsed = windowMode === 'collapsed';
+  const full = windowMode === 'full';
+
+  // Restored after mount, never in an initialiser: the server has no storage, and a
+  // guess would render one size on each side and fail hydration. Same shape as the
+  // console rail's `restored` flag.
+  const [restored, setRestored] = useState(false);
+  if (!restored && typeof window !== 'undefined') {
+    setRestored(true);
+    try {
+      if (window.localStorage.getItem(WINDOW_KEY) === 'full') setWindowMode('full');
+    } catch {
+      /* storage refused — the default stands */
+    }
+  }
+
+  const remember = useCallback((next: ChatWindow) => {
+    setWindowMode(next);
+    if (next === 'collapsed') return;
+    try {
+      window.localStorage.setItem(WINDOW_KEY, next);
+    } catch {
+      /* non-fatal: the size is right for this visit either way */
+    }
+  }, []);
+
+  // The whole viewport means the page behind it must not scroll under the finger.
+  useScrollLock(open && full);
+
+  /*
+   * And the page's reserved scrollbar goes with it.
+   *
+   * `useScrollLock` locks `body`, but the scrollbar belongs to the document
+   * element — and `base.css` reserves its width permanently with
+   * `scrollbar-gutter: stable`, which is right for the site: a page that grows
+   * past the viewport does not shift sideways when the scrollbar appears.
+   *
+   * A fixed `inset-0` element is laid out inside the viewport *minus* that
+   * reserved gutter, so "full screen" left an eleven-pixel strip of page down the
+   * right-hand edge. Hiding the overflow is not enough — a stable gutter is
+   * reserved whether or not anything scrolls — so the reservation is lifted too,
+   * for exactly as long as the chat is covering the screen. Both are put back on
+   * the way out, and neither shift is visible: the chat is over all of it.
+   */
+  useEffect(() => {
+    if (!open || !full) return;
+
+    const root = document.documentElement;
+    const previous = { overflow: root.style.overflow, gutter: root.style.scrollbarGutter };
+    root.style.overflow = 'hidden';
+    root.style.scrollbarGutter = 'auto';
+
+    return () => {
+      root.style.overflow = previous.overflow;
+      root.style.scrollbarGutter = previous.gutter;
+    };
+  }, [open, full]);
+  // Escape steps out of full screen rather than closing: somebody who has just
+  // expanded the chat and hits Escape wants the page back, not the conversation
+  // put away. Nothing is bound in the docked sizes, where Escape belongs to the page.
+  useEscape(() => remember('normal'), open && full);
+
   useEffect(() => {
     const node = threadRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [shown.length, open]);
+    // `windowMode` is in here because expanding or collapsing changes the height of
+    // the scroller, and a thread that reopens part-way up is a thread that looks
+    // like it lost the last message.
+  }, [shown.length, open, windowMode]);
 
   // Kept current for the queued sends above, in effects rather than during render:
   // a ref written while rendering is what React's compiler refuses, and rightly.
@@ -307,7 +443,12 @@ export function SupportWidget({
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          // Never back into a title bar: collapsing was about the moment it
+          // happened, and the moment ended when this was pressed.
+          if (collapsed) setWindowMode('normal');
+          setOpen(true);
+        }}
         /*
          * Clears the mobile tab bar, which is fixed to the bottom until `lg` and
          * was covering this button on every phone and tablet width. The safe-area
@@ -328,107 +469,200 @@ export function SupportWidget({
 
   return (
     <div
-      // The open thread, updating itself: a reply is not also announced by the
-      // operating system while it is arriving here. Only while live — polling
-      // shows a reply seconds late, and the notification is how they hear sooner.
-      data-live-surface={status === 'live' ? 'support-thread' : undefined}
-      // Same clearance as the button, and a height that accounts for it — the
-      // panel was measured against the full viewport and ran under the bar.
-      className="fixed right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-[34rem] max-h-[calc(100dvh-9rem)] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl border border-line bg-bg-elev shadow-float lg:bottom-5 lg:max-h-[calc(100dvh-2.5rem)]"
+      /*
+       * The open thread, updating itself: a reply is not also announced by the
+       * operating system while it is arriving here. Only while live — polling
+       * shows a reply seconds late, and the notification is how they hear sooner.
+       *
+       * And only while the transcript is actually on screen. Collapsed, the chat is
+       * a title bar: the reply is not being read, so suppressing the notification
+       * would be the one case where somebody is told nothing at all.
+       */
+      data-live-surface={status === 'live' && !collapsed ? 'support-thread' : undefined}
+      className={cn(
+        'fixed flex flex-col overflow-hidden border border-line bg-bg-elev shadow-float',
+        full
+          ? // Edge to edge, and above the mobile tab bar, which is also `z-40` and
+            // would otherwise sit on top of a chat covering the whole screen. No
+            // rounding: a sliver of page around the outside reads as a dialog that
+            // has been placed wrong rather than a window filling the screen.
+            'inset-0 z-50 rounded-none'
+          : cn(
+              // Same clearance as the button, and a height that accounts for it —
+              // the panel was measured against the full viewport and ran under the
+              // mobile tab bar.
+              'z-40 right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] w-[min(23rem,calc(100vw-2.5rem))] rounded-xl lg:bottom-5',
+              collapsed
+                ? // The header's own height, whatever that turns out to be.
+                  'h-auto'
+                : 'h-[34rem] max-h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-2.5rem)]',
+            ),
+      )}
     >
-      <header className="flex items-center gap-3 border-b border-line bg-surface px-3 py-2.5">
+      <header
+        className={cn(
+          'flex shrink-0 items-center gap-3 bg-surface px-3 py-2.5',
+          !collapsed && 'border-b border-line',
+        )}
+      >
         <span
           aria-hidden
           className="grid size-9 shrink-0 place-items-center rounded-full bg-brand/20 text-brand-soft"
         >
           <Headset className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-fg">{BRAND.name} Support</p>
-          {/* Where WhatsApp shows "online". Ours reports the connection, because
-              that is what this application actually knows — nothing here tracks
-              whether an agent is at their desk. */}
-          <p className="flex items-center gap-1.5 truncate text-2xs text-fg-subtle">
-            {/* A customer is never told about a Firebase setting. Polling is a
-                working conversation on a timer, so it says so plainly and nothing
-                more — the specifics belong on the operator's screen. */}
-            {status === 'live' ? (
-              <>
-                <span aria-hidden className="size-1.5 rounded-full bg-up" />
-                Connected
-              </>
-            ) : status === 'connecting' ? (
-              'Connecting…'
-            ) : status === 'polling' ? (
-              <>
-                <span aria-hidden className="size-1.5 rounded-full bg-warn" />
-                Checking for replies
-              </>
-            ) : (
-              'Offline — messages still send'
-            )}
-          </p>
-        </div>
         <button
           type="button"
-          onClick={() => setOpen(false)}
-          className="grid size-8 shrink-0 place-items-center rounded-full text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          // The whole title is the way back up, the way every chat dock behaves.
+          // Inert when the transcript is already showing, so it never steals a
+          // click meant for the text behind it.
+          onClick={collapsed ? () => remember('normal') : undefined}
+          disabled={!collapsed}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
         >
-          <X className="size-4" />
-          <span className="sr-only">Close support</span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-semibold text-fg">
+                {BRAND.name} Support
+              </span>
+              {collapsed && unread > 0 ? (
+                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-brand text-2xs font-semibold text-on-brand">
+                  {unread}
+                </span>
+              ) : null}
+            </span>
+
+            {/* Where WhatsApp shows "online". Ours reports the connection, because
+                that is what this application actually knows — nothing here tracks
+                whether an agent is at their desk. */}
+            <span className="flex items-center gap-1.5 truncate text-2xs text-fg-subtle">
+              {/* A customer is never told about a Firebase setting. Polling is a
+                  working conversation on a timer, so it says so plainly and nothing
+                  more — the specifics belong on the operator's screen. */}
+              {status === 'live' ? (
+                <>
+                  <span aria-hidden className="size-1.5 rounded-full bg-up" />
+                  Connected
+                </>
+              ) : status === 'connecting' ? (
+                'Connecting…'
+              ) : status === 'polling' ? (
+                <>
+                  <span aria-hidden className="size-1.5 rounded-full bg-warn" />
+                  Checking for replies
+                </>
+              ) : (
+                'Offline — messages still send'
+              )}
+            </span>
+          </span>
         </button>
+
+        {/*
+          Collapse, resize, put away.
+
+          Three controls rather than one, because they are three different wants:
+          keep it open but out of the way, give it the whole screen, or be done with
+          it. Each keeps the conversation — nothing here ends a thread.
+        */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <HeaderButton
+            label={collapsed ? 'Expand the chat' : 'Collapse the chat'}
+            onClick={() => remember(collapsed ? 'normal' : 'collapsed')}
+          >
+            {collapsed ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </HeaderButton>
+
+          <HeaderButton
+            label={full ? 'Leave full screen' : 'Full screen'}
+            onClick={() => remember(full ? 'normal' : 'full')}
+          >
+            {full ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </HeaderButton>
+
+          <HeaderButton label="Minimise the chat" onClick={() => setOpen(false)}>
+            <X className="size-4" />
+          </HeaderButton>
+        </div>
       </header>
 
-      <div
-        ref={threadRef}
-        className="relative flex-1 overflow-y-auto bg-bg-sunken px-3 py-3"
-        // The wallpaper. Painted on the scroll container rather than on a child, so
-        // it stays put while the messages move over it — the way a chat ground does.
-        style={{
-          backgroundImage: CHAT_WALLPAPER,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '220px 220px',
-        }}
-      >
-        {/* The pattern is drawn in `currentColor`; this veil is what keeps it a
-            whisper rather than a rash, in either theme. */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-bg-sunken/80" />
+      {collapsed ? null : (
+        <>
+        <div
+          ref={threadRef}
+          className="relative flex-1 overflow-y-auto bg-bg-sunken px-3 py-3"
+          // The wallpaper. Painted on the scroll container rather than on a child, so
+          // it stays put while the messages move over it — the way a chat ground does.
+          style={{
+            backgroundImage: CHAT_WALLPAPER,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '220px 220px',
+          }}
+        >
+          {/* The pattern is drawn in `currentColor`; this veil is what keeps it a
+              whisper rather than a rash, in either theme. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-bg-sunken/80" />
 
-        <div className="relative">
-          {shown.length === 0 ? (
-            <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-6 text-center">
-              <span className="grid size-12 place-items-center rounded-full bg-brand/15 text-brand-soft">
-                <Headset className="size-5" />
-              </span>
-              <p className="text-xs leading-relaxed text-fg-muted">
-                Ask anything about your account, a deposit or a withdrawal. An agent
-                sees your account beside your message, so there is no reference to
-                look up.
-              </p>
-            </div>
-          ) : (
-            <Thread messages={shown} readBoundary={readBoundary} undelivered={undelivered} />
-          )}
+          <div className="relative">
+            {shown.length === 0 ? (
+              <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-6 text-center">
+                <span className="grid size-12 place-items-center rounded-full bg-brand/15 text-brand-soft">
+                  <Headset className="size-5" />
+                </span>
+                <p className="text-xs leading-relaxed text-fg-muted">
+                  Ask anything about your account, a deposit or a withdrawal. An agent
+                  sees your account beside your message, so there is no reference to
+                  look up.
+                </p>
+              </div>
+            ) : (
+              <Thread messages={shown} readBoundary={readBoundary} undelivered={undelivered} />
+            )}
+          </div>
         </div>
-      </div>
 
-      {problem !== null ? (
-        <p role="status" className="border-t border-down/35 bg-down/8 px-4 py-2 text-2xs text-fg">
-          {problem}
-        </p>
-      ) : null}
+        {problem !== null ? (
+          <p role="status" className="border-t border-down/35 bg-down/8 px-4 py-2 text-2xs text-fg">
+            {problem}
+          </p>
+        ) : null}
 
-      <ChatComposer
-        value={draft}
-        onChange={setDraft}
-        onSend={() => void send()}
-        onAttach={(file) => void attach(file)}
-        attachment={attachment}
-        onClearAttachment={() => setAttachment(null)}
-        uploading={uploading}
-        sending={inFlight > 0}
-      />
+        <ChatComposer
+          value={draft}
+          onChange={setDraft}
+          onSend={() => void send()}
+          onAttach={(file) => void attach(file)}
+          attachment={attachment}
+          onClearAttachment={() => setAttachment(null)}
+          uploading={uploading}
+          sending={inFlight > 0}
+        />
+        </>
+      )}
     </div>
+  );
+}
+
+/** One of the chat window's controls. Square, quiet, and labelled for a reader. */
+function HeaderButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="grid size-8 shrink-0 place-items-center rounded-full text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+    >
+      {children}
+    </button>
   );
 }
 

@@ -135,6 +135,36 @@ function currentWindow(): ConsoleWindow {
 }
 
 /**
+ * Whether this is an iPhone or an iPad.
+ *
+ * Asked for one reason: Apple delivers web push only to a site added to the Home
+ * Screen, so "this browser cannot receive notifications" has a different remedy
+ * there than anywhere else, and telling an iPhone owner to open Chrome would be
+ * advice that cannot work — Chrome on iOS is the same engine underneath.
+ *
+ * An iPad reports itself as a Mac, which is why the touch check is there: a real
+ * Mac has no touch points, and desktop Safari is not what this is about.
+ */
+export function useApplePlatform(): boolean {
+  // Read through a store with nothing to subscribe to: the value cannot change for
+  // the life of the page, and the only reason this is not computed during render is
+  // that the server has no `navigator` and must answer false to hydrate cleanly.
+  return useSyncExternalStore(neverChanges, isApplePlatform, () => false);
+}
+
+const neverChanges = (): (() => void) => () => {};
+
+function isApplePlatform(): boolean {
+  const agent = navigator.userAgent;
+  return (
+    /iPad|iPhone|iPod/.test(agent) ||
+    // An iPad has called itself a Macintosh since iPadOS 13. A real Mac reports no
+    // touch points, so that is what separates them.
+    (agent.includes('Macintosh') && navigator.maxTouchPoints > 1)
+  );
+}
+
+/**
  * Whether this page is the installed app or an ordinary tab.
  *
  * `app` on the server, so nothing that depends on this renders during hydration:

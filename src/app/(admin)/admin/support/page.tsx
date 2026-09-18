@@ -50,10 +50,12 @@ export default async function SupportPage({
   // newest, so the thread panel is filled on arrival too. One extra read, on the one
   // conversation the operator is most likely to open first. Matched against the
   // inbox rather than read by id, so a link can only open a thread the inbox has.
-  const newest =
-    inbox.conversations.find((conversation) => conversation.id === requested) ??
-    inbox.conversations[0] ??
-    null;
+  const asked = typeof requested === 'string' ? requested : null;
+  const matched =
+    asked === null
+      ? null
+      : (inbox.conversations.find((conversation) => conversation.id === asked) ?? null);
+  const newest = matched ?? inbox.conversations[0] ?? null;
   const thread = newest === null ? null : await getSupportThread(newest.id);
 
   return (
@@ -94,6 +96,10 @@ export default async function SupportPage({
             initialThread={{
               conversationId: newest?.id ?? null,
               messages: thread?.messages ?? [],
+              // True only when a link named this conversation and the inbox has
+              // it. On a phone that is the difference between landing on the
+              // queue and landing in the conversation the notification was about.
+              requested: matched !== null,
             }}
           />
         </>

@@ -11,6 +11,7 @@ import { useScrollLock } from '@/shared/lib/hooks';
 import { CONSOLE_APP } from '../../_lib/console-app';
 import {
   promptInstall,
+  useApplePlatform,
   useConsoleWindow,
   useInstallOffer,
   useInstalledHere,
@@ -120,8 +121,8 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
               Finish setting up this device
             </h2>
             <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-              Approvals, KYC and support all wait on an operator. The console stays
-              locked on this device until it can reach you.
+              Approvals and support wait on an operator. The console stays locked on
+              this device until it can reach you.
             </p>
           </div>
         </header>
@@ -137,14 +138,23 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
             <InstallAction installed={installed} offered={offered} installedHere={installedHere} />
           </Step>
 
+          {/*
+            Not gated behind step 1 any more.
+
+            It used to be, on the reasoning that permission granted inside the
+            installed app is what files the notifications under the console rather
+            than under the browser. That is still true, and the body below still
+            says so — but it is a reason to prefer an order, not a reason to take
+            the switch away. An operator on a phone who cannot install yet, or who
+            simply wants the prompt now, was left looking at a disabled step with
+            nothing to press.
+          */}
           <Step
             index={2}
             done={notified}
             icon={<BellRing className="size-4" />}
             title="Turn on system notifications"
-            body="Alerts reach you while the console is closed. Turn them on inside the installed app, so the operating system files them under the console."
-            locked={!installed}
-            lockedNote="Available once the console is installed and opened as an app."
+            body="Alerts reach you while the console is closed. Best turned on inside the installed app, so your operating system files them under the console rather than the browser."
           >
             <NotificationAction state={state} error={error} onEnable={() => void enable()} />
           </Step>
@@ -162,8 +172,6 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
 function Step({
   index,
   done,
-  locked = false,
-  lockedNote,
   icon,
   title,
   body,
@@ -171,15 +179,13 @@ function Step({
 }: {
   index: number;
   done: boolean;
-  locked?: boolean;
-  lockedNote?: string;
   icon: ReactNode;
   title: string;
   body: string;
   children: ReactNode;
 }) {
   return (
-    <li className={cn('flex gap-3.5 px-6 py-5', locked && !done && 'opacity-55')}>
+    <li className="flex gap-3.5 px-6 py-5">
       <span
         aria-hidden
         className={cn(
@@ -200,8 +206,6 @@ function Step({
               <Check className="size-3.5" />
               Done on this device
             </span>
-          ) : locked ? (
-            <span className="text-fg-subtle">{lockedNote}</span>
           ) : (
             children
           )}
@@ -252,6 +256,21 @@ function InstallAction({
   );
 }
 
+/**
+ * The switch, and what to say when there is nothing to switch.
+ *
+ * The button asks the operating system directly — `Notification.requestPermission`
+ * by way of `usePush().enable` — so it raises the real system prompt wherever it
+ * is pressed: Android's, Windows', macOS', or iOS's inside a Home Screen app. It
+ * is always offered, never gated behind the install step, because a prompt an
+ * operator can reach is worth more than a tidy order.
+ *
+ * What differs by platform is only the sentence shown when the browser admits it
+ * cannot take a subscription at all. On Android and desktop that means the wrong
+ * browser; on iPhone and iPad it means the console is not on the Home Screen yet,
+ * and "use Chrome" would be advice that cannot work there — every iOS browser is
+ * the same engine, and none of them take web push from a tab.
+ */
 function NotificationAction({
   state,
   error,
@@ -261,18 +280,22 @@ function NotificationAction({
   error: string | null;
   onEnable: () => void;
 }) {
+  const apple = useApplePlatform();
+
   return (
     <>
       {state === 'denied' ? (
         <p className="leading-relaxed text-fg-muted">
-          Notifications are blocked for this site. Allow them in this browser’s site
-          settings — the padlock or icon beside the address, then Notifications —
-          and reload.
+          Notifications are blocked for this site.{' '}
+          {apple
+            ? 'Allow them in Settings → Notifications → Console on this device, then check again.'
+            : 'Allow them in this browser’s site settings — the padlock or icon beside the address, then Notifications — and reload.'}
         </p>
       ) : state === 'unsupported' ? (
         <p className="leading-relaxed text-fg-muted">
-          This browser cannot receive push notifications. Open the console in Chrome
-          or Edge.
+          {apple
+            ? 'iPhone and iPad only deliver notifications to an app on the Home Screen. Tap Share → Add to Home Screen, open the console from there, and this switch will work.'
+            : 'This browser cannot receive push notifications. Open the console in Chrome or Edge.'}
         </p>
       ) : (
         <button

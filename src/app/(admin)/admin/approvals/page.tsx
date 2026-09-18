@@ -133,7 +133,7 @@ export default async function ApprovalsPage() {
               const account = accounts.get(claim.userId);
 
               return (
-                <Panel key={claim.id}>
+                <Panel key={claim.id} id={`claim-${claim.id}`}>
                   <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr_1fr]">
                     <div className="min-w-0">
                       <p className="font-mono text-lg font-semibold text-fg">
@@ -225,7 +225,7 @@ export default async function ApprovalsPage() {
             const dual = withdrawal.approvalsRequired > 1;
 
             return (
-              <Panel key={withdrawal.id}>
+              <Panel key={withdrawal.id} id={`withdrawal-${withdrawal.id}`}>
                 <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

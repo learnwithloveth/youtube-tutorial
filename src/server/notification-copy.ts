@@ -252,6 +252,18 @@ function decidedByOperator(reference: string | null): boolean {
   return reference !== null && reference.includes(' by ');
 }
 
+/**
+ * A queue page, pointed at one row.
+ *
+ * Returns the bare queue when there is no reference to point at, rather than a
+ * fragment that matches nothing: a link that scrolls nowhere is worse than one
+ * that lands at the top, because it looks like the row is missing.
+ */
+function queueAnchor(page: string, prefix: string, reference: string | null): string {
+  if (reference === null || reference.length === 0) return page;
+  return `${page}#${prefix}-${encodeURIComponent(reference)}`;
+}
+
 export function adminCopyFor(
   event: AdminFeedEvent,
   customer: { readonly id: string; readonly email: string },
@@ -275,7 +287,20 @@ export function adminCopyFor(
         ]
           .filter((part): part is string => part !== null)
           .join(' · '),
-        link: '/admin/live',
+        /*
+         * This person, not the board of everybody.
+         *
+         * It used to be `/admin/live`, which answers "who is here" — but the
+         * notification has already answered that, by name. What an operator opens
+         * it to see is what *this* customer is doing, and their account page is
+         * the only screen carrying both halves: the live map overlay showing where
+         * they are, and the activity timeline showing what they have done.
+         *
+         * A signed-out visitor still goes to the board. There is no account page
+         * to open, and the board is the whole of what is known about them — see
+         * `visitorCopyFor`.
+         */
+        link: account,
         tone: 'brand',
         tag: `visit-${customer.id}`,
       };
@@ -289,11 +314,23 @@ export function adminCopyFor(
         tone: 'brand',
       };
     case 'withdrawal-requested':
-      return { title: 'Withdrawal requested', body: about(event.detail), link: '/admin/approvals', tone: 'warn' };
+      return {
+        title: 'Withdrawal requested',
+        body: about(event.detail),
+        // The row itself. A queue twenty deep is not "where to act" when the
+        // notification was about one withdrawal — see `Panel`'s `id`.
+        link: queueAnchor('/admin/approvals', 'withdrawal', event.reference),
+        tone: 'warn',
+      };
     case 'deposit-recorded':
       return decidedByOperator(event.reference)
         ? { title: 'Deposit credited', body: about(event.detail), link: account, tone: 'up' }
-        : { title: 'Deposit claim submitted', body: about(event.detail), link: '/admin/approvals', tone: 'warn' };
+        : {
+            title: 'Deposit claim submitted',
+            body: about(event.detail),
+            link: queueAnchor('/admin/approvals', 'claim', event.reference),
+            tone: 'warn',
+          };
     case 'verification-submitted':
       return { title: 'Identity documents submitted', body: customer.email, link: '/admin/kyc', tone: 'warn' };
     case 'sign-in':

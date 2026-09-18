@@ -135,7 +135,10 @@ describe('adminCopyFor', () => {
     expect(adminCopyFor(event({ kind: 'visit-started', path: '/app/wallet' }), customer)).toEqual({
       title: 'Customer online',
       body: 'ada@example.com is on /app/wallet',
-      link: '/admin/live',
+      // Their account page, not the live board: the notification has already said
+      // who it is, and this is the one screen carrying both where they are and
+      // what they have been doing.
+      link: '/admin/users/user-7',
       tone: 'brand',
       tag: 'visit-user-7',
     });
@@ -162,13 +165,26 @@ describe('adminCopyFor', () => {
     expect(copy?.link).toBe('/admin/support?conversation=conv%2F1');
   });
 
-  it('sends what is waiting on an operator to the queue that holds it', () => {
-    expect(adminCopyFor(event({ kind: 'withdrawal-requested', detail: '0.5 BTC' }), customer)).toMatchObject({
+  it('sends what is waiting on an operator to the row that holds it', () => {
+    expect(
+      adminCopyFor(
+        event({ kind: 'withdrawal-requested', reference: 'w-9', detail: '0.5 BTC' }),
+        customer,
+      ),
+    ).toMatchObject({
       title: 'Withdrawal requested',
       body: 'ada@example.com · 0.5 BTC',
-      link: '/admin/approvals',
+      link: '/admin/approvals#withdrawal-w-9',
     });
     expect(adminCopyFor(event({ kind: 'verification-submitted' }), customer)?.link).toBe('/admin/kyc');
+  });
+
+  it('falls back to the bare queue when there is no row to point at', () => {
+    // A fragment matching nothing scrolls nowhere, which reads as the row having
+    // vanished. Landing at the top of the queue is the honest answer.
+    expect(
+      adminCopyFor(event({ kind: 'withdrawal-requested', detail: '0.5 BTC' }), customer)?.link,
+    ).toBe('/admin/approvals');
   });
 
   it('tells a customer’s deposit claim from an operator crediting it', () => {
@@ -180,7 +196,10 @@ describe('adminCopyFor', () => {
       event({ kind: 'deposit-recorded', reference: 'claim-1 by ops@example.com', detail: '50 USDT credited' }),
       customer,
     );
-    expect(claim).toMatchObject({ title: 'Deposit claim submitted', link: '/admin/approvals' });
+    expect(claim).toMatchObject({
+      title: 'Deposit claim submitted',
+      link: '/admin/approvals#claim-claim-1',
+    });
     expect(credit).toMatchObject({ title: 'Deposit credited', link: '/admin/users/user-7' });
   });
 

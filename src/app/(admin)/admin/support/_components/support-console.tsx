@@ -77,7 +77,12 @@ export function SupportConsole({
   operatorId: string;
   initialConversations: readonly ConversationDto[];
   initialCustomers: Readonly<Record<string, SupportCustomerDto>>;
-  initialThread: { conversationId: string | null; messages: readonly MessageDto[] };
+  initialThread: {
+    conversationId: string | null;
+    messages: readonly MessageDto[];
+    /** A link named this conversation — see the page. */
+    requested?: boolean;
+  };
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(initialThread.conversationId);
   /**
@@ -86,8 +91,13 @@ export function SupportConsole({
    * False on arrival, so a phone opens on the list rather than on whichever
    * conversation the server happened to prefill. Irrelevant above `lg`, where both
    * panes are on screen at once.
+   *
+   * Except when a link asked for this one. A notification about a message is a
+   * request to read that message, and an operator who tapped it on their phone
+   * had to find the conversation in the queue again — which is the notification
+   * failing at the one job it has.
    */
-  const [opened, setOpened] = useState(false);
+  const [opened, setOpened] = useState(initialThread.requested === true);
   const wide = useMediaQuery('(min-width: 1024px)');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
