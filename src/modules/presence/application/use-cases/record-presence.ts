@@ -65,6 +65,16 @@ export interface RecordPresenceResult {
    * `server/admin-alerts.ts`. It is false for anonymous traffic.
    */
   readonly arrived: boolean;
+  /**
+   * True on the first beat from a browsing context, whoever is behind it.
+   *
+   * Somebody opening the site, rather than somebody opening it *as an account*:
+   * `arrived` is silent for the signed-out traffic that is most of a public site,
+   * and a console watching who is on the page needs to hear about that too. One
+   * per context, so moving between pages is not a second landing — the row exists
+   * by then. It is false for a tab reporting that it is closing.
+   */
+  readonly landed: boolean;
   /** The page this beat reported, normalised to a route — what an arrival lands on. */
   readonly path: string;
   /**
@@ -131,6 +141,8 @@ export function createRecordPresence(deps: PresenceDependencies) {
 
     const existing = await deps.presences.find(visitorId);
     const arrived = input.userId !== null && (existing === null || existing.userId !== input.userId);
+    // No row means nothing has reported from this context before: a landing.
+    const landed = existing === null;
 
     if (existing !== null && !mayClaim(existing.userId, input.userId)) {
       // The row belongs to a signed-in account and this request is not that
@@ -177,6 +189,7 @@ export function createRecordPresence(deps: PresenceDependencies) {
         nextBeatMs: 0,
         // A tab that is closing has not arrived anywhere.
         arrived: false,
+        landed: false,
         path: presence.path,
         // A closing tab leaves the page it was on, which is the last chance to
         // record how long it was open.
@@ -203,6 +216,7 @@ export function createRecordPresence(deps: PresenceDependencies) {
       visitorId,
       nextBeatMs: HEARTBEAT_INTERVAL_MS,
       arrived,
+      landed,
       path: presence.path,
       departedPage: leftPath === null ? null : departure(leftPath, leftSince, now),
       observed: observationOf(presence, deps),

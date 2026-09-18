@@ -3,7 +3,7 @@ import { after } from 'next/server';
 import { networkContextFrom, type PresenceReport } from '@/modules/presence/server';
 import { logger } from '@/platform/observability/logger';
 import { sweepActivity } from '@/server/activity';
-import { announceArrival } from '@/server/admin-alerts';
+import { announceVisit } from '@/server/admin-alerts';
 import { recordVisitorPresence, sweepPresence } from '@/server/presence';
 
 /**
@@ -113,12 +113,13 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
-  // A customer who has just arrived is announced to operators — after the
-  // response, because it reads presence and the trail and a heartbeat should not
-  // wait on either. `announceArrival` decides whether this tab is a visit.
-  if (outcome.kind === 'recorded' && outcome.user !== null && outcome.result.arrived) {
+  // Somebody who has just arrived is announced to operators — signed in or not,
+  // which is most of the traffic a public site has. After the response, because it
+  // reads presence and the trail and a heartbeat should not wait on either;
+  // `announceVisit` decides whether this beat is a visit worth an interruption.
+  if (outcome.kind === 'recorded' && (outcome.result.landed || outcome.result.arrived)) {
     const { user, result } = outcome;
-    after(() => announceArrival({ user, result }));
+    after(() => announceVisit({ user, result }));
   }
 
   if (outcome.kind === 'not-configured' || outcome.kind === 'unavailable') {

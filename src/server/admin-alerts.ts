@@ -10,7 +10,12 @@ import { toUserId, type UserId } from '@/shared/kernel/ids';
 
 import { activity, getActivityForUser, recordActivity, toEventLocation } from './activity';
 import { identity } from './auth';
-import { ADMIN_FEED_KINDS, adminCopyFor, type NotificationTone } from './notification-copy';
+import {
+  ADMIN_FEED_KINDS,
+  adminCopyFor,
+  visitorCopyFor,
+  type NotificationTone,
+} from './notification-copy';
 import { hasOtherOpenTab } from './presence';
 import { support } from './support';
 
@@ -109,19 +114,40 @@ export function alertAdmins(command: RecordActivityCommand): void {
 }
 
 /**
- * Tells operators a customer has arrived, when a tab's arrival is a visit.
+ * Tells operators somebody is on the site.
  *
- * A tab arriving is not always somebody arriving. It is not when the customer
- * already has another tab open, or had one moments ago — and it has already been
- * said when they signed in a moment ago, because the sign-in itself is announced.
- * What is left is the thing worth an interruption: somebody who was not here, and
- * now is.
+ * ── Two kinds of arrival, one decision ────────────────────────────────────────
+ * Most people on a public exchange are signed out, and the console exists to watch
+ * them too, so a landing is announced whether or not there is an account behind
+ * it. What differs is what can be said and where it is kept:
+ *
+ *  - a customer's arrival is an event on their trail, so it is recorded and then
+ *    pushed, and the console's bell shows it with everything else they have done;
+ *  - a signed-out visitor has no account and therefore no trail. That arrival is
+ *    a push and a row on the live board, built from the heartbeat itself.
+ *
+ * ── Once per visit ────────────────────────────────────────────────────────────
+ * A landing is a browsing context's first beat, so reading five pages is one
+ * notification, not five. For a customer there is more to rule out: a tab arriving
+ * is not somebody arriving when they already have another tab open, or had one
+ * moments ago, and it has already been said if they signed in a moment ago —
+ * because the sign-in itself is announced.
+ *
+ * Operators' own browsing is never announced. Neither is a crawler's — but only
+ * where there is no account: somebody signed in is a person however their browser
+ * describes itself, and a user agent is a claim, not a fact.
  */
-export async function announceArrival(input: {
-  readonly user: { readonly id: UserId; readonly role: string };
+export async function announceVisit(input: {
+  readonly user: { readonly id: UserId; readonly role: string } | null;
   readonly result: RecordPresenceResult;
 }): Promise<void> {
   const { user, result } = input;
+
+  if (user === null) {
+    await announceVisitor(result);
+    return;
+  }
+
   if (!result.arrived || user.role !== 'customer') return;
 
   try {
@@ -145,6 +171,50 @@ export async function announceArrival(input: {
     });
   } catch (error) {
     logger.warn({ event: 'arrival_announce_failed', module: 'presence' }, error);
+  }
+}
+
+/**
+ * Pushes a signed-out visitor's landing to every operator device.
+ *
+ * Nothing is recorded: the trail is an account's history and this visitor has no
+ * account. What an operator gets is the notification and the live board behind it,
+ * which is where the rest of the answer — who else is here, where they are now —
+ * already lives.
+ *
+ * The line logged names the page and nothing else. A visitor's city and browser
+ * belong in the notification an operator asked for, not in a log file that outlives
+ * the visit and is read by anyone with access to it.
+ */
+async function announceVisitor(result: RecordPresenceResult): Promise<void> {
+  // A crawler that runs JavaScript beats like a browser and would otherwise be
+  // announced like one. Half the traffic to a public site is bots — see the parser
+  // in `presence/infrastructure/http` — and none of it is somebody arriving.
+  if (!result.landed || result.observed.device === 'bot') return;
+
+  try {
+    const context = support();
+    if (context === null) return;
+
+    const copy = visitorCopyFor({
+      path: result.path,
+      visitorId: result.visitorId,
+      location: toEventLocation(result.observed.location),
+      browser: result.observed.browser,
+      device: result.observed.device,
+    });
+
+    logger.info({ event: 'visitor_announced', module: 'presence', path: result.path });
+
+    await context.dependencies.push.notify({
+      audience: 'operators',
+      title: copy.title,
+      body: copy.body,
+      link: copy.link,
+      tag: copy.tag,
+    });
+  } catch (error) {
+    logger.warn({ event: 'visitor_announce_failed', module: 'presence' }, error);
   }
 }
 

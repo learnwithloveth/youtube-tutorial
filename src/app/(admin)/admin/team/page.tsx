@@ -104,47 +104,6 @@ export default async function AdminTeamPage() {
           viewerId={viewer.id}
         />
       </Panel>
-
-      <Panel>
-        <PanelHeader
-          title="What an administrator can do"
-          subtitle="Two access tiers, not a matrix"
-        />
-
-        <ul className="space-y-3 text-xs leading-relaxed text-fg-muted">
-          <li className="flex gap-3">
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-up" />
-            <span>
-              <span className="font-medium text-fg">Everything in this console.</span>{' '}
-              Approve deposits and withdrawals, read any account and its activity,
-              answer support conversations, and suspend another administrator.{' '}
-              <span className="text-fg">There is no narrower role</span> — the gate is
-              a single check on whether an account holds the operator tier.
-            </span>
-          </li>
-          <li className="flex gap-3">
-            <Terminal className="mt-0.5 size-4 shrink-0 text-brand-soft" />
-            <span>
-              <span className="font-medium text-fg">Promotion happens at a terminal.</span>{' '}
-              Granting the operator tier is{' '}
-              <code className="rounded bg-surface px-1 py-0.5 font-mono text-2xs text-fg">
-                pnpm admin:grant you@example.com
-              </code>{' '}
-              against the database, never a button here — because it hands somebody
-              the ability to move money, and that should take a deliberate act with
-              shell access rather than a click in a browser somebody left open.
-              Withdrawing access is the opposite direction, so that <em>is</em> here.
-            </span>
-          </li>
-        </ul>
-
-        <p className="mt-5 border-t border-line pt-4 text-2xs leading-relaxed text-fg-subtle">
-          A six-role permission matrix used to sit here. It was a constant with
-          nothing reading it, on the one screen whose job is to answer who can do
-          what — so it is gone rather than reworded. When roles exist, this is where
-          they will be described.
-        </p>
-      </Panel>
     </>
   );
 }

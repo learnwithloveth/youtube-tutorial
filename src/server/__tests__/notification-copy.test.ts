@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { adminCopyFor, bodyFor, pushFor, type DescribableEvent } from '../notification-copy';
+import {
+  adminCopyFor,
+  bodyFor,
+  pushFor,
+  visitorCopyFor,
+  type DescribableEvent,
+} from '../notification-copy';
 
 function event(overrides: Partial<DescribableEvent> & Pick<DescribableEvent, 'kind'>): DescribableEvent {
   return {
@@ -95,6 +101,24 @@ describe('pushFor', () => {
   });
 });
 
+/** A resolved location, as the trail stores one. `source` is what "near" turns on. */
+function fix(
+  city: string | null,
+  country: string,
+  source: 'device' | 'edge' | 'network' = 'network',
+  region: string | null = null,
+) {
+  return {
+    source,
+    precision: city === null ? ('region' as const) : ('city' as const),
+    city,
+    region,
+    country,
+    latitude: null,
+    longitude: null,
+  };
+}
+
 describe('adminCopyFor', () => {
   const customer = { id: 'user-7', email: 'ada@example.com' };
   const event = (overrides: Partial<Parameters<typeof adminCopyFor>[0]> & Pick<Parameters<typeof adminCopyFor>[0], 'kind'>) => ({
@@ -115,6 +139,21 @@ describe('adminCopyFor', () => {
       tone: 'brand',
       tag: 'visit-user-7',
     });
+  });
+
+  it('carries where they are and what they are on, when the beat knew', () => {
+    const copy = adminCopyFor(
+      event({
+        kind: 'visit-started',
+        path: '/',
+        location: fix('Lagos', 'NG'),
+        browser: 'Chrome',
+        device: 'mobile',
+      }),
+      customer,
+    );
+
+    expect(copy?.body).toBe('ada@example.com is on / · near Lagos, NG · Chrome on mobile');
   });
 
   it('sends a support message to the conversation in the console', () => {
@@ -147,7 +186,7 @@ describe('adminCopyFor', () => {
 
   it('names the customer and where a sign-in came from', () => {
     const copy = adminCopyFor(
-      event({ kind: 'sign-in', browser: 'Chrome', device: 'desktop', location: { city: 'Paris', country: 'FR' } }),
+      event({ kind: 'sign-in', browser: 'Chrome', device: 'desktop', location: fix('Paris', 'FR') }),
       customer,
     );
     expect(copy?.body).toBe('ada@example.com · Chrome · desktop · Paris, FR');
@@ -183,3 +222,66 @@ const NOTIFIABLE_KINDS = [
   'sign-in',
   'receipt-sent',
 ] as const;
+
+/**
+ * A visitor with no account.
+ *
+ * Most people on a public exchange are signed out, so this is the notification an
+ * operator sees most often. It has no name to give, which makes the other three
+ * facts — the page, the place and the browser — the whole of it.
+ */
+describe('visitorCopyFor', () => {
+  const visit = {
+    path: '/',
+    visitorId: 'ctx-42',
+    location: null,
+    browser: null,
+    device: null,
+  };
+
+  it('says where they landed, and sends the operator to the live board', () => {
+    expect(visitorCopyFor(visit)).toEqual({
+      title: 'Visitor online',
+      body: 'on /',
+      link: '/admin/live',
+      tone: 'neutral',
+      tag: 'visit-ctx-42',
+    });
+  });
+
+  it('adds the place and the browser when the beat knew them', () => {
+    const copy = visitorCopyFor({
+      ...visit,
+      path: '/markets',
+      location: fix('Lagos', 'NG', 'device'),
+      browser: 'Safari',
+      device: 'mobile',
+    });
+
+    expect(copy.body).toBe('on /markets · Lagos, NG · Safari on mobile');
+  });
+
+  /* A place resolved from an address is a guess, and the console says so everywhere
+     else. A notification that read the same for both would overstate it. */
+  it('marks a place guessed from the address as approximate', () => {
+    expect(visitorCopyFor({ ...visit, location: fix('Lagos', 'NG') }).body).toBe(
+      'on / · near Lagos, NG',
+    );
+    expect(visitorCopyFor({ ...visit, location: fix('Lagos', 'NG', 'device') }).body).toBe(
+      'on / · Lagos, NG',
+    );
+  });
+
+  it('falls back to the region when no city was resolved, and to nothing at all', () => {
+    expect(visitorCopyFor({ ...visit, location: fix(null, 'NG', 'network', 'Lagos State') }).body).toBe(
+      'on / · near Lagos State, NG',
+    );
+    expect(visitorCopyFor({ ...visit, browser: 'Firefox' }).body).toBe('on / · Firefox');
+  });
+
+  /* One notification per visitor per device: a second landing from the same
+     browsing context replaces the first rather than stacking under it. */
+  it('tags the notification with the browsing context', () => {
+    expect(visitorCopyFor({ ...visit, visitorId: 'ctx-9' }).tag).toBe('visit-ctx-9');
+  });
+});

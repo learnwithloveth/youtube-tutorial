@@ -158,6 +158,74 @@ export const ADMIN_FEED_KINDS: readonly ActivityKind[] = [
 export interface AdminFeedEvent extends DescribableEvent {
   /** The page, for an arrival. Null for everything else. */
   readonly path: string | null;
+  /**
+   * The whole fix, not just the city: an arrival says *how* the place was known,
+   * and that needs `source`. Narrower than the customer's copy, which never says.
+   */
+  readonly location: EventLocation | null;
+}
+
+/**
+ * Where somebody is, in the words the console uses elsewhere.
+ *
+ * "near Lagos, NG" for a place derived from an address, "Lagos, NG" for one the
+ * device gave: a consented fix and a guess from an IP are not the same claim, and
+ * the rest of the console is careful to say which. A notification that flattened
+ * them would assert a precision nobody has.
+ */
+function placeOf(location: EventLocation | null): string | null {
+  if (location === null) return null;
+
+  // City and country is enough to picture. The region earns its place only when
+  // the fix never resolved a city.
+  const named = location.city ?? location.region;
+  const place = [named, location.country].filter((part) => Boolean(part)).join(', ');
+
+  if (place.length === 0) return null;
+  return location.source === 'device' ? place : `near ${place}`;
+}
+
+/** `Chrome on desktop`, or whichever half was recognised. */
+function clientOf(browser: string | null, device: string | null): string | null {
+  if (browser !== null && device !== null) return `${browser} on ${device}`;
+  return browser ?? device;
+}
+
+/** What a visitor with no account is described by: where they are, and on what. */
+export interface VisitorArrival {
+  /** The page they landed on, already normalised to a route. */
+  readonly path: string;
+  readonly visitorId: string;
+  readonly location: EventLocation | null;
+  readonly browser: string | null;
+  readonly device: string | null;
+}
+
+/**
+ * What operators are told when somebody with no account lands on the site.
+ *
+ * ── Not an entry on anybody's trail ───────────────────────────────────────────
+ * The activity trail records what an *account* did, and this visitor has none, so
+ * this copy is built straight from the heartbeat rather than read back from a
+ * stored event. It is a push and a line on the live board; the console's bell
+ * stays what it is, an account's history.
+ *
+ * The link goes to the live board because that is the screen that can answer the
+ * next question — who else is here, and where are they now.
+ */
+export function visitorCopyFor(visit: VisitorArrival): AdminCopy {
+  return {
+    title: 'Visitor online',
+    body:
+      [`on ${visit.path}`, placeOf(visit.location), clientOf(visit.browser, visit.device)]
+        .filter((part): part is string => part !== null)
+        .join(' · '),
+    link: '/admin/live',
+    tone: 'neutral',
+    // One notification per visitor on a device: a second landing from the same
+    // browsing context replaces the first rather than stacking under it.
+    tag: `visit-${visit.visitorId}`,
+  };
 }
 
 export interface AdminCopy {
@@ -197,7 +265,16 @@ export function adminCopyFor(
     case 'visit-started':
       return {
         title: 'Customer online',
-        body: `${customer.email} is on ${event.path ?? 'the site'}`,
+        // The same three facts a signed-out visitor's notification carries, with a
+        // name in front of them — an operator reading both should not have to
+        // decode two formats.
+        body: [
+          `${customer.email} is on ${event.path ?? 'the site'}`,
+          placeOf(event.location),
+          clientOf(event.browser, event.device),
+        ]
+          .filter((part): part is string => part !== null)
+          .join(' · '),
         link: '/admin/live',
         tone: 'brand',
         tag: `visit-${customer.id}`,

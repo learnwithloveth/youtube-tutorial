@@ -219,6 +219,60 @@ describe('recordPresence', () => {
     });
   });
 
+  /**
+   * `landed` is the same question asked without an account: somebody opened the
+   * site. It is what the console watches a public page with, where `arrived` —
+   * silent for signed-out traffic — would say nothing at all.
+   */
+  describe('landing', () => {
+    it('says a signed-out tab has landed, where arriving says nothing', async () => {
+      const record = createRecordPresence(context.deps);
+
+      const first = await record({ report: report(), userId: null, network: NETWORK });
+
+      expect(first.ok && first.value.landed).toBe(true);
+      expect(first.ok && first.value.arrived).toBe(false);
+    });
+
+    it('counts one landing per browsing context, not per page', async () => {
+      const record = createRecordPresence(context.deps);
+
+      await record({ report: report(), userId: null, network: NETWORK });
+      const second = await record({ report: report({ path: '/markets' }), userId: null, network: NETWORK });
+      const third = await record({ report: report({ path: '/earn' }), userId: ALICE, network: NETWORK });
+
+      expect(second.ok && second.value.landed).toBe(false);
+      // Signing in on that tab is an arrival, but the landing already happened.
+      expect(third.ok && third.value.landed).toBe(false);
+      expect(third.ok && third.value.arrived).toBe(true);
+    });
+
+    it('counts a new tab as its own landing', async () => {
+      const record = createRecordPresence(context.deps);
+
+      await record({ report: report(), userId: null, network: NETWORK });
+      const other = await record({
+        report: report({ visitorId: OTHER_VISITOR, path: '/markets' }),
+        userId: null,
+        network: NETWORK,
+      });
+
+      expect(other.ok && other.value.landed).toBe(true);
+    });
+
+    it('never counts a tab that is closing', async () => {
+      const record = createRecordPresence(context.deps);
+
+      const leaving = await record({
+        report: report({ visitorId: OTHER_VISITOR, event: 'leave' }),
+        userId: null,
+        network: NETWORK,
+      });
+
+      expect(leaving.ok && leaving.value.landed).toBe(false);
+    });
+  });
+
   describe('validation', () => {
     it('rejects a visitor id that is not a UUID', async () => {
       const record = createRecordPresence(context.deps);
