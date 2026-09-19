@@ -23,6 +23,7 @@ import { AssetMark } from '@/shared/ui/visuals/asset-mark';
 import { Sparkline } from '@/shared/ui/visuals/sparkline';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { AccountNumber } from './_components/account-number';
 import { ResendVerification } from '../../_components/resend-verification';
 import { PageHeader, Panel, PanelHeader } from '../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../_console/components/table';
@@ -75,6 +76,11 @@ export default async function OverviewPage() {
       <PageHeader
         title="Overview"
         description={`Signed in as ${user.email}.`}
+        /* In the header rather than buried in settings, because this is the one
+           identifier somebody else asks you for — an operator crediting a workshop
+           account, a support agent finding yours. A number nobody can locate is a
+           number nobody uses. */
+        actions={<AccountNumber value={user.accountNumber} />}
       />
 
       {!user.emailVerified ? (

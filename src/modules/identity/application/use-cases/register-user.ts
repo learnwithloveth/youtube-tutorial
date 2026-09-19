@@ -6,6 +6,7 @@ import { EmailAddress } from '../../domain/email-address';
 import { validatePasswordPolicy } from '../../domain/password';
 import { Profile } from '../../domain/profile';
 import { User } from '../../domain/user';
+import { allocateAccountNumber } from '../allocate-account-number';
 import { fromProfileProblem, IdentityErrors, type IdentityError } from '../errors';
 import type { IdentityDependencies } from '../ports';
 import type { SessionDto } from '../dto';
@@ -96,6 +97,9 @@ export function createRegisterUser(deps: IdentityDependencies) {
     const user = User.register({
       id,
       email: email.value,
+      // Drawn and checked before the insert, so the unique index on it is a
+      // backstop rather than the ordinary path — see `allocateAccountNumber`.
+      accountNumber: await allocateAccountNumber(deps.users),
       passwordHash,
       now,
     });

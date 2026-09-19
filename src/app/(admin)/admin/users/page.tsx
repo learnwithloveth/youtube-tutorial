@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowUpRight, MailCheck, MailX, ShieldCheck, UserRound } from 'lucide-react';
 
-import type { UserStatus } from '@/modules/identity';
+import { formatAccountNumber, type UserStatus } from '@/modules/identity';
 import { getUsers } from '@/server/users';
 import { formatDate } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/primitives/badge';
@@ -123,6 +123,7 @@ export default async function UsersPage({
           <thead>
             <tr>
               <Th>Account</Th>
+              <Th>Number</Th>
               <Th>Status</Th>
               <Th>Email</Th>
               <Th>Role</Th>
@@ -134,7 +135,7 @@ export default async function UsersPage({
           </thead>
           <tbody>
             {list.users.length === 0 ? (
-              <EmptyRow colSpan={6}>
+              <EmptyRow colSpan={7}>
                 {params.q || status
                   ? 'No account matches that filter.'
                   : 'No accounts yet. The first person to sign up appears here.'}
@@ -162,6 +163,14 @@ export default async function UsersPage({
                         </span>
                       </span>
                     </Link>
+                  </Td>
+                  <Td>
+                    {/* The identifier the account holder can actually quote. The
+                        truncated UUID above stays because it is what a log line
+                        says, but nobody reads one of those down a phone. */}
+                    <span data-numeric className="font-mono text-xs text-fg-muted">
+                      {formatAccountNumber(user.accountNumber)}
+                    </span>
                   </Td>
                   <Td>
                     <Badge tone={STATUS_TONE[user.status]}>{user.status}</Badge>

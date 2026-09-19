@@ -116,6 +116,7 @@ describe('retention', () => {
       'withdrawal-rejected',
       'deposit-recorded',
       'deposit-rejected',
+      'demo-funds-granted',
       'admin-suspended',
       'admin-reinstated',
       'receipt-sent',

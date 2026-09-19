@@ -12,6 +12,7 @@
 import { err, ok, type Result } from '@/shared/kernel/result';
 import type { UserId } from '@/shared/kernel/ids';
 
+import type { AccountNumber } from './account-number';
 import type { EmailAddress } from './email-address';
 import type { PasswordHash } from './password';
 
@@ -49,6 +50,15 @@ export interface UserProps {
   id: UserId;
   email: EmailAddress;
   /**
+   * The ten digits the account holder sees, and an operator types to find them.
+   *
+   * Assigned once, at registration, and never reissued: it is printed on a
+   * dashboard and read out loud, and an identifier that changes is one that sends
+   * somebody to the wrong account. See `AccountNumber` for why it is drawn at
+   * random rather than counted, and why it identifies without authenticating.
+   */
+  accountNumber: AccountNumber;
+  /**
    * Null for an account that has only ever signed in through a provider.
    *
    * Not a placeholder hash of something unguessable, which is the usual shortcut:
@@ -73,12 +83,14 @@ export class User {
   static register(input: {
     id: UserId;
     email: EmailAddress;
+    accountNumber: AccountNumber;
     passwordHash: PasswordHash;
     now: Date;
   }): User {
     return new User({
       id: input.id,
       email: input.email,
+      accountNumber: input.accountNumber,
       passwordHash: input.passwordHash,
       status: 'active',
       // Never `admin`. Registration cannot grant privilege.
@@ -103,11 +115,13 @@ export class User {
   static registerWithProvider(input: {
     id: UserId;
     email: EmailAddress;
+    accountNumber: AccountNumber;
     now: Date;
   }): User {
     return new User({
       id: input.id,
       email: input.email,
+      accountNumber: input.accountNumber,
       passwordHash: null,
       status: 'active',
       role: 'customer',
@@ -135,6 +149,9 @@ export class User {
   }
   get email(): EmailAddress {
     return this.props.email;
+  }
+  get accountNumber(): AccountNumber {
+    return this.props.accountNumber;
   }
   get passwordHash(): PasswordHash | null {
     return this.props.passwordHash;

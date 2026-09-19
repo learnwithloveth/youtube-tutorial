@@ -74,6 +74,7 @@ async function seedUser(users: FakeUsers, hasher: PasswordHasher): Promise<User>
   const user = User.register({
     id: USER_ID,
     email: EmailAddress.parseOrThrow('ada@example.com'),
+    accountNumber: users.nextAccountNumber(),
     passwordHash: await hasher.hash('correct-horse-battery'),
     now: NOW,
   });

@@ -51,6 +51,21 @@ export const users = identitySchema.table(
     email: text('email').notNull(),
 
     /**
+     * Ten digits, shown to the account holder and typed by an operator.
+     *
+     * A column on `users` rather than on `profiles`, although it is the field a
+     * person reads: a profile row is created on demand and most accounts never
+     * have one, and an identifier that exists for some accounts is not an
+     * identifier. It is also assigned once and never edited, which is the opposite
+     * of everything in `profiles`.
+     *
+     * The unique index is the real arbiter, exactly as the email one is — the
+     * application checks a candidate first, but two registrations can draw the
+     * same number between that check and the insert.
+     */
+    accountNumber: text('account_number').notNull(),
+
+    /**
      * Self-describing scrypt output: algorithm, parameters, salt, key.
      *
      * Nullable since Google sign-in: an account created through a provider has no
@@ -78,7 +93,10 @@ export const users = identitySchema.table(
     /** Optimistic-concurrency token. */
     version: integer('version').notNull().default(0),
   },
-  (table) => [uniqueIndex('users_email_uq').on(table.email)],
+  (table) => [
+    uniqueIndex('users_email_uq').on(table.email),
+    uniqueIndex('users_account_number_uq').on(table.accountNumber),
+  ],
 );
 
 /**

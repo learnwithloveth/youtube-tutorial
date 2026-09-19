@@ -92,8 +92,10 @@ export const transfers = ledgerSchema.table(
   'transfers',
   {
     id: text('id').primaryKey(),
+    // `text` with a TypeScript enum, not a Postgres enum: the constraint is at
+    // the type level, so adding a kind is a type change and not a migration.
     kind: text('kind', {
-      enum: ['deposit', 'withdrawal', 'withdrawal-fee', 'adjustment'],
+      enum: ['deposit', 'withdrawal', 'withdrawal-fee', 'adjustment', 'demo-credit'],
     }).notNull(),
     /** What this was for: a transaction hash, a withdrawal id, a ticket number. */
     reference: text('reference').notNull(),

@@ -6,6 +6,7 @@ import { PROVIDER_LABELS, type AuthProvider } from '../../domain/connected-accou
 import { EmailAddress } from '../../domain/email-address';
 import { Profile } from '../../domain/profile';
 import { User } from '../../domain/user';
+import { allocateAccountNumber } from '../allocate-account-number';
 import { IdentityErrors, type IdentityError } from '../errors';
 import type { IdentityDependencies, ProviderProfile } from '../ports';
 import type { SessionDto } from '../dto';
@@ -81,6 +82,11 @@ export function createSignInWithGoogle(deps: IdentityDependencies) {
     const created = User.registerWithProvider({
       id: deps.users.nextId(),
       email: email.value,
+      // Every account gets one, however it arrived. An account created through a
+      // provider is an account like any other the moment it exists, and a
+      // dashboard that could not state its number for one kind of sign-in would
+      // be describing how somebody registered rather than who they are.
+      accountNumber: await allocateAccountNumber(deps.users),
       now,
     });
 

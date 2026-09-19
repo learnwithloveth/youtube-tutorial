@@ -54,6 +54,10 @@ function severityOf(kind: ActivityEventDto['kind']): 'critical' | 'notice' | 'in
     case 'withdrawal-rejected':
     case 'deposit-recorded':
     case 'deposit-rejected':
+    // Notice, not info: somebody credited an account from nothing, and an audit
+    // log where that sits at the same weight as a page view is one nobody would
+    // spot it in.
+    case 'demo-funds-granted':
     case 'password-reset':
       return 'notice';
     default:
@@ -74,6 +78,7 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'withdrawal-rejected': 'Withdrawal rejected',
   'deposit-recorded': 'Deposit credited',
   'deposit-rejected': 'Deposit refused',
+  'demo-funds-granted': 'Demo funds issued',
   'admin-suspended': 'Console access suspended',
   'admin-reinstated': 'Console access restored',
   'receipt-sent': 'Receipt emailed',

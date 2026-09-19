@@ -1,3 +1,4 @@
+import { AccountNumber } from '../../domain/account-number';
 import type { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
 import type { Profile } from '../../domain/profile';
@@ -58,6 +59,7 @@ export class FakeTokenHasher implements VerificationTokenHasher {
 export class FakeUsers implements UserRepository {
   readonly store = new Map<string, User>();
   private counter = 0;
+  private accountNumberCounter = 0;
 
   /** `fixedId` pins every new id, for a test that wants to name its one account. */
   constructor(private readonly options: { fixedId?: UserId } = {}) {}
@@ -67,11 +69,28 @@ export class FakeUsers implements UserRepository {
     this.counter += 1;
     return `00000000-0000-4000-8000-${String(this.counter).padStart(12, '0')}` as UserId;
   }
+  /**
+   * Counted, not random, so a test can predict what it will get.
+   *
+   * The real adapter draws from the CSPRNG, and the property that matters to
+   * `allocateAccountNumber` — that a taken number is refused and another tried —
+   * is exercised better by a source that repeats deterministically than by one
+   * that almost never collides.
+   */
+  nextAccountNumber(): AccountNumber {
+    this.accountNumberCounter += 1;
+    return AccountNumber.parseOrThrow(String(1_000_000_000 + this.accountNumberCounter));
+  }
   async findById(id: UserId) {
     return this.store.get(id) ?? null;
   }
   async findByEmail(email: EmailAddress) {
     return [...this.store.values()].find((user) => user.email.equals(email)) ?? null;
+  }
+  async findByAccountNumber(accountNumber: AccountNumber) {
+    return (
+      [...this.store.values()].find((user) => user.accountNumber.equals(accountNumber)) ?? null
+    );
   }
   async findManyByIds(ids: readonly UserId[]) {
     // Absent ids are simply missing from the result, as the port specifies — a
@@ -82,7 +101,10 @@ export class FakeUsers implements UserRepository {
     const term = query.term?.trim().toLowerCase();
     return [...this.store.values()].filter(
       (user) =>
-        (!term || user.email.value.toLowerCase().includes(term) || user.id === query.term) &&
+        (!term ||
+          user.email.value.toLowerCase().includes(term) ||
+          user.id === query.term ||
+          user.accountNumber.value === term) &&
         (!query.status || user.status === query.status),
     );
   }

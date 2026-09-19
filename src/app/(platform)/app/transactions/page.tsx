@@ -56,6 +56,12 @@ const KIND_LABEL: Record<TransferKind, string> = {
   withdrawal: 'Withdrawal',
   'withdrawal-fee': 'Network fee',
   adjustment: 'Adjustment',
+  // Said plainly on the customer's own statement, because the alternative is
+  // somebody believing a workshop balance is money. An exhaustive `Record`
+  // over `TransferKind` is what forced this line to be written at all — the
+  // kind could not be added without the label, which is the point of typing it
+  // this way rather than with a fallback.
+  'demo-credit': 'Demo funds',
 };
 
 const KIND_TONE: Record<TransferKind, 'up' | 'down' | 'brand' | 'neutral'> = {
@@ -63,6 +69,9 @@ const KIND_TONE: Record<TransferKind, 'up' | 'down' | 'brand' | 'neutral'> = {
   withdrawal: 'down',
   'withdrawal-fee': 'neutral',
   adjustment: 'brand',
+  // Not `up`. Green is what a deposit gets, and reading the two as the same
+  // thing at a glance is exactly the confusion the separate kind exists to stop.
+  'demo-credit': 'brand',
 };
 
 export default async function TransactionsPage({

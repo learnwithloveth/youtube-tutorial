@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { AccountNumber } from '../account-number';
 import { EmailAddress } from '../email-address';
 import { PasswordHash, validatePasswordPolicy, PASSWORD_MIN_LENGTH } from '../password';
 import { MAX_FAILED_ATTEMPTS, User } from '../user';
@@ -19,6 +20,7 @@ function aUser(now = T0) {
   return User.register({
     id: '11111111-1111-4111-8111-111111111111' as UserId,
     email: anEmail(),
+    accountNumber: AccountNumber.parseOrThrow('1234567890'),
     passwordHash: aHash(),
     now,
   });

@@ -32,6 +32,13 @@ export type { IdentityError } from './application/errors';
 export { presentIdentityError } from './application/errors';
 
 export { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from './domain/password';
+
+/* The account number's shape and its display grouping — needed by every surface
+   that prints one: the customer's dashboard, the console's account list, the
+   demo-funds form. The class itself stays inside the module, because nothing
+   above this boundary constructs an account number; it only renders one. */
+export { ACCOUNT_NUMBER_LENGTH, formatAccountNumber } from './domain/account-number';
+
 export type { VerificationPurpose } from './domain/verification-token';
 export { TOKEN_LIFETIME_MS } from './domain/verification-token';
 

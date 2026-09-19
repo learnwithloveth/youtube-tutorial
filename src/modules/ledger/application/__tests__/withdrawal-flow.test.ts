@@ -32,6 +32,7 @@ import type {
 import { createDecideWithdrawal } from '../use-cases/decide-withdrawal';
 import { createSendReceipt, createSendTransactionEmail } from '../use-cases/send-receipt';
 import { createDecideDepositClaim } from '../use-cases/decide-deposit-claim';
+import { createGrantDemoFunds } from '../use-cases/grant-demo-funds';
 import { createRecordDeposit } from '../use-cases/record-deposit';
 import { createSubmitDepositClaim } from '../use-cases/submit-deposit-claim';
 import { createRequestWithdrawal } from '../use-cases/request-withdrawal';
@@ -327,6 +328,7 @@ function build(prices: PriceOracle = priceOracle) {
     proofs,
     outbox,
     deposit: createRecordDeposit(deps),
+    grantDemo: createGrantDemoFunds(deps),
     submitClaim: createSubmitDepositClaim(deps),
     decideClaim: createDecideDepositClaim(deps),
     request: createRequestWithdrawal(deps),
@@ -361,6 +363,108 @@ function expectBooksBalance(accounts: FakeLedger): void {
     );
   }
 }
+
+describe('demo funds', () => {
+  /* The whole reason this is a separate use case: custody's magnitude is the
+     platform's liability to its customers, and workshop money must not appear in
+     it. If this ever starts failing, the treasury screen has begun lying about
+     what is owed. */
+  it('credits the customer and leaves custody untouched', async () => {
+    const ctx = build();
+
+    const result = await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'BTC',
+      amount: '1.5',
+      note: 'Tuesday workshop',
+      issuedBy: BOB,
+    });
+
+    expect(result.ok).toBe(true);
+
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+    const demo = await ctx.accounts.find(accountIdFor(platformOwner('demo'), 'BTC'));
+    const custody = await ctx.accounts.find(accountIdFor(platformOwner('custody'), 'BTC'));
+
+    expect(alice?.balance.toDecimalString()).toBe('1.50000000');
+    expect(demo?.balance.toDecimalString()).toBe('-1.50000000');
+    // Never opened, because nothing drew on it.
+    expect(custody).toBeNull();
+    expectBooksBalance(ctx.accounts);
+  });
+
+  /* A customer's statement has to say what happened without anybody reading the
+     reference — the kind is what is indexed and what a reader sees first. */
+  it('posts it under its own kind, never as a deposit', async () => {
+    const ctx = build();
+    await ctx.grantDemo({ userId: ALICE, asset: 'BTC', amount: '1', issuedBy: BOB });
+
+    const [transfer] = ctx.accounts.posted;
+    expect(transfer?.kind).toBe('demo-credit');
+    // The issuing operator is always named, so the entry is attributable.
+    expect(transfer?.reference).toContain(BOB);
+  });
+
+  it('names the note when there is one, and reads cleanly when there is not', async () => {
+    const ctx = build();
+
+    await ctx.grantDemo({ userId: ALICE, asset: 'BTC', amount: '1', note: ' group B ', issuedBy: BOB });
+    await ctx.grantDemo({ userId: CAROL, asset: 'BTC', amount: '1', note: '   ', issuedBy: BOB });
+
+    expect(ctx.accounts.posted[0]?.reference).toBe(`demo funds (group B) by ${BOB}`);
+    // No empty parentheses and no double space where the note would have been.
+    expect(ctx.accounts.posted[1]?.reference).toBe(`demo funds by ${BOB}`);
+  });
+
+  it('refuses an amount that is zero, negative or not a number', async () => {
+    const ctx = build();
+
+    for (const amount of ['0', '-1', 'lots', '']) {
+      const result = await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'BTC',
+        amount,
+        issuedBy: BOB,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe('amount-invalid');
+    }
+
+    expect(ctx.accounts.posted).toHaveLength(0);
+  });
+
+  it('refuses an asset the platform does not custody', async () => {
+    const ctx = build();
+    const result = await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'DOGE',
+      amount: '1',
+      issuedBy: BOB,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('asset-not-supported');
+  });
+
+  /* The point of the exercise, in a workshop: the student requests a withdrawal
+     against demo funds and the tutor decides on it. Nothing about the grant makes
+     the balance a second-class one. */
+  it('is spendable, and the books still balance when it is spent', async () => {
+    const ctx = build();
+    await ctx.grantDemo({ userId: ALICE, asset: 'BTC', amount: '1', issuedBy: BOB });
+
+    const requested = await ctx.request({
+      userId: ALICE,
+      asset: 'BTC',
+      amount: '0.1',
+      network: 'bitcoin',
+      destination: BTC_ADDRESS,
+    });
+
+    expect(requested.ok).toBe(true);
+    expectBooksBalance(ctx.accounts);
+  });
+});
 
 describe('deposits', () => {
   it('credits the customer and debits custody', async () => {

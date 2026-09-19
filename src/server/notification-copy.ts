@@ -26,6 +26,10 @@ export type NotificationTone = 'up' | 'down' | 'warn' | 'brand' | 'neutral';
 export const COPY: Partial<Record<ActivityKind, { title: string; tone: NotificationTone }>> = {
   'price-alert-triggered': { title: 'Price alert', tone: 'brand' },
   'deposit-recorded': { title: 'Deposit credited', tone: 'up' },
+  // Not 'Deposit credited'. The customer is told what it is, in the same words
+  // their statement uses, so nobody discovers later that a workshop balance was
+  // never money.
+  'demo-funds-granted': { title: 'Demo funds added', tone: 'brand' },
   'deposit-rejected': { title: 'Deposit not accepted', tone: 'down' },
   'withdrawal-requested': { title: 'Withdrawal requested', tone: 'neutral' },
   'withdrawal-approved': { title: 'Withdrawal approved', tone: 'up' },
@@ -69,6 +73,7 @@ export function bodyFor(event: DescribableEvent): string | null {
 const PUSH_LINKS: Partial<Record<ActivityKind, string>> = {
   'price-alert-triggered': '/app/alerts',
   'deposit-recorded': '/app/transactions',
+  'demo-funds-granted': '/app/transactions',
   'withdrawal-approved': '/app/transactions',
   'verification-approved': '/app/settings?tab=verification',
   'verification-rejected': '/app/settings?tab=verification',

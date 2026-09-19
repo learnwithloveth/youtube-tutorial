@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Ban,
   Clock,
+  Coins,
   Crosshair,
   FileText,
   KeyRound,
@@ -53,6 +54,10 @@ const KIND_META: Record<
   'withdrawal-rejected': { label: 'Withdrawal rejected', icon: Ban, tone: 'warn' },
   'deposit-recorded': { label: 'Deposit credited', icon: ArrowDownToLine, tone: 'brand' },
   'deposit-rejected': { label: 'Deposit refused', icon: ArrowDownToLine, tone: 'warn' },
+  // A different icon from a deposit as well as a different label. On a timeline
+  // the glyph is read before the words, and two identical arrows would undo the
+  // distinction the separate kind exists to make.
+  'demo-funds-granted': { label: 'Demo funds issued', icon: Coins, tone: 'brand' },
   // Passive, because that is how they are recorded — against the account it
   // happened to, with the operator who did it in the detail line.
   'admin-suspended': { label: 'Console access suspended', icon: ShieldOff, tone: 'warn' },

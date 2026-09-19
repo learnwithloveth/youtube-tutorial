@@ -15,6 +15,7 @@ import {
 
 import type { ActivityKind } from '@/modules/activity';
 import { SECURITY_KINDS } from '@/modules/activity';
+import { formatAccountNumber } from '@/modules/identity';
 import { getUserDetail } from '@/server/users';
 import { formatDate, formatDuration } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
@@ -120,7 +121,7 @@ export default async function UserDetailPage({
 
       <AdminPageHeader
         title={account.email}
-        description={`Account ${account.id} · joined ${formatDate(account.createdAt)}`}
+        description={`Account ${formatAccountNumber(account.accountNumber)} · ${account.id} · joined ${formatDate(account.createdAt)}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={account.status === 'active' ? 'up' : account.status === 'locked' ? 'warn' : 'down'}>

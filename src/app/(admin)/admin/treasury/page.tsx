@@ -51,6 +51,15 @@ const SECTIONS = [
     title: 'Fee revenue',
     subtitle: 'Credited when a withdrawal is approved',
   },
+  /* Its own section, deliberately apart from "owed to customers". These balances
+     are on customer accounts and are *not* a liability: nobody sent the money and
+     nothing backs it. Folding the two together would make the one figure on this
+     screen meant to be checkable against real holdings uncheckable. */
+  {
+    purpose: 'demo' as const,
+    title: 'Demo funds issued',
+    subtitle: 'Credited for workshops. Backed by nothing, and owed to nobody',
+  },
 ];
 
 export default async function TreasuryPage() {
@@ -74,7 +83,7 @@ export default async function TreasuryPage() {
         </div>
       ) : null}
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="Owed to customers"
           // Null is a state, not a gap: a dash says a holding could not be priced,
@@ -101,9 +110,18 @@ export default async function TreasuryPage() {
           value={treasury.feesUsd === null ? '—' : usd(treasury.feesUsd)}
           delta={{ value: 'Since the ledger opened', direction: 'flat', period: '' }}
         />
+        <StatTile
+          label="Demo funds issued"
+          value={treasury.demoUsd === null ? '—' : usd(treasury.demoUsd)}
+          // The number to subtract when reading any customer total on this
+          // platform as a real one. Said plainly rather than left for somebody to
+          // work out from the section below.
+          delta={{ value: 'Not owed to anyone', direction: 'flat', period: '' }}
+          upIsGood={false}
+        />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {SECTIONS.map((section) => {
           const lines = treasury.lines.filter((line) => line.purpose === section.purpose);
 
@@ -117,7 +135,9 @@ export default async function TreasuryPage() {
                     ? 'No customer balances yet.'
                     : section.purpose === 'payable'
                       ? 'Nothing waiting to be sent.'
-                      : 'No fees earned yet.'}
+                      : section.purpose === 'demo'
+                        ? 'No demo funds issued.'
+                        : 'No fees earned yet.'}
                 </p>
               ) : (
                 <ul className="divide-y divide-line/60">

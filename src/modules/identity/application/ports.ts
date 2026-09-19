@@ -1,5 +1,6 @@
 import type { UserId } from '@/shared/kernel/ids';
 
+import type { AccountNumber } from '../domain/account-number';
 import type { AuthProvider, ConnectedAccount } from '../domain/connected-account';
 import type { EmailAddress } from '../domain/email-address';
 import type { PasswordHash } from '../domain/password';
@@ -24,8 +25,24 @@ import type {
 
 export interface UserRepository {
   nextId(): UserId;
+  /**
+   * One candidate account number. Not an allocation — see
+   * `allocateAccountNumber`, which is what checks whether it is free.
+   *
+   * On the repository beside `nextId` rather than behind a port of its own,
+   * because it is the same kind of thing: a fresh identifier for a row this
+   * repository is about to write, drawn from a source the adapter chooses.
+   */
+  nextAccountNumber(): AccountNumber;
   findById(id: UserId): Promise<User | null>;
   findByEmail(email: EmailAddress): Promise<User | null>;
+  /**
+   * The lookup an operator's typing reaches, and the check before an allocation.
+   *
+   * Null is an ordinary answer both times: an unused number during allocation, and
+   * a mistyped one at a console.
+   */
+  findByAccountNumber(accountNumber: AccountNumber): Promise<User | null>;
   /**
    * Bulk lookup for a caller that holds ids and needs names.
    *
@@ -36,13 +53,21 @@ export interface UserRepository {
   findManyByIds(ids: readonly UserId[]): Promise<User[]>;
   /** @throws ConcurrencyError when the stored version has moved on. */
   save(user: User): Promise<void>;
-  /** Relies on a unique index, so two concurrent registrations cannot both win. */
+  /**
+   * Relies on a unique index, so two concurrent registrations cannot both win.
+   *
+   * There is a second unique index on the row it writes — the account number — and
+   * this method does *not* absorb a conflict on that one. A lost race there is
+   * vanishingly rare (see `allocateAccountNumber`) and means something is wrong,
+   * so it throws rather than being reported as "that email is taken", which is the
+   * one thing a `false` here is allowed to mean.
+   */
   insertIfEmailFree(user: User): Promise<boolean>;
 
   /**
    * The console's account list: filtered, paged, newest first.
    *
-   * `term` matches an email or an id, never a display name. That is not because
+   * `term` matches an email, an id or an account number, never a display name. That is not because
    * the module cannot reach one — `ProfileRepository` is right below — but because
    * `User` deliberately does not carry it: an entity that accumulates every field
    * anyone wants to search on is how a forty-field user object forms. Searching by

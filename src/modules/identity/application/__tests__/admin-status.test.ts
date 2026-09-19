@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { fixedClock } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { AccountNumber } from '../../domain/account-number';
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
 import { User, type UserRole, type UserStatus } from '../../domain/user';
@@ -26,6 +27,7 @@ function account(id: UserId, role: UserRole, status: UserStatus): User {
   return User.rehydrate({
     id,
     email: EmailAddress.parseOrThrow(`${id}@novex.io`),
+    accountNumber: AccountNumber.parseOrThrow(`1${String(id.length).padStart(9, '7')}`),
     passwordHash: PasswordHash.fromEncoded('scrypt$1$16384$8$1$c2FsdA$a2V5'),
     status,
     role,

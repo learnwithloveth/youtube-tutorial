@@ -22,6 +22,14 @@ export interface SessionDto {
 export interface CurrentUserDto {
   id: UserId;
   email: string;
+  /**
+   * The ten digits, unformatted.
+   *
+   * Grouped for display by `formatAccountNumber` at the point of rendering, not
+   * here: a DTO carrying "1234 567 890" is a DTO whose value has to be unpicked
+   * again by anything that wants to compare or copy it.
+   */
+  accountNumber: string;
   emailVerified: boolean;
   role: UserRole;
   createdAt: string;
@@ -62,6 +70,7 @@ export function toCurrentUserDto(user: User, profile?: Profile | null): CurrentU
   return {
     id: user.id,
     email: user.email.value,
+    accountNumber: user.accountNumber.value,
     emailVerified: user.isEmailVerified,
     role: user.role,
     createdAt: user.createdAt.toISOString(),
@@ -98,6 +107,8 @@ export interface UserSummaryDto {
   handle: string | null;
   id: UserId;
   email: string;
+  /** Unformatted. The console groups it for reading the same way the app does. */
+  accountNumber: string;
   emailVerified: boolean;
   role: UserRole;
   status: UserStatus;
@@ -116,6 +127,7 @@ export function toUserSummaryDto(user: User, profile?: Profile | null): UserSumm
   return {
     id: user.id,
     email: user.email.value,
+    accountNumber: user.accountNumber.value,
     emailVerified: user.isEmailVerified,
     role: user.role,
     status: user.status,

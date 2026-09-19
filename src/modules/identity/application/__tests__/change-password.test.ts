@@ -55,12 +55,14 @@ async function seed(
     ? User.register({
         id: users.nextId(),
         email: EmailAddress.parseOrThrow('ada@example.com'),
+        accountNumber: users.nextAccountNumber(),
         passwordHash: PasswordHash.fromEncoded(`fake$${CURRENT}`),
         now: NOW,
       })
     : User.registerWithProvider({
         id: users.nextId(),
         email: EmailAddress.parseOrThrow('ada@example.com'),
+        accountNumber: users.nextAccountNumber(),
         now: NOW,
       });
   await users.insertIfEmailFree(user);

@@ -64,6 +64,17 @@ export type ActivityKind =
    */
   | 'deposit-rejected'
   /*
+   * An operator issued demo funds into this account.
+   *
+   * Its own kind rather than a `deposit-recorded` with a different detail line,
+   * for the reason `deposit-rejected` is not `withdrawal-rejected`: the kind is
+   * what is indexed, filtered on and read first, and an audit trail that
+   * announced a deposit for money nobody sent would be wrong in the field that
+   * matters. It is in `SECURITY_KINDS` because "who credited this account, and
+   * who let them" is exactly the question an audit of a workshop deployment asks.
+   */
+  | 'demo-funds-granted'
+  /*
    * Console access, withdrawn or restored.
    *
    * Written against the account it happened *to*, not the operator who did it, and
@@ -128,6 +139,7 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'withdrawal-rejected',
   'deposit-recorded',
   'deposit-rejected',
+  'demo-funds-granted',
   'admin-suspended',
   'admin-reinstated',
   'receipt-sent',

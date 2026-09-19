@@ -19,6 +19,21 @@ import type { UserId } from '@/shared/kernel/ids';
  *   `fees`     fee revenue, credited when a withdrawal is approved
  *   `payable`  approved withdrawals that have not yet left. Money that is no
  *              longer the customer's and not yet off the platform
+ *   `demo`     the contra account for funds an operator issued for a workshop.
+ *              Negative like custody, and deliberately *not* custody — see below
+ *
+ * ── Why demo funds get a contra account of their own ───────────────────────────
+ * A demo grant has to balance like everything else, so it needs a second leg. The
+ * obvious candidate is `custody`, and it is the wrong one: custody's magnitude is
+ * the platform's liability to its customers, the number that is supposed to be
+ * backed by what is actually held on chain and in the bank. Drawing workshop money
+ * from it would inflate that number by funds nobody ever sent, and the one figure
+ * on the treasury screen whose whole job is to be checkable would stop being
+ * checkable.
+ *
+ * Separated, both numbers stay true and their difference is legible: custody is
+ * what is owed, `demo` is what was conjured for a classroom, and an operator can
+ * see at a glance which is which.
  *
  * ── The balance is stored, not derived ─────────────────────────────────────────
  * Purists derive a balance by summing entries. That is correct and unusable: it
@@ -34,7 +49,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 export type AccountId = string;
 
-export type PlatformPurpose = 'custody' | 'fees' | 'payable';
+export type PlatformPurpose = 'custody' | 'fees' | 'payable' | 'demo';
 
 export type AccountOwner =
   | { readonly kind: 'user'; readonly userId: UserId }

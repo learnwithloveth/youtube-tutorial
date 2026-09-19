@@ -27,6 +27,7 @@ export { getReceipt } from './application/queries/receipt';
 export type { RequestWithdrawalCommand } from './application/use-cases/request-withdrawal';
 export type { DecideWithdrawalCommand } from './application/use-cases/decide-withdrawal';
 export type { RecordDepositCommand } from './application/use-cases/record-deposit';
+export type { GrantDemoFundsCommand } from './application/use-cases/grant-demo-funds';
 export type { SubmitDepositClaimCommand } from './application/use-cases/submit-deposit-claim';
 export type { DecideDepositClaimCommand } from './application/use-cases/decide-deposit-claim';
 export type {

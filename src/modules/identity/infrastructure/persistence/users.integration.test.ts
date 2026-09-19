@@ -44,6 +44,7 @@ describeWithDb('DrizzleUserRepository', () => {
     return User.registerWithProvider({
       id: repository.nextId(),
       email: address.value,
+      accountNumber: repository.nextAccountNumber(),
       now: new Date(),
     });
   };

@@ -5,6 +5,7 @@ import { and, count, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } fro
 import type { Database } from '@/platform/db/client';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { AccountNumber } from '../../domain/account-number';
 import { EmailAddress } from '../../domain/email-address';
 import { PasswordHash } from '../../domain/password';
 import { Profile } from '../../domain/profile';
@@ -41,6 +42,7 @@ function userToDomain(row: UserRow): User {
   return User.rehydrate({
     id: row.id as UserId,
     email: EmailAddress.parseOrThrow(row.email),
+    accountNumber: AccountNumber.parseOrThrow(row.accountNumber),
     // Null for an account that signs in through a provider and has set no password.
     passwordHash: row.passwordHash === null ? null : PasswordHash.fromEncoded(row.passwordHash),
     status: row.status,
@@ -208,6 +210,34 @@ export class DrizzleUserRepository implements UserRepository {
     return crypto.randomUUID() as UserId;
   }
 
+  /**
+   * One candidate account number, from the platform CSPRNG.
+   *
+   * `Math.random` would do for a number that only has to be unlikely to repeat,
+   * and is used nowhere in this repository for anything a person is identified by.
+   * The draw is uniform over the ten-digit space either way; the difference is
+   * that this one is not predictable from previous draws, and an account number
+   * that can be guessed in order is one an operator can be walked onto.
+   */
+  nextAccountNumber(): AccountNumber {
+    return AccountNumber.candidate(() => {
+      const [drawn] = crypto.getRandomValues(new Uint32Array(1));
+      // Divided by 2^32 rather than by its maximum, so the result is in [0, 1)
+      // and never exactly 1 — which is the contract `candidate` is written to.
+      return (drawn ?? 0) / 2 ** 32;
+    });
+  }
+
+  async findByAccountNumber(accountNumber: AccountNumber): Promise<User | null> {
+    const rows = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.accountNumber, accountNumber.value))
+      .limit(1);
+    const row = rows[0];
+    return row === undefined ? null : userToDomain(row);
+  }
+
   async findById(id: UserId): Promise<User | null> {
     const rows = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
     const row = rows[0];
@@ -249,6 +279,7 @@ export class DrizzleUserRepository implements UserRepository {
       .values({
         id: snapshot.id,
         email: snapshot.email.value,
+        accountNumber: snapshot.accountNumber.value,
         passwordHash: snapshot.passwordHash?.encoded ?? null,
         status: snapshot.status,
         role: snapshot.role,
@@ -312,6 +343,9 @@ export class DrizzleUserRepository implements UserRepository {
     const updated = await this.db
       .update(users)
       .set({
+        // `accountNumber` is deliberately absent. It is assigned at registration
+        // and never rewritten: it is printed on a dashboard and read out loud, and
+        // an update path for it is an update path somebody eventually calls.
         email: snapshot.email.value,
         passwordHash: snapshot.passwordHash?.encoded ?? null,
         status: snapshot.status,
@@ -618,7 +652,18 @@ function userFilter(query: { term?: string | undefined; status?: UserStatus | un
   const term = query.term?.trim();
   if (term) {
     const pattern = `%${term.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
-    clauses.push(or(ilike(users.email, pattern), eq(users.id, term)));
+    // An account number is matched exactly, and only when the term parses as one.
+    // Matching it with `ilike` as well would make "1" match a third of the
+    // platform, and the number is something an operator has in front of them
+    // rather than something they search for a fragment of.
+    const asAccountNumber = AccountNumber.parse(term);
+    clauses.push(
+      or(
+        ilike(users.email, pattern),
+        eq(users.id, term),
+        ...(asAccountNumber.ok ? [eq(users.accountNumber, asAccountNumber.value.value)] : []),
+      ),
+    );
   }
   if (query.status) clauses.push(eq(users.status, query.status));
 

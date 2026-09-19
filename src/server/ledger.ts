@@ -4,7 +4,13 @@ import { after } from 'next/server';
 import { cache } from 'react';
 
 import { BRAND } from '@/modules/content';
-import type { ApprovalQueueDto, StatementDto, StatementOptions, WalletDto } from '@/modules/ledger';
+import type {
+  ApprovalQueueDto,
+  StatementDto,
+  StatementOptions,
+  TreasuryDto,
+  WalletDto,
+} from '@/modules/ledger';
 import type { CustomerDirectory, ReceiptSender } from '@/modules/ledger/server';
 import {
   getReceipt,
@@ -249,6 +255,24 @@ export async function getStatementFor(
   return getStatement(context.dependencies, userId, options);
 }
 
+/**
+ * Every asset the platform will custody, with the precision it is stored at.
+ *
+ * Separate from `withdrawableAssets` although it reads the same catalogue: that
+ * one carries networks, fees and minimums because a withdrawal form needs them,
+ * and a demo grant has no network, pays no fee and has no minimum. Handing the
+ * fuller shape to a screen that uses a third of it invites somebody to start
+ * rendering the rest.
+ */
+export function fundableAssets() {
+  return LEDGER_ASSETS.map((asset) => ({
+    code: asset.code,
+    name: asset.name,
+    /** Decimal places the balance is held at — what the form hints as a step. */
+    scale: asset.scale,
+  }));
+}
+
 /** The withdrawal form's options: assets, networks, fees and minimums. */
 export function withdrawableAssets() {
   return LEDGER_ASSETS.map((asset) => ({
@@ -377,14 +401,18 @@ export async function getDepositProof(
  *
  * Deduplicated per request so the tiles and the table cost one read between them.
  */
-export const getPlatformTreasury = cache(async () => {
+export const getPlatformTreasury = cache(async (): Promise<TreasuryDto> => {
   const context = ledger();
   if (context === null) {
+    // Annotated rather than inferred, so a field added to `TreasuryDto` fails
+    // here instead of quietly leaving the degraded shape a field short — which is
+    // exactly what happened when `demoUsd` was added.
     return {
       lines: [],
       liabilityUsd: null,
       feesUsd: null,
       payableUsd: null,
+      demoUsd: null,
       valuationIncomplete: true,
       degraded: true,
     };

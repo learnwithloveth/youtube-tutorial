@@ -19,6 +19,10 @@ import {
   type DecideDepositClaim,
 } from './application/use-cases/decide-deposit-claim';
 import {
+  createGrantDemoFunds,
+  type GrantDemoFunds,
+} from './application/use-cases/grant-demo-funds';
+import {
   createRecordDeposit,
   type RecordDeposit,
 } from './application/use-cases/record-deposit';
@@ -70,6 +74,14 @@ export interface LedgerModule {
   readonly requestWithdrawal: RequestWithdrawal;
   readonly decideWithdrawal: DecideWithdrawal;
   readonly recordDeposit: RecordDeposit;
+  /**
+   * An operator issues funds for a workshop, from the `demo` contra account.
+   *
+   * Beside `recordDeposit` and nothing like it: that one records money that
+   * arrived, this one admits that none did. See the use case for why the two are
+   * not one function with a flag.
+   */
+  readonly grantDemoFunds: GrantDemoFunds;
   /** A customer submits evidence that funds arrived. Credits nothing. */
   readonly submitDepositClaim: SubmitDepositClaim;
   /** An operator confirms or refuses that evidence. This is what credits. */
@@ -123,6 +135,7 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     requestWithdrawal: createRequestWithdrawal(dependencies),
     decideWithdrawal: createDecideWithdrawal(dependencies),
     recordDeposit: createRecordDeposit(dependencies),
+    grantDemoFunds: createGrantDemoFunds(dependencies),
     submitDepositClaim: createSubmitDepositClaim(dependencies),
     decideDepositClaim: createDecideDepositClaim(dependencies),
     sendReceipt: createSendReceipt(dependencies),
