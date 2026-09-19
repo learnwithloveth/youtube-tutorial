@@ -60,9 +60,14 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const result = await context.postMessage({
-    // The author is decided from the session, never from the request. A customer
-    // who posts `author: 'operator'` is still a customer.
-    author: user.role === 'admin' ? 'operator' : 'customer',
+    // The caller's tier, from the session and never from the request — a customer
+    // who posts `role: 'operator'` is still a customer.
+    //
+    // What part they play in the thread is not this: an operator writing in their
+    // own support thread is the customer in it, and `postMessage` decides that
+    // from whose thread it is. Deciding it here, from the role alone, is what made
+    // the widget unusable for anybody with console access.
+    role: user.role === 'admin' ? 'operator' : 'customer',
     authorId: user.id,
     body: payload.body,
     ...(typeof payload.conversationId === 'string'

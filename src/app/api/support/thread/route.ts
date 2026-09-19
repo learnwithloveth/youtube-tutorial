@@ -45,13 +45,17 @@ export async function GET(request: Request): Promise<Response> {
   const operator = user.role === 'admin';
 
   // A customer may only ever read their own, whatever they asked for — the id is
-  // ignored rather than checked, so there is nothing to get wrong. An operator
-  // addresses a thread by id, and gets nothing without one.
-  const thread = operator
-    ? conversationId === null
-      ? { conversation: null, messages: [], degraded: false }
-      : await getSupportThread(conversationId)
-    : await getMySupportThread(user.id);
+  // ignored rather than checked, so there is nothing to get wrong.
+  //
+  // An operator addresses a thread by id. Naming none means their own, exactly as
+  // it does for anybody else: an operator has a support thread too, and the widget
+  // asks for it without an id. This used to answer them an empty thread, so the
+  // widget never learned a conversation existed and every message they sent came
+  // back as 'that conversation is no longer available'.
+  const thread =
+    operator && conversationId !== null
+      ? await getSupportThread(conversationId)
+      : await getMySupportThread(user.id);
 
   if (thread.conversation === null) {
     return json({ changed: true, conversation: null, messages: [] });

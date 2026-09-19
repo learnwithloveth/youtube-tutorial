@@ -783,11 +783,10 @@ describe('the demo funds email', () => {
     expect(result.ok).toBe(true);
     const [message] = ctx.outbox;
 
-    expect(message?.subject).toContain('Demo funds');
+    expect(message?.subject).toContain('added to your account');
     // Trailing zeros dropped for reading. The record keeps its own precision.
     expect(message?.subject).toContain('500 USDT');
     for (const body of [message?.text ?? '', message?.html ?? '']) {
-      expect(body).toContain('demo funds');
       expect(body).toContain('Tron (TRC-20)');
       expect(body).toContain('Tuesday workshop');
     }

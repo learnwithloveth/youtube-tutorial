@@ -180,7 +180,7 @@ describe('support conversations', () => {
 
   it("opens a thread on a customer's first message and names it from what they wrote", async () => {
     const result = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'My SEPA deposit has not landed after two hours — reference NVX-8841.',
     });
@@ -196,8 +196,8 @@ describe('support conversations', () => {
   });
 
   it('continues the same thread rather than opening a second', async () => {
-    const first = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
-    const second = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Still there?' });
+    const first = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    const second = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Still there?' });
 
     expect(first.ok && second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
@@ -210,12 +210,12 @@ describe('support conversations', () => {
   });
 
   it("refuses a customer writing into somebody else's thread, without confirming it exists", async () => {
-    const mine = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    const mine = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
     expect(mine.ok).toBe(true);
     if (!mine.ok) return;
 
     const intruder = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: OTHER,
       conversationId: mine.value.conversation.id,
       body: 'Let me see that',
@@ -228,21 +228,59 @@ describe('support conversations', () => {
     expect(intruder.error.kind).toBe('conversation-not-found');
   });
 
-  it('refuses to let an operator start a conversation', async () => {
-    // A support thread the customer never opened is a message arriving from
-    // nowhere, in a transcript they can read.
-    const result = await harness.post({ author: 'operator', authorId: OPERATOR, body: 'Hi there' });
+  /*
+   * An operator naming no thread gets their *own*, as its customer.
+   *
+   * This used to be refused outright, and the refusal was the bug: anybody with
+   * console access opening the support widget was told "that conversation is no
+   * longer available" on every message they sent, forever. The rule it was
+   * enforcing — an operator may not start a thread *for a customer* — is now
+   * structural rather than checked, because the command has no field with which to
+   * name somebody else's account.
+   */
+  it('opens an operator their own thread, with them as its customer', async () => {
+    const result = await harness.post({
+      role: 'operator',
+      authorId: OPERATOR,
+      body: 'Something is wrong with my own account',
+    });
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.opened).toBe(true);
+    expect(result.value.conversation.userId).toBe(OPERATOR);
+    // The part, not the tier. In their own thread they are the customer, so the
+    // transcript does not label their own question as an agent's reply.
+    expect(result.value.message.author).toBe('customer');
   });
 
-  it("moves the unread badge to the customer when an operator replies", async () => {
-    const opened = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
+  /* And the half that still matters: writing into a thread that is not theirs is
+     what makes somebody the operator in it. */
+  it('makes an operator the operator only in somebody else one', async () => {
+    const opened = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
 
     const reply = await harness.post({
-      author: 'operator',
+      role: 'operator',
+      authorId: OPERATOR,
+      conversationId: opened.value.conversation.id,
+      body: 'Looking into it',
+    });
+
+    expect(reply.ok).toBe(true);
+    if (!reply.ok) return;
+    expect(reply.value.message.author).toBe('operator');
+  });
+
+  it("moves the unread badge to the customer when an operator replies", async () => {
+    const opened = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    const reply = await harness.post({
+      role: 'operator',
       authorId: OPERATOR,
       conversationId: opened.value.conversation.id,
       body: 'Looking into it now.',
@@ -259,12 +297,12 @@ describe('support conversations', () => {
   });
 
   it('links each push to the screen that answers it, and tags it by conversation', async () => {
-    const opened = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    const opened = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
     const id = opened.value.conversation.id;
 
-    await harness.post({ author: 'operator', authorId: OPERATOR, conversationId: id, body: 'Hi' });
+    await harness.post({ role: 'operator', authorId: OPERATOR, conversationId: id, body: 'Hi' });
 
     const [toOperators, toCustomer] = harness.push.sent;
     expect(toOperators).toMatchObject({
@@ -288,7 +326,7 @@ describe('support conversations', () => {
   });
 
   it('reopens a resolved thread when the customer writes again', async () => {
-    const opened = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    const opened = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
 
@@ -302,7 +340,7 @@ describe('support conversations', () => {
     expect(resolved.ok && resolved.value.unreadForOperator).toBe(0);
 
     const again = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       conversationId: opened.value.conversation.id,
       body: 'It happened again.',
@@ -317,7 +355,7 @@ describe('support conversations', () => {
   });
 
   it('writes a system line when a thread is claimed or resolved, credited to nobody', async () => {
-    const opened = await harness.post({ author: 'customer', authorId: CUSTOMER, body: 'Hello' });
+    const opened = await harness.post({ role: 'customer', authorId: CUSTOMER, body: 'Hello' });
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
 
@@ -346,7 +384,7 @@ describe('support conversations', () => {
     // No caption. Somebody who screenshots the error has said something, and
     // demanding text alongside it would be a field between them and the point.
     const result = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: '',
       attachmentId: 'img-1',
@@ -366,7 +404,7 @@ describe('support conversations', () => {
     await harness.attachments.put({ id: 'img-theirs', userId: OTHER });
 
     const result = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'Look at this',
       attachmentId: 'img-theirs',
@@ -393,7 +431,7 @@ describe('support conversations', () => {
      * hand. So it is written down here, and the route compares against it.
      */
     const opened = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'My card was declined',
     });
@@ -404,7 +442,7 @@ describe('support conversations', () => {
 
     const replied = await harness.post({
       conversationId: opened.value.conversation.id,
-      author: 'operator',
+      role: 'operator',
       authorId: OPERATOR,
       body: 'Try this',
       attachmentId: 'img-from-agent',
@@ -422,7 +460,7 @@ describe('support conversations', () => {
     await harness.attachments.put({ id: 'img-mine', userId: CUSTOMER });
 
     const result = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'Here it is',
       attachmentId: 'img-mine',
@@ -436,7 +474,7 @@ describe('support conversations', () => {
     await harness.attachments.put({ id: 'img-1', userId: CUSTOMER });
 
     const first = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'Here',
       attachmentId: 'img-1',
@@ -445,7 +483,7 @@ describe('support conversations', () => {
 
     // Already claimed. A replayed request must not put one upload on two messages.
     const second = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'And again',
       attachmentId: 'img-1',
@@ -457,12 +495,12 @@ describe('support conversations', () => {
   });
 
   it('rejects an empty or oversized message before anything is written', async () => {
-    const empty = await harness.post({ author: 'customer', authorId: CUSTOMER, body: '   ' });
+    const empty = await harness.post({ role: 'customer', authorId: CUSTOMER, body: '   ' });
     expect(empty.ok).toBe(false);
     if (!empty.ok) expect(empty.error.kind).toBe('message-empty');
 
     const huge = await harness.post({
-      author: 'customer',
+      role: 'customer',
       authorId: CUSTOMER,
       body: 'x'.repeat(MAX_MESSAGE_LENGTH + 1),
     });

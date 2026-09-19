@@ -19,10 +19,23 @@ import type { SupportDependencies } from '../ports';
  *
  * What differs is authority, and that is checked once, here:
  *
- *  - A customer may only write to their own thread, and opening one is implicit:
- *    if they have no open conversation, this creates it.
- *  - An operator may write to any thread, and may not create one. A support thread
- *    a customer never started is a message arriving from nowhere.
+ *  - Anyone may write to their own thread, and opening one is implicit: with no
+ *    open conversation, this creates it.
+ *  - An operator may additionally write to *somebody else's* thread, and may not
+ *    create one for them. A support thread a customer never started is a message
+ *    arriving from nowhere, in a transcript they can read.
+ *
+ * ── The part is decided by the thread, not by the account ─────────────────────
+ * `role` says what the caller is allowed to do; `author` says which part they are
+ * playing in this particular conversation, and they are not the same question. An
+ * operator is also a person with an account, and when they write in their *own*
+ * thread they are the customer in it.
+ *
+ * Conflating the two is a bug this had: the role alone decided the author, so an
+ * operator opening the customer widget was refused with "that conversation is no
+ * longer available" on every message. They had no thread, the operator branch
+ * would not open one, and the error for "you named no conversation" is the same
+ * error as "that conversation is not yours".
  *
  * ── Why the push is awaited but cannot fail ────────────────────────────────────
  * `notify` is best-effort by contract. The message is already written by the time
@@ -32,12 +45,22 @@ import type { SupportDependencies } from '../ports';
  */
 
 export interface PostMessageCommand {
-  /** Omitted by a customer starting fresh; required for an operator. */
+  /**
+   * Omitted when the caller means their own thread, whoever they are.
+   *
+   * An operator replying to a customer names the thread; anybody writing about
+   * their own account does not have one to name, and this opens it.
+   */
   readonly conversationId?: string | undefined;
-  readonly author: 'customer' | 'operator';
+  /**
+   * What the caller is *allowed* to do, straight from their account.
+   *
+   * Not which part they play — see `locate`. This used to be `author`, decided by
+   * the route, and that is precisely what broke: an operator has a support thread
+   * like everybody else, and naming them the operator in it made it unreachable.
+   */
+  readonly role: 'customer' | 'operator';
   readonly authorId: UserId;
-  /** The customer whose thread this is. For an operator, read from the thread. */
-  readonly userId?: UserId | undefined;
   readonly body: string;
   /** An image already uploaded by this caller. Claimed here, not trusted. */
   readonly attachmentId?: string | undefined;
@@ -69,7 +92,7 @@ export function createPostMessage(deps: SupportDependencies): PostMessage {
 
     const found = await locate(deps, command, now);
     if (!found.ok) return found;
-    const { conversation, opened } = found.value;
+    const { conversation, opened, author } = found.value;
 
     // Claimed before the message is written, and scoped to the uploader: an id
     // that does not exist, belongs to somebody else, or is already on another
@@ -93,7 +116,9 @@ export function createPostMessage(deps: SupportDependencies): PostMessage {
       id: deps.ids.next(),
       conversationId: conversation.id,
       userId: conversation.userId,
-      author: command.author,
+      // The part played in *this* thread, which the locator worked out from whose
+      // thread it is. An operator writing in their own is a customer in it.
+      author,
       authorId: command.authorId,
       body,
       attachmentId,
@@ -119,45 +144,61 @@ export function createPostMessage(deps: SupportDependencies): PostMessage {
 }
 
 /**
- * Finds the thread this message belongs to, creating one where that is allowed.
+ * Finds the thread this message belongs to, creating one where that is allowed,
+ * and works out which part the caller is playing in it.
  *
  * The authority check lives here because it is the same check in three shapes: an
- * operator addressing a thread by id, a customer addressing their own by id, and a
- * customer addressing the one they have open.
+ * operator addressing somebody else's thread by id, anybody addressing their own
+ * by id, and anybody addressing the one they have open.
+ *
+ * ── Own thread beats role, every time ─────────────────────────────────────────
+ * A thread that belongs to the caller makes them the customer in it whatever their
+ * account says, so an operator can use the support widget like anybody else. Only
+ * a thread that is *not* theirs puts them in the operator's chair — which is the
+ * one case where the role has to be checked at all.
  */
 async function locate(
   deps: SupportDependencies,
   command: PostMessageCommand,
   now: Date,
-): Promise<Result<{ conversation: Conversation; opened: boolean }, SupportError>> {
+): Promise<
+  Result<
+    { conversation: Conversation; opened: boolean; author: 'customer' | 'operator' },
+    SupportError
+  >
+> {
   if (command.conversationId !== undefined) {
     const conversation = await deps.conversations.find(command.conversationId);
     if (conversation === null) {
       return err(SupportErrors.conversationNotFound(command.conversationId));
     }
 
+    if (conversation.belongsTo(command.authorId)) {
+      return ok({ conversation, opened: false, author: 'customer' });
+    }
+
     // Not-found rather than forbidden for a thread that exists but is not theirs.
     // Telling a caller which of their guessed ids was real is the first thing worth
     // knowing if you are enumerating other people's support threads.
-    if (command.author === 'customer' && !conversation.belongsTo(command.authorId)) {
+    if (command.role !== 'operator') {
       return err(SupportErrors.conversationNotFound(command.conversationId));
     }
 
-    return ok({ conversation, opened: false });
+    return ok({ conversation, opened: false, author: 'operator' });
   }
 
-  if (command.author === 'operator') {
-    // An operator cannot start a thread. A support conversation a customer never
-    // opened is a message arriving from nowhere, in a transcript they can read.
-    return err(SupportErrors.conversationNotFound('(none supplied)'));
-  }
-
+  // No conversation named, so this is about the caller's own account — the only
+  // thread anybody can mean without naming one. An operator lands here too, and
+  // that is the fix: the rule they used to hit was meant to stop them opening a
+  // thread *for a customer*, not to stop them having one.
   const existing = await deps.conversations.findOpenForUser(command.authorId);
-  if (existing !== null) return ok({ conversation: existing, opened: false });
+  if (existing !== null) {
+    return ok({ conversation: existing, opened: false, author: 'customer' });
+  }
 
   const conversation = Conversation.open({
     id: deps.ids.next(),
-    userId: command.userId ?? command.authorId,
+    userId: command.authorId,
     // Derived from what they wrote. See `subjectFrom` for why the widget does not
     // ask for one.
     subject: subjectFrom(command.body),
@@ -165,7 +206,7 @@ async function locate(
   });
   await deps.conversations.create(conversation);
 
-  return ok({ conversation, opened: true });
+  return ok({ conversation, opened: true, author: 'customer' });
 }
 
 /** Tells whoever did not send it. Never throws — see the port. */
