@@ -158,7 +158,14 @@ export async function getReceipt(
         assetName: nameForAsset(deps, snapshot.asset),
         network: snapshot.network,
         networkLabel: network,
-        status: snapshot.status,
+        // `confirming` collapses to `pending` here, and only here. A receipt has
+        // three outcomes because a document either records a settlement, records a
+        // refusal, or acknowledges something still waiting — and a claim waiting on
+        // the chain is squarely the third. The acknowledgement copy already says
+        // "an operator confirms the transaction on chain first", which is precisely
+        // what is happening. The distinction that matters lives on the wallet page,
+        // where the customer can act on it.
+        status: snapshot.status === 'confirming' ? 'pending' : snapshot.status,
         amount: (credited ?? snapshot.claimedAmount).toTrimmedString(),
         counterparty: snapshot.reference === '' ? null : snapshot.reference,
         counterpartyLabel: 'Your reference',

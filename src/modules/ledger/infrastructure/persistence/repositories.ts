@@ -129,6 +129,8 @@ export class DrizzleLedgerRepository implements LedgerRepository {
         id: transfer.id,
         kind: transfer.kind,
         reference: transfer.reference,
+        network: transfer.network,
+        txHash: transfer.txHash,
         occurredAt: transfer.occurredAt,
       });
 
@@ -179,6 +181,8 @@ export class DrizzleLedgerRepository implements LedgerRepository {
         scale: accounts.scale,
         kind: transfers.kind,
         reference: transfers.reference,
+        network: transfers.network,
+        txHash: transfers.txHash,
       })
       .from(entries)
       // Joined rather than fetched per row: a statement of fifty lines would
@@ -195,6 +199,8 @@ export class DrizzleLedgerRepository implements LedgerRepository {
       transferId: row.transferId,
       kind: row.kind,
       reference: row.reference,
+      network: row.network,
+      txHash: row.txHash,
       accountId: row.accountId,
       delta: Money.fromDecimalString(row.delta, row.asset, row.scale),
       occurredAt: row.occurredAt,
@@ -543,6 +549,9 @@ export class DrizzleDepositClaimRepository implements DepositClaimRepository {
         proofId: snapshot.proofId,
         status: snapshot.status,
         submittedAt: snapshot.submittedAt,
+        confirmingAt: snapshot.confirmingAt,
+        confirmingBy: snapshot.confirmingBy,
+        confirmingNote: snapshot.confirmingNote,
         decidedAt: snapshot.decidedAt,
         decidedBy: snapshot.decidedBy,
         reason: snapshot.reason,
@@ -556,6 +565,12 @@ export class DrizzleDepositClaimRepository implements DepositClaimRepository {
         set: {
           creditedAmount: sql`excluded.credited_amount`,
           status: sql`excluded.status`,
+          // The confirming trio moves for the same reason the decided one does: an
+          // operator marking a claim as waiting on the chain is a state change on
+          // this row, and it is the only thing that writes these three.
+          confirmingAt: sql`excluded.confirming_at`,
+          confirmingBy: sql`excluded.confirming_by`,
+          confirmingNote: sql`excluded.confirming_note`,
           decidedAt: sql`excluded.decided_at`,
           decidedBy: sql`excluded.decided_by`,
           reason: sql`excluded.reason`,
@@ -591,7 +606,11 @@ export class DrizzleDepositClaimRepository implements DepositClaimRepository {
     const rows = await this.db
       .select()
       .from(depositClaims)
-      .where(eq(depositClaims.status, 'pending'))
+      // Confirming claims stay in the queue. They are undecided — an operator has
+      // seen the evidence and is waiting on the chain, not finished with it — and
+      // a queue that dropped them would be a list of work an operator can lose
+      // track of by marking something as in progress.
+      .where(inArray(depositClaims.status, ['pending', 'confirming']))
       // Oldest first: a customer waiting on funds notices the wait, not the size.
       .orderBy(asc(depositClaims.submittedAt))
       .limit(limit);
@@ -658,6 +677,9 @@ function toClaim(row: DepositClaimRow): DepositClaim {
     proofId: row.proofId,
     status: row.status,
     submittedAt: row.submittedAt,
+    confirmingAt: row.confirmingAt,
+    confirmingBy: (row.confirmingBy as UserId | null) ?? null,
+    confirmingNote: row.confirmingNote,
     decidedAt: row.decidedAt,
     decidedBy: (row.decidedBy as UserId | null) ?? null,
     reason: row.reason,

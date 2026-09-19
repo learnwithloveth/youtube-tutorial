@@ -26,10 +26,14 @@ export type NotificationTone = 'up' | 'down' | 'warn' | 'brand' | 'neutral';
 export const COPY: Partial<Record<ActivityKind, { title: string; tone: NotificationTone }>> = {
   'price-alert-triggered': { title: 'Price alert', tone: 'brand' },
   'deposit-recorded': { title: 'Deposit credited', tone: 'up' },
+  // Neutral, not `up`: nothing has been credited, and green is the colour this
+  // feed uses for money that has actually arrived. The title uses the customer's
+  // own word for the state — their wallet says "Pending" about the same row.
+  'deposit-confirming': { title: 'Deposit pending', tone: 'neutral' },
   // Not 'Deposit credited'. The customer is told what it is, in the same words
   // their statement uses, so nobody discovers later that a workshop balance was
   // never money.
-  'demo-funds-granted': { title: 'Demo funds added', tone: 'brand' },
+  'demo-funds-granted': { title: 'Funds added', tone: 'brand' },
   'deposit-rejected': { title: 'Deposit not accepted', tone: 'down' },
   'withdrawal-requested': { title: 'Withdrawal requested', tone: 'neutral' },
   'withdrawal-approved': { title: 'Withdrawal approved', tone: 'up' },
@@ -73,6 +77,8 @@ export function bodyFor(event: DescribableEvent): string | null {
 const PUSH_LINKS: Partial<Record<ActivityKind, string>> = {
   'price-alert-triggered': '/app/alerts',
   'deposit-recorded': '/app/transactions',
+  // The wallet, not the feed: that is where the claim and its progress note are.
+  'deposit-confirming': '/app/wallet',
   'demo-funds-granted': '/app/transactions',
   'withdrawal-approved': '/app/transactions',
   'verification-approved': '/app/settings?tab=verification',

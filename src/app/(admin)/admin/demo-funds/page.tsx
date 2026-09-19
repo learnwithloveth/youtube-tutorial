@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Coins, Search, TriangleAlert } from 'lucide-react';
+import { Coins, Mail, ScrollText, Search, TriangleAlert } from 'lucide-react';
 
 import { formatAccountNumber } from '@/modules/identity';
+import { smtpConfig } from '@/platform/env';
 import { requireAdmin } from '@/server/auth';
 import { fundableAssets, ledger } from '@/server/ledger';
 import { getUsers } from '@/server/users';
@@ -48,7 +49,7 @@ import { GrantForm } from './_components/grant-form';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Demo funds',
+  title: 'Fund user',
   robots: { index: false, follow: false },
 };
 
@@ -70,12 +71,16 @@ export default async function DemoFundsPage({
   const assets = fundableAssets();
 
   const unavailable = ledger() === null;
+  // Asked here rather than inside the form: with no SMTP the platform's transport
+  // logs a message and reports success, so a form that offered to email would be
+  // reporting a send that never happened.
+  const mailConfigured = smtpConfig() !== null;
 
   return (
     <>
       <AdminPageHeader
-        title="Demo funds"
-        description="Put a balance on any account for a workshop. These are not deposits: nothing arrived, and the ledger records them as demo funds so nobody can mistake them for money later."
+        title="Fund user"
+        description=""
       />
 
       {unavailable ? (
@@ -124,7 +129,7 @@ export default async function DemoFundsPage({
           </button>
         </form>
 
-        <TableShell caption="Accounts that can be funded" minWidth="46rem">
+        <TableShell caption="Accounts that can be funded" minWidth="58rem">
           <thead>
             <tr>
               <Th>Account</Th>
@@ -177,7 +182,12 @@ export default async function DemoFundsPage({
                     </span>
                   </Td>
                   <Td>
-                    <GrantForm userId={user.id} assets={assets} compact />
+                    <GrantForm
+                      userId={user.id}
+                      assets={assets}
+                      mailConfigured={mailConfigured}
+                      compact
+                    />
                   </Td>
                 </Tr>
               ))
@@ -185,13 +195,29 @@ export default async function DemoFundsPage({
           </tbody>
         </TableShell>
 
-        <p className="mt-4 border-t border-line pt-4 text-2xs leading-relaxed text-fg-subtle">
-          <Coins className="mr-1.5 inline size-3 align-[-1px]" />
-          Every grant is written to the audit log against the account that received it,
-          naming the operator who issued it. There is no clawback: taking funds back is
-          a second transfer in the other direction, and this screen deliberately only
-          credits — see <span className="font-mono">grant-demo-funds.ts</span> for why.
-        </p>
+        <ul className="mt-4 grid gap-1.5 border-t border-line pt-4 text-2xs leading-relaxed text-fg-subtle">
+          <li>
+            <Coins className="mr-1.5 inline size-3 align-[-1px]" />
+            An asset that travels on more than one chain asks which — USDT over Tron
+            or Ethereum, bitcoin on-chain or over Lightning. They differ in fee,
+            address format, and the coin a withdrawal is eventually paid for with. It
+            is still one balance per asset either way: the network is the route in,
+            exactly as on a real exchange, not a pot of its own.
+          </li>
+          <li>
+            <Mail className="mr-1.5 inline size-3 align-[-1px]" />
+            {mailConfigured
+              ? 'Ticking Email tells the student, in a message that says plainly these are demo funds and that nothing is owed to them.'
+              : 'No mail server is configured on this deployment, so the email option is unavailable.'}
+          </li>
+          <li>
+            <ScrollText className="mr-1.5 inline size-3 align-[-1px]" />
+            Every grant is written to the audit log against the account that received
+            it, naming the operator who issued it. There is no clawback — taking funds
+            back is a second transfer in the other direction, and this screen
+            deliberately only credits.
+          </li>
+        </ul>
       </Panel>
     </>
   );

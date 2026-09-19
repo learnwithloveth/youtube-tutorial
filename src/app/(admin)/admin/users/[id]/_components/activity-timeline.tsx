@@ -5,6 +5,7 @@ import {
   Ban,
   Clock,
   Coins,
+  Hourglass,
   Crosshair,
   FileText,
   KeyRound,
@@ -53,6 +54,7 @@ const KIND_META: Record<
   'withdrawal-approved': { label: 'Withdrawal approved', icon: BadgeCheck, tone: 'up' },
   'withdrawal-rejected': { label: 'Withdrawal rejected', icon: Ban, tone: 'warn' },
   'deposit-recorded': { label: 'Deposit credited', icon: ArrowDownToLine, tone: 'brand' },
+  'deposit-confirming': { label: 'Deposit pending on chain', icon: Hourglass, tone: 'neutral' },
   'deposit-rejected': { label: 'Deposit refused', icon: ArrowDownToLine, tone: 'warn' },
   // A different icon from a deposit as well as a different label. On a timeline
   // the glyph is read before the words, and two identical arrows would undo the

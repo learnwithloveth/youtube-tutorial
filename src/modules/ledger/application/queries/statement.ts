@@ -34,8 +34,18 @@ export interface StatementLineDto {
   readonly id: string;
   readonly transferId: string;
   readonly kind: TransferKind;
-  /** What caused it: a transaction hash, a withdrawal id, a ticket reference. */
+  /** What caused it, in words. Written for an operator, not for a customer. */
   readonly reference: string;
+  /**
+   * The chain, by network id — `tron`, `ethereum`, `bitcoin`.
+   *
+   * The distinction USDT makes unavoidable: one asset, one balance, two networks
+   * that differ in fee, address format and the coin a withdrawal is paid for
+   * with. Null where the movement crossed no chain.
+   */
+  readonly network: string | null;
+  /** The transaction on that chain, in full. Null where there is not one. */
+  readonly txHash: string | null;
   readonly asset: string;
   /** Signed exact decimal string: negative left the account. */
   readonly delta: string;
@@ -89,6 +99,8 @@ export async function getStatement(
       transferId: entry.transferId,
       kind: entry.kind,
       reference: entry.reference,
+      network: entry.network,
+      txHash: entry.txHash,
       asset: entry.delta.currency,
       delta: entry.delta.toDecimalString(),
       direction: entry.delta.isNegative ? 'out' : 'in',

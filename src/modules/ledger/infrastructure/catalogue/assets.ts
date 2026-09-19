@@ -54,6 +54,8 @@ const ASSETS: readonly LedgerAsset[] = [
         nativeAsset: 'BTC',
         fee: '0.00004000',
         eta: '~20 min',
+        // A txid is written as bare hex, big-endian, with no prefix.
+        txHashPrefix: '',
         // Legacy (1), P2SH (3) and bech32 (bc1). Deliberately permissive on length.
         addressPattern: /^(bc1[a-z0-9]{25,62}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/,
       },
@@ -63,6 +65,8 @@ const ASSETS: readonly LedgerAsset[] = [
         nativeAsset: 'BTC',
         fee: '0.00000001',
         eta: 'Instant',
+        // A payment hash, and bare hex like a txid.
+        txHashPrefix: '',
         // A BOLT-11 invoice, not an address — which is why Lightning cannot reuse
         // the on-chain pattern and needs its own route.
         addressPattern: /^ln(bc|tb)[0-9a-z]{50,}$/i,
@@ -81,6 +85,8 @@ const ASSETS: readonly LedgerAsset[] = [
         nativeAsset: 'ETH',
         fee: '0.001200000000000000',
         eta: '~3 min',
+        // Ethereum writes its hashes with an 0x prefix, as it does everything.
+        txHashPrefix: '0x',
         addressPattern: /^0x[0-9a-fA-F]{40}$/,
       },
     ],
@@ -103,6 +109,8 @@ const ASSETS: readonly LedgerAsset[] = [
         nativeAsset: 'ETH',
         fee: '6.000000',
         eta: '~3 min',
+        // Ethereum writes its hashes with an 0x prefix, as it does everything.
+        txHashPrefix: '0x',
         addressPattern: /^0x[0-9a-fA-F]{40}$/,
       },
       {
@@ -113,6 +121,8 @@ const ASSETS: readonly LedgerAsset[] = [
         // A fraction of the Ethereum fee, which is why most USDT settles here.
         fee: '1.000000',
         eta: '~1 min',
+        // Tron writes its transaction ids as bare hex, like Bitcoin.
+        txHashPrefix: '',
         addressPattern: TRON_ADDRESS,
       },
     ],
@@ -130,6 +140,8 @@ const ASSETS: readonly LedgerAsset[] = [
         nativeAsset: 'TRX',
         fee: '1.100000',
         eta: '~1 min',
+        // Tron writes its transaction ids as bare hex, like Bitcoin.
+        txHashPrefix: '',
         addressPattern: TRON_ADDRESS,
       },
     ],

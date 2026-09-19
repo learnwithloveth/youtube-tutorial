@@ -9,16 +9,23 @@ import {
 } from 'lucide-react';
 
 import type { TransferKind } from '@/modules/ledger';
+import { shortenHash } from '@/modules/ledger';
 import { requireUser } from '@/server/auth';
-import { getStatementFor, withdrawableAssets } from '@/server/ledger';
+import { getOwnTransactions, getStatementFor, withdrawableAssets } from '@/server/ledger';
+import { getInstruments } from '@/server/market-data';
+import { shortenDecimalString } from '@/shared/kernel';
 import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
+import { AssetMark } from '@/shared/ui/visuals/asset-mark';
 import type { UserId } from '@/shared/kernel/ids';
 
-import { PageHeader, Panel } from '../../../_console/components/page-header';
+import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
+import { ReceiptLink } from '../_components/receipt-link';
+import { TxHash } from '../_components/tx-hash';
+import { CUSTOMER_STATUS } from '../_lib/record-status';
 
 /**
  * The statement: every movement on this account, newest first.
@@ -50,6 +57,15 @@ export const metadata: Metadata = {
 };
 
 const PAGE_SIZE = 25;
+
+/**
+ * How many deposit and withdrawal records to list above the statement.
+ *
+ * Deliberately short and unpaged. This panel answers "where is the thing I asked
+ * for, and can I print it" — a question about recent requests. The full history
+ * is the statement below, which is paged.
+ */
+const RECORD_LIMIT = 10;
 
 const KIND_LABEL: Record<TransferKind, string> = {
   deposit: 'Deposit',
@@ -86,13 +102,40 @@ export default async function TransactionsPage({
 
   const assets = withdrawableAssets();
   const asset = assets.find((candidate) => candidate.code === params.asset)?.code;
+
+  /*
+   * How a chain is written, per asset.
+   *
+   * Keyed by asset *and* network, not by network alone, because the catalogue
+   * names the same chain differently depending on what is travelling over it —
+   * Tron carrying USDT is "Tron (TRC-20)" and Tron carrying TRX is just "Tron".
+   * The token standard is the part a customer has to get right, and only the
+   * pairing knows it.
+   */
+  const networkLabels = new Map(
+    assets.flatMap((entry) =>
+      entry.networks.map((network) => [`${entry.code}:${network.id}`, network.label] as const),
+    ),
+  );
   const page = Math.max(Number(params.page ?? '1') || 1, 1);
 
-  const statement = await getStatementFor(user.id as UserId, {
-    asset,
-    limit: PAGE_SIZE,
-    offset: (page - 1) * PAGE_SIZE,
-  });
+  // Two reads, and they are not the same set. The statement is what moved; the
+  // records are the requests behind it — including a refused deposit and a
+  // withdrawal still on hold, neither of which ever produced an entry. A receipt
+  // is issued against a record, which is why the links live on that panel.
+  const [statement, records] = await Promise.all([
+    getStatementFor(user.id as UserId, {
+      asset,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
+    getOwnTransactions(user.id as UserId, RECORD_LIMIT),
+  ]);
+
+  // Logos and brand hues, for the coin beside each movement. Editorial data from
+  // market-data, which is where a glyph belongs — the ledger has never heard of one.
+  const instruments = await getInstruments();
+  const marks = new Map(instruments.map((i) => [i.symbol, { glyph: i.glyph, hue: i.hue }]));
 
   const pages = Math.max(Math.ceil(statement.total / PAGE_SIZE), 1);
   const incoming = statement.lines.filter((line) => line.direction === 'in').length;
@@ -112,9 +155,7 @@ export default async function TransactionsPage({
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
           <p className="text-sm text-fg">
             Your statement could not be loaded.{' '}
-            <span className="text-fg-muted">
-              This is a failed query, not an empty history.
-            </span>
+            <span className="text-fg-muted">This is a failed query, not an empty history.</span>
           </p>
         </div>
       ) : null}
@@ -143,6 +184,63 @@ export default async function TransactionsPage({
         />
       </div>
 
+      {records.transactions.length > 0 ? (
+        <Panel className="mb-4">
+          <PanelHeader
+            title="Deposits and withdrawals"
+            subtitle="Your requests and where each one stands. Open one to print its receipt."
+          />
+          <ul className="divide-y divide-line/60">
+            {records.transactions.map((record) => {
+              const state = CUSTOMER_STATUS[record.status];
+              const detail =
+                record.status === 'rejected'
+                  ? record.reason
+                  : (record.confirmingNote ?? state.hint);
+
+              return (
+                <li key={record.id} className="flex flex-wrap items-center gap-3 py-3">
+                  {record.direction === 'in' ? (
+                    <ArrowDownLeft className="size-4 shrink-0 text-up" />
+                  ) : (
+                    <ArrowUpRight className="size-4 shrink-0 text-down" />
+                  )}
+                  <span className="min-w-0">
+                    <span data-numeric className="block font-mono text-sm text-fg">
+                      {shortenDecimalString(record.settledAmount ?? record.amount)} {record.asset}
+                    </span>
+                    <span className="block text-2xs text-fg-subtle">
+                      {record.kind === 'deposit' ? 'Deposit' : 'Withdrawal'} · {record.network} ·{' '}
+                      {formatDate(record.occurredAt)}
+                    </span>
+                    {/* Under the badge rather than inside it. "Pending" is the word
+                        that has to be readable at a glance; *why* it is pending is
+                        a sentence, and a sentence does not fit in a badge. The
+                        operator's own note wins over the generic hint when there
+                        is one — they know what this particular wait is about. */}
+                    {detail === null ? null : (
+                      <span className="mt-0.5 block text-2xs text-fg-muted">{detail}</span>
+                    )}
+                  </span>
+                  <span className="ml-auto flex shrink-0 items-center gap-2">
+                    <Badge tone={state.tone}>{state.label}</Badge>
+                    <ReceiptLink
+                      kind={record.kind}
+                      recordId={record.recordId}
+                      status={record.status}
+                    />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-4 border-t border-line pt-4 text-2xs leading-relaxed text-fg-subtle">
+            A receipt records one movement on your account. It is not a tax invoice — nothing in
+            this system issues one.
+          </p>
+        </Panel>
+      ) : null}
+
       <Panel>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <SlidersHorizontal className="size-3.5 text-fg-subtle" />
@@ -157,18 +255,20 @@ export default async function TransactionsPage({
           ))}
         </div>
 
-        <TableShell caption="Account movements" minWidth="48rem">
+        <TableShell caption="Account movements" minWidth="60rem">
           <thead>
             <tr>
               <Th>Date</Th>
               <Th>Type</Th>
-              <Th>Reference</Th>
+              <Th>Asset</Th>
+              <Th>Network</Th>
+              <Th>Transaction</Th>
               <Th numeric>Amount</Th>
             </tr>
           </thead>
           <tbody>
             {statement.lines.length === 0 ? (
-              <EmptyRow colSpan={4}>
+              <EmptyRow colSpan={6}>
                 {statement.degraded
                   ? 'Your statement could not be read.'
                   : asset
@@ -190,16 +290,51 @@ export default async function TransactionsPage({
                     </span>
                   </Td>
                   <Td>
-                    <span className="block max-w-88 truncate font-mono text-xs text-fg-subtle">
-                      {line.reference}
+                    <span className="flex items-center gap-2">
+                      {/* The network is passed, so USDT draws the chain's badge on
+                          the coin: Tether-on-Tron and Tether-on-Ethereum are the
+                          same balance and very much not the same transaction. */}
+                      <AssetMark
+                        symbol={line.asset}
+                        glyph={marks.get(line.asset)?.glyph ?? line.asset.slice(0, 1)}
+                        hue={marks.get(line.asset)?.hue ?? 'var(--chart-1)'}
+                        network={line.network}
+                        size="xs"
+                      />
+                      <span className="text-xs text-fg">{line.asset}</span>
                     </span>
+                  </Td>
+                  <Td>
+                    {line.network === null ? (
+                      // Never a dash standing in for a chain. A withdrawal fee is
+                      // an internal movement between two platform accounts and
+                      // crossed nothing, and saying so beats implying it did.
+                      <span className="text-2xs text-fg-subtle">Internal</span>
+                    ) : (
+                      <span className="text-xs text-fg-muted">
+                        {networkLabels.get(`${line.asset}:${line.network}`) ?? line.network}
+                      </span>
+                    )}
+                  </Td>
+                  <Td>
+                    {line.txHash === null ? (
+                      <span
+                        // Said, rather than left blank: this platform's payout path
+                        // ends at `payable` and broadcasts nothing, so a withdrawal
+                        // genuinely has no transaction to name. A blank cell reads
+                        // as missing data; this reads as the truth.
+                        title="Nothing is broadcast by this platform, so there is no transaction hash."
+                        className="text-2xs text-fg-subtle"
+                      >
+                        Not broadcast
+                      </span>
+                    ) : (
+                      <TxHash value={line.txHash} short={shortenHash(line.txHash)} />
+                    )}
                   </Td>
                   <Td numeric>
                     <span
-                      className={cn(
-                        'font-mono',
-                        line.direction === 'in' ? 'text-up' : 'text-fg',
-                      )}
+                      className={cn('font-mono', line.direction === 'in' ? 'text-up' : 'text-fg')}
                     >
                       {/* The sign is already on the value — it is the ledger's own
                           signed delta, not a formatting decision made here. */}
@@ -230,27 +365,12 @@ export default async function TransactionsPage({
             </span>
           </nav>
         ) : null}
-
-        <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
-          Amounts are exact and shown in the asset that moved. There is no dollar
-          column because a historical movement needs the price it had at the time,
-          which is not something this statement can reconstruct from today&rsquo;s
-          market without being wrong.
-        </p>
       </Panel>
     </>
   );
 }
 
-function AssetFilter({
-  label,
-  href,
-  active,
-}: {
-  label: string;
-  href: string;
-  active: boolean;
-}) {
+function AssetFilter({ label, href, active }: { label: string; href: string; active: boolean }) {
   return (
     <Link
       href={href}

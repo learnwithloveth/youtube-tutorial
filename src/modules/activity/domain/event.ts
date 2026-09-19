@@ -64,6 +64,16 @@ export type ActivityKind =
    */
   | 'deposit-rejected'
   /*
+   * An operator saw the evidence and the chain is what is being waited on.
+   *
+   * Its own kind rather than a second `deposit-recorded`, because nothing was
+   * recorded: no transfer exists and no balance moved. The customer's bell is the
+   * main reason it is here — before it, somebody who had sent a transaction could
+   * not tell "nobody has looked" from "we have looked, blocks are slow", and those
+   * want different responses from them.
+   */
+  | 'deposit-confirming'
+  /*
    * An operator issued demo funds into this account.
    *
    * Its own kind rather than a `deposit-recorded` with a different detail line,
@@ -138,6 +148,7 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'withdrawal-approved',
   'withdrawal-rejected',
   'deposit-recorded',
+  'deposit-confirming',
   'deposit-rejected',
   'demo-funds-granted',
   'admin-suspended',

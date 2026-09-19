@@ -13,8 +13,85 @@ import type { UserId } from '@/shared/kernel/ids';
 import type { DecisionFormState } from './form-state';
 import { trimDecimalString } from '@/shared/kernel';
 
+interface QueuedClaim {
+  readonly id: string;
+  readonly userId: string;
+  readonly asset: string;
+  readonly claimedAmount: string;
+}
+
 /**
- * An operator confirms or refuses a deposit claim.
+ * Marks a claim as waiting on the chain.
+ *
+ * ── No email, deliberately ────────────────────────────────────────────────────
+ * A decision sends one because it is final and the customer has to be able to
+ * read it later. This is an interim state that may be followed by another within
+ * the hour, and mailing every step of a wait is how a platform teaches people to
+ * filter its address. The bell and the push notification carry it instead, and the
+ * wallet shows the note for as long as it applies.
+ */
+async function markConfirming(input: {
+  claimId: string;
+  operator: { id: string; email: string };
+  note: string;
+  subject: QueuedClaim | undefined;
+}): Promise<DecisionFormState> {
+  const context = ledger();
+  if (context === null) {
+    return { status: 'error', message: 'The ledger is unavailable.', withdrawalId: null };
+  }
+
+  const result = await context.markDepositConfirming({
+    claimId: input.claimId,
+    operatorId: input.operator.id as UserId,
+    note: input.note,
+  });
+
+  if (!result.ok) {
+    logger.warn({
+      event: 'deposit_confirming_refused',
+      module: 'ledger',
+      reason: result.error.kind,
+      claimId: input.claimId,
+    });
+    return {
+      status: 'error',
+      message: presentLedgerError(result.error),
+      withdrawalId: input.claimId,
+    };
+  }
+
+  if (input.subject !== undefined) {
+    const request = await describeRequest();
+
+    await recordAndPush({
+      userId: input.subject.userId as UserId,
+      kind: 'deposit-confirming',
+      reference: `${input.claimId} by ${input.operator.email}`,
+      detail:
+        result.value.note ??
+        `${trimDecimalString(input.subject.claimedAmount)} ${input.subject.asset} awaiting confirmations`,
+      location: request.location,
+      agent: request.agent,
+      ipDigest: request.ipDigest,
+    });
+  }
+
+  // The queue still holds it — it is undecided — but its row and the customer's
+  // wallet both read differently now.
+  revalidatePath('/admin/approvals');
+  revalidatePath('/app/wallet');
+
+  return {
+    status: 'decided',
+    message:
+      'Marked pending on the network. The customer now sees it as Pending, with your note under it. Nothing has been credited, and it stays in this queue until you approve or reject it.',
+    withdrawalId: input.claimId,
+  };
+}
+
+/**
+ * An operator credits, refuses, or marks a deposit claim as pending on the chain.
  *
  * ── The authorisation check is here, not in the layout ─────────────────────────
  * `(admin)/layout.tsx` protects the *page*. It protects nothing here: a Server
@@ -35,12 +112,26 @@ export async function decideDepositAction(
   }
 
   const claimId = String(formData.get('claimId') ?? '');
-  const decision = formData.get('decision') === 'reject' ? 'reject' : 'approve';
+  const submitted = String(formData.get('decision') ?? '');
 
-  // Read before the decision: afterwards the claim is no longer pending and the
+  // Read before anything is written: afterwards the claim has moved on and the
   // amount would have to be re-derived for the audit line.
   const queue = await getPendingDepositClaims();
   const subject = queue.find((candidate) => candidate.id === claimId);
+
+  // Parked, not decided. Handled before the approve/reject split rather than as a
+  // third branch of it, because nothing below this point applies: no amount is
+  // credited, no receipt is owed, and the claim stays in the queue.
+  if (submitted === 'confirming') {
+    return markConfirming({
+      claimId,
+      operator,
+      note: String(formData.get('reason') ?? ''),
+      subject,
+    });
+  }
+
+  const decision = submitted === 'reject' ? 'reject' : 'approve';
 
   const result = await context.decideDepositClaim({
     claimId,

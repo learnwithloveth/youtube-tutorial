@@ -16,6 +16,15 @@ import { shortenDecimalString } from '@/shared/kernel';
 export type LedgerError =
   | { readonly kind: 'asset-not-supported'; readonly asset: string }
   | { readonly kind: 'network-not-supported'; readonly asset: string; readonly network: string }
+  /**
+   * The asset travels on more than one chain and nobody said which.
+   *
+   * Separate from `network-not-supported`, because the two need different words:
+   * one is "that chain is wrong for this coin", the other is "this coin does not
+   * have a single chain to assume". Defaulting to the first network instead would
+   * put a stablecoin on Ethereum because it happens to be listed first.
+   */
+  | { readonly kind: 'network-required'; readonly asset: string; readonly options: string }
   | { readonly kind: 'amount-invalid'; readonly reason: string }
   | { readonly kind: 'amount-below-minimum'; readonly minimum: string; readonly asset: string }
   | { readonly kind: 'destination-invalid'; readonly reason: string }
@@ -71,6 +80,11 @@ export const LedgerErrors = {
     kind: 'network-not-supported',
     asset,
     network,
+  }),
+  networkRequired: (asset: string, options: string): LedgerError => ({
+    kind: 'network-required',
+    asset,
+    options,
   }),
   amountInvalid: (reason: string): LedgerError => ({ kind: 'amount-invalid', reason }),
   amountBelowMinimum: (minimum: string, asset: string): LedgerError => ({
@@ -132,6 +146,8 @@ export function presentLedgerError(error: LedgerError): string {
       return `${error.asset} cannot be withdrawn from this account.`;
     case 'network-not-supported':
       return `${error.network} is not a supported network for ${error.asset}.`;
+    case 'network-required':
+      return `${error.asset} moves on more than one network. Choose ${error.options}.`;
     case 'amount-invalid':
       return error.reason;
     case 'amount-below-minimum':

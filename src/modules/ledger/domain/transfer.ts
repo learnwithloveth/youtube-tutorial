@@ -58,6 +58,33 @@ export interface TransferSnapshot {
    * explain six months later, and the one an auditor asks about first.
    */
   readonly reference: string;
+  /**
+   * The chain this movement belongs to, by network id — `tron`, `ethereum`.
+   *
+   * Null where the question does not apply: a withdrawal fee is an internal
+   * movement between two platform accounts and crosses no chain at all.
+   *
+   * It is stored on the transfer rather than looked up through the record behind
+   * it because a statement line *is* an entry, and an entry that cannot say which
+   * chain it happened on is one the customer has to go somewhere else to
+   * understand. USDT is the case that forces it: the same asset, the same balance,
+   * two completely different networks with different fees and different addresses.
+   */
+  readonly network: string | null;
+  /**
+   * The transaction on that chain.
+   *
+   * Three sources, and they are not equally solid, which is why the field is
+   * nullable rather than defaulted:
+   *
+   *  - a **deposit** carries the hash the customer gave when they claimed it;
+   *  - a **withdrawal** carries null, always. This platform's payout path ends at
+   *    `payable` and nothing is ever broadcast, so there is no transaction to name
+   *    and inventing one would assert a payment that did not happen;
+   *  - a **demo credit** carries a derived, chain-shaped value — see
+   *    `chain-reference.ts` for why that is not the same as inventing a fact.
+   */
+  readonly txHash: string | null;
 }
 
 export class Transfer {
@@ -66,6 +93,8 @@ export class Transfer {
   readonly entries: readonly Entry[];
   readonly occurredAt: Date;
   readonly reference: string;
+  readonly network: string | null;
+  readonly txHash: string | null;
 
   private constructor(snapshot: TransferSnapshot) {
     this.id = snapshot.id;
@@ -73,6 +102,8 @@ export class Transfer {
     this.entries = snapshot.entries;
     this.occurredAt = snapshot.occurredAt;
     this.reference = snapshot.reference;
+    this.network = snapshot.network;
+    this.txHash = snapshot.txHash;
   }
 
   static create(snapshot: TransferSnapshot): Transfer {

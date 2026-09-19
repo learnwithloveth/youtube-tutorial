@@ -24,7 +24,32 @@ import type { UserId } from '@/shared/kernel/ids';
  * produces an unevidenced claim for an operator to approve by accident.
  */
 
-export type DepositClaimStatus = 'pending' | 'approved' | 'rejected';
+/**
+ * Where a claim stands.
+ *
+ *   `pending`     filed, and waiting on an operator to look
+ *   `confirming`  an operator has looked, and it is waiting on the chain
+ *   `approved`    verified and credited
+ *   `rejected`    refused, with a reason the customer is shown
+ *
+ * ── Why `confirming` is not just `pending` with a note ────────────────────────
+ * The two wait on different things, and the customer's next move differs. A
+ * pending claim is waiting on a person, and if it sits there for a day something
+ * is wrong with the queue. A confirming one is waiting on a block, and a day is
+ * sometimes simply what that takes — the operator has already seen the evidence
+ * and is not the bottleneck.
+ *
+ * Collapsing them would mean a customer watching "submitted" for an hour with no
+ * way to tell whether anybody had looked, which is the state that generates the
+ * support ticket. It is also the distinction a workshop is trying to demonstrate:
+ * the gap between sending a transaction and it being spendable is the thing
+ * people new to this find surprising.
+ *
+ * It is not a decision. Nothing moves, `decidedAt` and `decidedBy` stay null, and
+ * the claim stays in the operator's queue — from here it still becomes approved or
+ * rejected like any other.
+ */
+export type DepositClaimStatus = 'pending' | 'confirming' | 'approved' | 'rejected';
 
 export interface DepositClaimSnapshot {
   readonly id: string;
@@ -55,6 +80,25 @@ export interface DepositClaimSnapshot {
   readonly proofId: string;
   readonly status: DepositClaimStatus;
   readonly submittedAt: Date;
+  /**
+   * When an operator marked it as waiting on the chain. Null if never marked.
+   *
+   * Kept beside `decidedAt` rather than sharing it, because they answer different
+   * questions — "when was this looked at" and "when was this settled" — and a
+   * claim that went straight from pending to approved has the second and not the
+   * first.
+   */
+  readonly confirmingAt: Date | null;
+  readonly confirmingBy: UserId | null;
+  /**
+   * What the operator said while it confirms — "3 of 6 confirmations, ~20 min".
+   *
+   * Optional, and its own field rather than `reason`. That one means "why this was
+   * refused" and is rendered as a refusal wherever it appears; putting a progress
+   * note in it would have the customer's wallet explain a rejection that did not
+   * happen.
+   */
+  readonly confirmingNote: string | null;
   readonly decidedAt: Date | null;
   readonly decidedBy: UserId | null;
   /** Required on a rejection. The customer is told. */
@@ -77,6 +121,9 @@ export class DepositClaim {
   readonly submittedAt: Date;
   private _creditedAmount: Money | null;
   private _status: DepositClaimStatus;
+  private _confirmingAt: Date | null;
+  private _confirmingBy: UserId | null;
+  private _confirmingNote: string | null;
   private _decidedAt: Date | null;
   private _decidedBy: UserId | null;
   private _reason: string | null;
@@ -93,6 +140,9 @@ export class DepositClaim {
     this.submittedAt = snapshot.submittedAt;
     this._creditedAmount = snapshot.creditedAmount;
     this._status = snapshot.status;
+    this._confirmingAt = snapshot.confirmingAt;
+    this._confirmingBy = snapshot.confirmingBy;
+    this._confirmingNote = snapshot.confirmingNote;
     this._decidedAt = snapshot.decidedAt;
     this._decidedBy = snapshot.decidedBy;
     this._reason = snapshot.reason;
@@ -145,6 +195,9 @@ export class DepositClaim {
       proofId: input.proofId,
       status: 'pending',
       submittedAt: input.now,
+      confirmingAt: null,
+      confirmingBy: null,
+      confirmingNote: null,
       decidedAt: null,
       decidedBy: null,
       reason: null,
@@ -162,6 +215,19 @@ export class DepositClaim {
   get creditedAmount(): Money | null {
     return this._creditedAmount;
   }
+  get confirmingAt(): Date | null {
+    return this._confirmingAt;
+  }
+  get confirmingBy(): UserId | null {
+    return this._confirmingBy;
+  }
+  get confirmingNote(): string | null {
+    return this._confirmingNote;
+  }
+  /** Still the operator's to decide — pending and confirming both are. */
+  get isUndecided(): boolean {
+    return this._status === 'pending' || this._status === 'confirming';
+  }
   get decidedAt(): Date | null {
     return this._decidedAt;
   }
@@ -178,17 +244,28 @@ export class DepositClaim {
   /**
    * Confirms the deposit for the amount the operator actually verified.
    *
-   * An operator may not approve their own claim. The rule is the one that governs
-   * withdrawals, for the same reason and with more force: crediting is the cheaper
-   * fraud, since it needs no counterparty and leaves the platform short only when
-   * custody is next reconciled.
+   * ── The self-approval rule is currently lifted, and that is a real trade ─────
+   * An operator used to be refused their own claim — the rule that governs
+   * withdrawals, applied with more force, because crediting is the cheaper fraud:
+   * it needs no counterparty and leaves the platform short only when custody is
+   * next reconciled. The check is commented out below rather than deleted, because
+   * it is the line to restore and nothing else has to change with it.
+   *
+   * It is lifted for the workshop deployment, where a tutor demonstrating the
+   * deposit flow on their own account is the ordinary case and the only "funds" in
+   * play are ones an operator could issue outright from the demo-funds screen
+   * anyway. On a deployment holding real customer money it should go back: with it
+   * off, a single compromised console account can credit itself any amount, and
+   * the only thing that surfaces it is the next custody reconciliation.
    */
   approve(operatorId: UserId, credited: Money, transferId: string, now: Date): void {
-    this.assertPending();
+    this.assertUndecided();
 
-    if (operatorId === this.userId) {
-      throw new RangeError('An operator cannot approve their own deposit.');
-    }
+    // Restore this to re-enable the rule. See the note above for what it costs to
+    // leave it off.
+    // if (operatorId === this.userId) {
+    //   throw new RangeError('An operator cannot approve their own deposit.');
+    // }
     if (credited.currency !== this.claimedAmount.currency) {
       throw new TypeError('The credited amount must be in the asset that was claimed.');
     }
@@ -203,8 +280,33 @@ export class DepositClaim {
     this._transferId = transferId;
   }
 
+  /**
+   * Says the evidence has been seen and the chain is what is being waited on.
+   *
+   * ── No self-approval guard here, and there would be no point in one ──────────
+   * Nothing is credited and no balance moves, so the guard `approve` carries — see
+   * that method for its current state — would buy nothing here even when it is on.
+   * The worst an operator can do to their own claim with this is tell themselves
+   * to keep waiting.
+   *
+   * Only from `pending`. Marking an already-confirming claim again is a no-op
+   * dressed as an action, and it would overwrite the timestamp that says how long
+   * it has been waiting.
+   */
+  markConfirming(operatorId: UserId, note: string, now: Date): void {
+    if (this._status !== 'pending') {
+      throw new RangeError(`Deposit claim ${this.id} is already ${this._status}.`);
+    }
+
+    const stated = note.trim();
+    this._status = 'confirming';
+    this._confirmingAt = now;
+    this._confirmingBy = operatorId;
+    this._confirmingNote = stated.length > 0 ? stated : null;
+  }
+
   reject(operatorId: UserId, reason: string, now: Date): void {
-    this.assertPending();
+    this.assertUndecided();
 
     const stated = reason.trim();
     if (stated.length === 0) {
@@ -217,8 +319,15 @@ export class DepositClaim {
     this._reason = stated;
   }
 
-  private assertPending(): void {
-    if (this._status !== 'pending') {
+  /**
+   * Refuses a second decision, and only a second decision.
+   *
+   * `confirming` passes: it is a claim an operator has seen and not yet settled,
+   * which is exactly what approving or rejecting is for. Only `approved` and
+   * `rejected` are terminal.
+   */
+  private assertUndecided(): void {
+    if (!this.isUndecided) {
       throw new RangeError(`Deposit claim ${this.id} is already ${this._status}.`);
     }
   }
@@ -235,6 +344,9 @@ export class DepositClaim {
       proofId: this.proofId,
       status: this._status,
       submittedAt: this.submittedAt,
+      confirmingAt: this._confirmingAt,
+      confirmingBy: this._confirmingBy,
+      confirmingNote: this._confirmingNote,
       decidedAt: this._decidedAt,
       decidedBy: this._decidedBy,
       reason: this._reason,

@@ -19,9 +19,17 @@ import {
   type DecideDepositClaim,
 } from './application/use-cases/decide-deposit-claim';
 import {
+  createMarkDepositConfirming,
+  type MarkDepositConfirming,
+} from './application/use-cases/mark-deposit-confirming';
+import {
   createGrantDemoFunds,
   type GrantDemoFunds,
 } from './application/use-cases/grant-demo-funds';
+import {
+  createSendDemoFundsEmail,
+  type SendDemoFundsEmail,
+} from './application/use-cases/send-demo-funds-email';
 import {
   createRecordDeposit,
   type RecordDeposit,
@@ -82,10 +90,23 @@ export interface LedgerModule {
    * not one function with a flag.
    */
   readonly grantDemoFunds: GrantDemoFunds;
+  /**
+   * Tells a student their account was funded.
+   *
+   * Separate from the grant rather than a flag on it, so a mail server that is
+   * down cannot make a credit that already committed look like a failure — and so
+   * the console can report the two outcomes in different words.
+   */
+  readonly sendDemoFundsEmail: SendDemoFundsEmail;
   /** A customer submits evidence that funds arrived. Credits nothing. */
   readonly submitDepositClaim: SubmitDepositClaim;
   /** An operator confirms or refuses that evidence. This is what credits. */
   readonly decideDepositClaim: DecideDepositClaim;
+  /**
+   * An operator says the evidence is good and the chain is what is being waited
+   * on. Credits nothing and decides nothing — the claim stays in the queue.
+   */
+  readonly markDepositConfirming: MarkDepositConfirming;
   /** Emails a customer the record of a decided movement. The console's button. */
   readonly sendReceipt: SendReceipt;
   /**
@@ -136,8 +157,10 @@ export function registerLedger(options: RegisterLedgerOptions): LedgerModule {
     decideWithdrawal: createDecideWithdrawal(dependencies),
     recordDeposit: createRecordDeposit(dependencies),
     grantDemoFunds: createGrantDemoFunds(dependencies),
+    sendDemoFundsEmail: createSendDemoFundsEmail(dependencies),
     submitDepositClaim: createSubmitDepositClaim(dependencies),
     decideDepositClaim: createDecideDepositClaim(dependencies),
+    markDepositConfirming: createMarkDepositConfirming(dependencies),
     sendReceipt: createSendReceipt(dependencies),
     sendTransactionEmail: createSendTransactionEmail(dependencies),
     decideRiskSignal: createDecideRiskSignal(dependencies),

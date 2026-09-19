@@ -41,7 +41,16 @@ import type { FeedCursor, FeedPageQuery, LedgerDependencies } from '../ports';
  */
 
 export type TransactionKind = 'deposit' | 'withdrawal';
-export type TransactionStatus = 'pending' | 'approved' | 'rejected';
+/**
+ * A row's state in the console's feed.
+ *
+ * `confirming` reaches this from a deposit claim and never from a withdrawal:
+ * there is no chain to wait on before a decision to pay out, only after one, and
+ * the platform's payout path ends at `payable` rather than broadcasting anything.
+ * So the union is wider than either source alone, which is what a feed over two
+ * tables is.
+ */
+export type TransactionStatus = 'pending' | 'confirming' | 'approved' | 'rejected';
 
 export interface TransactionDto {
   /**
@@ -92,6 +101,15 @@ export interface TransactionDto {
   readonly decidedAt: string | null;
   readonly decidedBy: string | null;
   readonly reason: string | null;
+  /**
+   * What an operator said while a deposit waits on the chain.
+   *
+   * Never a refusal — that is `reason`, and the two are separate fields on the
+   * record for exactly this reason: a progress note rendered as a rejection would
+   * have the customer's wallet explain something that did not happen. Null on a
+   * withdrawal, which has no chain to wait on before a decision.
+   */
+  readonly confirmingNote: string | null;
 
   /** Deposits: whether a screenshot was filed. Always true today — a claim cannot
    *  be constructed without one — but the console should not assume that. */
@@ -253,6 +271,7 @@ function toDepositTransaction(claim: DepositClaim): TransactionDto {
     decidedAt: snapshot.decidedAt?.toISOString() ?? null,
     decidedBy: snapshot.decidedBy,
     reason: snapshot.reason,
+    confirmingNote: snapshot.confirmingNote,
     hasProof: snapshot.proofId.length > 0,
     // A deposit is confirmed by one operator. Dual control exists to stop a single
     // compromised console account moving a large sum *out*; requiring a second
@@ -288,6 +307,9 @@ function toWithdrawalTransaction(withdrawal: Withdrawal): TransactionDto {
     decidedAt: snapshot.decidedAt?.toISOString() ?? null,
     decidedBy: snapshot.decidedBy,
     reason: snapshot.reason,
+    // Null, always: a withdrawal waits on an operator and then on a payout run,
+    // never on a chain before the decision.
+    confirmingNote: null,
     hasProof: false,
     approvalsHeld: snapshot.approvals.length,
     approvalsRequired: approvalsRequired(snapshot.valuedAtUsd, limitsFor(tierFor())),

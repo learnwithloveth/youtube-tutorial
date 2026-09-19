@@ -122,6 +122,12 @@ export function createDecideWithdrawal(deps: LedgerDependencies) {
       kind: 'withdrawal',
       occurredAt: now,
       reference: `withdrawal ${withdrawal.id}`,
+      network: withdrawal.network,
+      // Null, always, and this is the honest end of this platform's payout path.
+      // Approval moves the money to `payable`; nothing broadcasts it, because
+      // there is no chain client here. A hash on this row would tell a customer
+      // their withdrawal was sent, which is the one thing that has not happened.
+      txHash: null,
       entries: [
         { accountId: account.id, delta: withdrawal.totalReserved.negate() },
         { accountId: payable.id, delta: withdrawal.amount },

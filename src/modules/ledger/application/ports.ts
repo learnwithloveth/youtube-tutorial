@@ -72,6 +72,10 @@ export interface StatementEntry {
   readonly transferId: string;
   readonly kind: TransferKind;
   readonly reference: string;
+  /** The chain, by network id. Null for a movement that crossed none. */
+  readonly network: string | null;
+  /** The transaction on that chain. Null where there genuinely is not one. */
+  readonly txHash: string | null;
   readonly accountId: AccountId;
   /** Signed: positive credited the account, negative debited it. */
   readonly delta: Money;
@@ -114,7 +118,14 @@ export interface FeedPageQuery {
   readonly before?: FeedCursor | undefined;
   /** Restricts the feed to one customer. */
   readonly userId?: UserId | undefined;
-  readonly status?: 'pending' | 'approved' | 'rejected' | undefined;
+  /**
+   * Narrows to one state.
+   *
+   * `confirming` only ever matches deposit claims — a withdrawal has no chain to
+   * wait on before a decision — so a withdrawal repository filtering on it
+   * correctly returns nothing rather than treating it as unrecognised.
+   */
+  readonly status?: 'pending' | 'confirming' | 'approved' | 'rejected' | undefined;
 }
 
 export interface WithdrawalRepository {

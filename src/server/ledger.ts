@@ -6,8 +6,10 @@ import { cache } from 'react';
 import { BRAND } from '@/modules/content';
 import type {
   ApprovalQueueDto,
+  DepositClaimStatus,
   StatementDto,
   StatementOptions,
+  TransactionPageDto,
   TreasuryDto,
   WalletDto,
 } from '@/modules/ledger';
@@ -19,6 +21,7 @@ import {
   getWallet,
   LEDGER_ASSETS,
   listPendingApprovals,
+  listTransactions,
   registerLedger,
   type LedgerModule,
   type PriceOracle,
@@ -237,6 +240,31 @@ export const getApprovalQueue = cache(async (): Promise<ApprovalQueueDto> => {
 });
 
 /**
+ * One customer's own deposit and withdrawal records, newest first.
+ *
+ * ── Records, not entries — and the page shows both for a reason ───────────────
+ * `getStatementFor` reads the ledger's entries: what actually moved. This reads
+ * the requests behind them, which is a different set. A refused deposit and a
+ * withdrawal still on hold never produced an entry and are absent from a
+ * statement entirely, yet they are exactly the things a customer goes looking
+ * for — and a receipt is issued against the record, not against the entry.
+ *
+ * ── Leaner than the console's feed on purpose ─────────────────────────────────
+ * `getTransactionFeed` in `server/transactions.ts` joins identity so an operator
+ * can see whose money it is. A customer already knows, so this skips that join
+ * and the second query with it.
+ */
+export async function getOwnTransactions(
+  userId: UserId,
+  limit = 10,
+): Promise<TransactionPageDto> {
+  const context = ledger();
+  if (context === null) return { transactions: [], nextCursor: null, degraded: true };
+
+  return listTransactions(context.dependencies, { userId, limit });
+}
+
+/**
  * One customer's statement.
  *
  * Not deduplicated per request, unlike the wallet: it is parameterised by page and
@@ -256,13 +284,15 @@ export async function getStatementFor(
 }
 
 /**
- * Every asset the platform will custody, with the precision it is stored at.
+ * Every asset the platform will custody, with the precision it is stored at and
+ * the chains it travels on.
  *
  * Separate from `withdrawableAssets` although it reads the same catalogue: that
- * one carries networks, fees and minimums because a withdrawal form needs them,
- * and a demo grant has no network, pays no fee and has no minimum. Handing the
- * fuller shape to a screen that uses a third of it invites somebody to start
- * rendering the rest.
+ * one carries fees, minimums and address patterns because a withdrawal form needs
+ * them, and nothing is being withdrawn here. What both need is the network list —
+ * "USDT" does not say whether a student is being shown a Tron balance or an
+ * Ethereum one, and that distinction is the whole reason the asset has two rows
+ * on any real exchange.
  */
 export function fundableAssets() {
   return LEDGER_ASSETS.map((asset) => ({
@@ -270,6 +300,15 @@ export function fundableAssets() {
     name: asset.name,
     /** Decimal places the balance is held at — what the form hints as a step. */
     scale: asset.scale,
+    /**
+     * The chains this asset travels on, so the form can ask when there is a
+     * question to ask. Only the id and the label: a fee, a minimum and an address
+     * pattern are a withdrawal's business, and nothing here is being withdrawn.
+     */
+    networks: asset.networks.map((network) => ({
+      id: network.id,
+      label: network.label,
+    })),
   }));
 }
 
@@ -329,8 +368,12 @@ export interface DepositClaimView {
   readonly claimedAmount: string;
   readonly creditedAmount: string | null;
   readonly reference: string;
-  readonly status: 'pending' | 'approved' | 'rejected';
+  readonly status: DepositClaimStatus;
   readonly submittedAt: string;
+  /** When an operator said it was waiting on the chain, if they did. */
+  readonly confirmingAt: string | null;
+  /** The operator's words to the customer while it waits. Never a refusal. */
+  readonly confirmingNote: string | null;
   readonly decidedAt: string | null;
   readonly reason: string | null;
 }
@@ -351,8 +394,10 @@ function toClaimView(claim: {
     claimedAmount: { toDecimalString(): string };
     creditedAmount: { toDecimalString(): string } | null;
     reference: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: DepositClaimStatus;
     submittedAt: Date;
+    confirmingAt: Date | null;
+    confirmingNote: string | null;
     decidedAt: Date | null;
     reason: string | null;
   };
@@ -368,6 +413,8 @@ function toClaimView(claim: {
     reference: s.reference,
     status: s.status,
     submittedAt: s.submittedAt.toISOString(),
+    confirmingAt: s.confirmingAt?.toISOString() ?? null,
+    confirmingNote: s.confirmingNote,
     decidedAt: s.decidedAt?.toISOString() ?? null,
     reason: s.reason,
   };

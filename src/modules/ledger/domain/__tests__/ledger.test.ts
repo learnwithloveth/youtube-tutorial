@@ -85,7 +85,14 @@ describe('balances and holds', () => {
 });
 
 describe('transfers must balance', () => {
-  const base = { id: 't1', kind: 'deposit' as const, occurredAt: NOW, reference: 'test' };
+  const base = {
+    id: 't1',
+    kind: 'deposit' as const,
+    occurredAt: NOW,
+    reference: 'test',
+    network: null,
+    txHash: null,
+  };
 
   it('accepts a balanced pair', () => {
     const transfer = Transfer.create({

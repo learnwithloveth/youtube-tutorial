@@ -53,15 +53,22 @@ const KIND_OPTIONS: readonly { value: KindFilter; label: string }[] = [
 const STATUS_OPTIONS: readonly { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'Any status' },
   { value: 'pending', label: 'Pending' },
+  { value: 'confirming', label: 'Pending on chain' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ];
 
-const STATUS_TONE = {
+const STATUS_TONE: Record<TransactionStatus, 'warn' | 'up' | 'down' | 'brand'> = {
   pending: 'warn',
+  // Not `warn` as well: a claim an operator has seen and is waiting on the chain
+  // for is not outstanding work in the way an unlooked-at one is, and an operator
+  // scanning this column needs to be able to tell those two apart at a glance.
+  // The customer's screens make no such distinction — both read "Pending" there,
+  // because the difference is about whose turn it is and that is not their problem.
+  confirming: 'brand',
   approved: 'up',
   rejected: 'down',
-} as const;
+};
 
 export function TransactionFeed({ initial }: { initial: TransactionFeedDto }) {
   const [kind, setKind] = useState<KindFilter>('all');

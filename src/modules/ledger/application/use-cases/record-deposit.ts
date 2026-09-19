@@ -86,6 +86,14 @@ export function createRecordDeposit(deps: LedgerDependencies) {
       kind: 'deposit',
       occurredAt: deps.clock.now(),
       reference: `deposit ${reference} by ${command.recordedBy}`,
+      // Both null, and not an oversight. This command carries an asset and a free
+      // text reference that may be a transaction hash, a bank reference or a
+      // ticket number — there is no way to tell which from here, and putting a
+      // bank reference in a column called `tx_hash` is how a statement starts
+      // lying quietly. The chain listener this use case was written for knows both
+      // and will pass them; until one exists, the honest answer is nothing.
+      network: null,
+      txHash: null,
       entries: [
         { accountId: account.id, delta: amount },
         { accountId: custody.id, delta: amount.negate() },

@@ -77,6 +77,7 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'withdrawal-approved': 'Withdrawal approved',
   'withdrawal-rejected': 'Withdrawal rejected',
   'deposit-recorded': 'Deposit credited',
+  'deposit-confirming': 'Deposit marked pending on chain',
   'deposit-rejected': 'Deposit refused',
   'demo-funds-granted': 'Demo funds issued',
   'admin-suspended': 'Console access suspended',

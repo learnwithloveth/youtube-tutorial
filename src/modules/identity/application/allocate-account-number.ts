@@ -1,4 +1,4 @@
-import { AccountNumber } from '../domain/account-number';
+import type { AccountNumber } from '../domain/account-number';
 import type { UserRepository } from './ports';
 
 /**

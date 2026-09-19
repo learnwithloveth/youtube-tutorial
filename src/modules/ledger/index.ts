@@ -57,6 +57,11 @@ export type {
 } from './application/queries/transactions';
 export type { TransferKind } from './domain/transfer';
 
+/* Chain-shaped references. `shortenHash` is a rendering helper every surface that
+   prints a hash needs; `demoTransactionHash` is deliberately NOT exported — see
+   that file for why nothing outside the ledger may mint one. */
+export { shortenHash } from './domain/chain-reference';
+
 /* Risk signals — the rules and their wording, which the console renders. The
    *query* logs, so it lives in `./server` like every other read here. */
 export type { RiskRule, RiskSeverity } from './domain/risk-signal';

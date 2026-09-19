@@ -2,6 +2,7 @@ import { Money, err, ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { platformOwner, userOwner } from '../../domain/account';
+import { demoTransactionHash } from '../../domain/chain-reference';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
 import { Transfer } from '../../domain/transfer';
 import type { LedgerDependencies } from '../ports';
@@ -10,6 +11,23 @@ export interface GrantDemoFundsCommand {
   /** Who receives it. Resolved from an account number or an email by the caller. */
   readonly userId: UserId;
   readonly asset: string;
+  /**
+   * Which chain the funds are to be treated as having arrived on.
+   *
+   * Optional only where there is no choice to make: an asset that travels on one
+   * network defaults to it, and one that travels on several refuses without it.
+   * USDT is the case that matters — "USDT" alone does not say whether a student is
+   * being shown a Tron deposit or an Ethereum one, and the fee, the address format
+   * and the coin that pays for the eventual withdrawal all differ between them.
+   *
+   * ── It does not create a separate balance, and that is correct ───────────────
+   * There is one USDT account per customer whichever chain the tokens came in on,
+   * exactly as on a real exchange: you deposit USDT over Tron and your USDT
+   * balance rises. The network describes the route in, not a pot of its own — so
+   * it lands in the transfer's reference and in what the student is told, and the
+   * ledger's account shape is untouched.
+   */
+  readonly network?: string | undefined;
   /** A decimal string. Never a number. */
   readonly amount: string;
   /**
@@ -67,9 +85,44 @@ export interface GrantDemoFundsCommand {
 export function createGrantDemoFunds(deps: LedgerDependencies) {
   return async function grantDemoFunds(
     command: GrantDemoFundsCommand,
-  ): Promise<Result<{ transferId: string; balance: string; asset: string }, LedgerError>> {
+  ): Promise<
+    Result<
+      {
+        transferId: string;
+        balance: string;
+        asset: string;
+        /** How the chosen network is written on a form — "Tron (TRC-20)". */
+        networkLabel: string;
+        /** The chain-shaped reference this grant was given. */
+        txHash: string;
+      },
+      LedgerError
+    >
+  > {
     const asset = deps.assets.find(command.asset);
     if (asset === null) return err(LedgerErrors.assetNotSupported(command.asset));
+
+    const chosen = command.network?.trim() ?? '';
+    const [only] = asset.networks;
+    let network;
+    if (chosen.length === 0) {
+      // One network is no choice at all, so not making it is not an omission.
+      if (asset.networks.length !== 1 || only === undefined) {
+        return err(
+          LedgerErrors.networkRequired(
+            asset.code,
+            asset.networks.map((option) => option.label).join(' or '),
+          ),
+        );
+      }
+      network = only;
+    } else {
+      const found = asset.networks.find((option) => option.id === chosen);
+      if (found === undefined) {
+        return err(LedgerErrors.networkNotSupported(asset.code, chosen));
+      }
+      network = found;
+    }
 
     let amount: Money;
     try {
@@ -85,15 +138,24 @@ export function createGrantDemoFunds(deps: LedgerDependencies) {
     const source = await deps.accounts.findOrOpen(platformOwner('demo'), asset);
 
     const note = command.note?.trim() ?? '';
+    // Taken before the transfer is built, because the hash is derived from it —
+    // see `chain-reference.ts` for why a demo credit gets a chain-shaped
+    // reference at all, and why it is derived rather than drawn.
+    const transferId = deps.ids.next();
+
     const transfer = Transfer.create({
-      id: deps.ids.next(),
+      id: transferId,
       kind: 'demo-credit',
       occurredAt: deps.clock.now(),
       // The operator is always named; the note is appended only when there is one,
       // so a reference never reads "demo funds  by <id>" with a hole in it.
+      // The network is always named, so a statement line can be read back years
+      // later without anybody having to remember which chain the class used.
       reference: note.length > 0
-        ? `demo funds (${note}) by ${command.issuedBy}`
-        : `demo funds by ${command.issuedBy}`,
+        ? `demo funds on ${network.id} (${note}) by ${command.issuedBy}`
+        : `demo funds on ${network.id} by ${command.issuedBy}`,
+      network: network.id,
+      txHash: demoTransactionHash(transferId, network.txHashPrefix),
       entries: [
         { accountId: account.id, delta: amount },
         { accountId: source.id, delta: amount.negate() },
@@ -109,6 +171,10 @@ export function createGrantDemoFunds(deps: LedgerDependencies) {
       transferId: transfer.id,
       balance: account.balance.toDecimalString(),
       asset: asset.code,
+      networkLabel: network.label,
+      // Read back off the transfer rather than recomputed, so the value the
+      // console reports is provably the one that was written.
+      txHash: transfer.txHash ?? '',
     });
   };
 }

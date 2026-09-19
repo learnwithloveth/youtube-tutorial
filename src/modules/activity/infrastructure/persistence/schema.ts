@@ -45,6 +45,7 @@ export const events = activitySchema.table(
         'withdrawal-approved',
         'withdrawal-rejected',
         'deposit-recorded',
+        'deposit-confirming',
         'deposit-rejected',
         'demo-funds-granted',
         'admin-suspended',

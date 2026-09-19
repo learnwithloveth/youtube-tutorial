@@ -44,8 +44,12 @@ export interface DecideDepositClaimCommand {
  * be reversed with a balancing transfer. The control that matters here is the
  * proof and the on-chain reference, not a second click.
  *
- * The operator still cannot approve their own claim — that rule holds for the
- * cheaper fraud as much as the expensive one.
+ * ── Self-approval is currently permitted ──────────────────────────────────────
+ * An operator used to be refused their own claim. That check is commented out in
+ * `DepositClaim.approve`, deliberately, for a deployment used to teach people how
+ * deposits work — a tutor walking through the flow on their own account is the
+ * ordinary case there. The comment at that method says what it costs and what to
+ * restore; it is the first thing to turn back on before real money is held.
  */
 export function createDecideDepositClaim(deps: LedgerDependencies) {
   return async function decideDepositClaim(
@@ -53,7 +57,10 @@ export function createDecideDepositClaim(deps: LedgerDependencies) {
   ): Promise<Result<{ status: 'approved' | 'rejected'; credited: string | null }, LedgerError>> {
     const claim = await deps.claims.find(command.claimId);
     if (claim === null) return err(LedgerErrors.depositClaimNotFound(command.claimId));
-    if (claim.status !== 'pending') {
+    // `confirming` passes: an operator has seen the evidence and is waiting on the
+    // chain, which is exactly the claim this use case is for. Only `approved` and
+    // `rejected` are terminal — see `DepositClaim.assertUndecided`.
+    if (!claim.isUndecided) {
       return err(LedgerErrors.withdrawalAlreadyDecided(claim.status));
     }
 
@@ -97,6 +104,12 @@ export function createDecideDepositClaim(deps: LedgerDependencies) {
       // an auditor reads, so it names both the external evidence and the person who
       // decided it was good.
       reference: `deposit ${claim.reference} confirmed by ${command.operatorId}`,
+      // Straight off the claim. The customer named the chain when they reported it
+      // and gave the hash as their evidence, and an operator approving the claim is
+      // agreeing that both are right — so this is the one place a real transaction
+      // hash enters the ledger.
+      network: claim.network,
+      txHash: claim.reference.trim().length > 0 ? claim.reference.trim() : null,
       entries: [
         { accountId: account.id, delta: credited },
         { accountId: custody.id, delta: credited.negate() },

@@ -11,10 +11,12 @@ import {
   Wallet2,
 } from 'lucide-react';
 
+import { shortenHash } from '@/modules/ledger';
 import { requireUser } from '@/server/auth';
 import { getStatementFor, getWalletFor } from '@/server/ledger';
 import { getMarkets } from '@/server/market-data';
 import { getVerificationStandingFor } from '@/server/verifications';
+import { shortenDecimalString } from '@/shared/kernel';
 import { formatDate, formatPercent } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
@@ -306,26 +308,43 @@ export default async function OverviewPage() {
               <ul className="divide-y divide-line/60">
                 {statement.lines.map((line) => (
                   <li key={line.id} className="flex items-center gap-3 py-3">
-                    {line.direction === 'in' ? (
-                      <ArrowDownLeft className="size-4 shrink-0 text-up" />
-                    ) : (
-                      <ArrowUpRight className="size-4 shrink-0 text-down" />
-                    )}
+                    {/* The coin, carrying its chain's badge where the two differ.
+                        This replaces a bare arrow: on a list where half the rows
+                        are USDT, which chain a movement was on is the thing a
+                        reader is looking for and an arrow says nothing about it. */}
+                    <AssetMark
+                      symbol={line.asset}
+                      glyph={marks.get(line.asset)?.glyph ?? line.asset.slice(0, 1)}
+                      hue={marks.get(line.asset)?.hue ?? 'var(--chart-1)'}
+                      network={line.network}
+                      size="xs"
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm capitalize text-fg">
                         {line.kind.replace('-', ' ')}
                       </span>
-                      <span className="block text-2xs text-fg-subtle">
+                      <span className="block truncate text-2xs text-fg-subtle">
                         {formatDate(line.occurredAt)}
+                        {line.txHash === null ? null : (
+                          <>
+                            {' · '}
+                            <span className="font-mono">{shortenHash(line.txHash, 6, 4)}</span>
+                          </>
+                        )}
                       </span>
                     </span>
+                    {line.direction === 'in' ? (
+                      <ArrowDownLeft className="size-3.5 shrink-0 text-up" />
+                    ) : (
+                      <ArrowUpRight className="size-3.5 shrink-0 text-down" />
+                    )}
                     <span
                       className={cn(
                         'shrink-0 font-mono text-sm',
                         line.direction === 'in' ? 'text-up' : 'text-fg',
                       )}
                     >
-                      {line.delta} {line.asset}
+                      {shortenDecimalString(line.delta)} {line.asset}
                     </span>
                   </li>
                 ))}

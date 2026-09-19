@@ -32,7 +32,9 @@ import type {
 import { createDecideWithdrawal } from '../use-cases/decide-withdrawal';
 import { createSendReceipt, createSendTransactionEmail } from '../use-cases/send-receipt';
 import { createDecideDepositClaim } from '../use-cases/decide-deposit-claim';
+import { createMarkDepositConfirming } from '../use-cases/mark-deposit-confirming';
 import { createGrantDemoFunds } from '../use-cases/grant-demo-funds';
+import { createSendDemoFundsEmail } from '../use-cases/send-demo-funds-email';
 import { createRecordDeposit } from '../use-cases/record-deposit';
 import { createSubmitDepositClaim } from '../use-cases/submit-deposit-claim';
 import { createRequestWithdrawal } from '../use-cases/request-withdrawal';
@@ -100,6 +102,9 @@ class FakeLedger implements LedgerRepository {
             transferId: transfer.id,
             kind: transfer.kind,
             reference: transfer.reference,
+            // Carried through, so a test can assert the chain a movement names.
+            network: transfer.network,
+            txHash: transfer.txHash,
             accountId: entry.accountId,
             delta: entry.delta,
             occurredAt: transfer.occurredAt,
@@ -232,7 +237,10 @@ class FakeClaims implements DepositClaimRepository {
     return [...this.store.values()].filter((c) => c.userId === userId).slice(0, limit);
   }
   async listPending(limit: number) {
-    return [...this.store.values()].filter((c) => c.status === 'pending').slice(0, limit);
+    // Matches the real adapter: a confirming claim is undecided and stays in the
+    // queue. A fake that dropped it would let a regression through where an
+    // operator marks something as in progress and loses it.
+    return [...this.store.values()].filter((c) => c.isUndecided).slice(0, limit);
   }
   async listPage(query: FeedPageQuery) {
     return feedPage([...this.store.values()], (c) => c.submittedAt, query);
@@ -286,7 +294,17 @@ const priceOracle: PriceOracle = {
 /** Mail, captured rather than sent. `outbox` is what the assertions read. */
 const SITE = 'Aurum Exchange';
 
-function build(prices: PriceOracle = priceOracle) {
+/**
+ * The harness.
+ *
+ * `overrides` is applied last and exists for the failure paths — a directory that
+ * cannot resolve an address, a sender that refuses. Those are reported as values
+ * rather than thrown, so there has to be a way to provoke them.
+ */
+function build(
+  prices: PriceOracle = priceOracle,
+  overrides: Partial<LedgerDependencies> = {},
+) {
   const accounts = new FakeLedger();
   const withdrawals = new FakeWithdrawals();
 
@@ -318,6 +336,7 @@ function build(prices: PriceOracle = priceOracle) {
     assets: new CatalogueAssetRegistry(),
     ids: sequentialIdGenerator(),
     clock: fixedClock(NOW),
+    ...overrides,
   };
 
   return {
@@ -329,8 +348,10 @@ function build(prices: PriceOracle = priceOracle) {
     outbox,
     deposit: createRecordDeposit(deps),
     grantDemo: createGrantDemoFunds(deps),
+    emailDemo: createSendDemoFundsEmail(deps),
     submitClaim: createSubmitDepositClaim(deps),
     decideClaim: createDecideDepositClaim(deps),
+    markConfirming: createMarkDepositConfirming(deps),
     request: createRequestWithdrawal(deps),
     decide: createDecideWithdrawal(deps),
     /** Sent by itself at every step — the customer's copy. */
@@ -375,6 +396,7 @@ describe('demo funds', () => {
     const result = await ctx.grantDemo({
       userId: ALICE,
       asset: 'BTC',
+      network: 'bitcoin',
       amount: '1.5',
       note: 'Tuesday workshop',
       issuedBy: BOB,
@@ -397,7 +419,13 @@ describe('demo funds', () => {
      reference — the kind is what is indexed and what a reader sees first. */
   it('posts it under its own kind, never as a deposit', async () => {
     const ctx = build();
-    await ctx.grantDemo({ userId: ALICE, asset: 'BTC', amount: '1', issuedBy: BOB });
+    await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '1',
+      issuedBy: BOB,
+    });
 
     const [transfer] = ctx.accounts.posted;
     expect(transfer?.kind).toBe('demo-credit');
@@ -408,12 +436,28 @@ describe('demo funds', () => {
   it('names the note when there is one, and reads cleanly when there is not', async () => {
     const ctx = build();
 
-    await ctx.grantDemo({ userId: ALICE, asset: 'BTC', amount: '1', note: ' group B ', issuedBy: BOB });
-    await ctx.grantDemo({ userId: CAROL, asset: 'BTC', amount: '1', note: '   ', issuedBy: BOB });
+    await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '1',
+      note: ' group B ',
+      issuedBy: BOB,
+    });
+    await ctx.grantDemo({
+      userId: CAROL,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '1',
+      note: '   ',
+      issuedBy: BOB,
+    });
 
-    expect(ctx.accounts.posted[0]?.reference).toBe(`demo funds (group B) by ${BOB}`);
+    expect(ctx.accounts.posted[0]?.reference).toBe(
+      `demo funds on bitcoin (group B) by ${BOB}`,
+    );
     // No empty parentheses and no double space where the note would have been.
-    expect(ctx.accounts.posted[1]?.reference).toBe(`demo funds by ${BOB}`);
+    expect(ctx.accounts.posted[1]?.reference).toBe(`demo funds on bitcoin by ${BOB}`);
   });
 
   it('refuses an amount that is zero, negative or not a number', async () => {
@@ -423,6 +467,7 @@ describe('demo funds', () => {
       const result = await ctx.grantDemo({
         userId: ALICE,
         asset: 'BTC',
+        network: 'bitcoin',
         amount,
         issuedBy: BOB,
       });
@@ -446,12 +491,97 @@ describe('demo funds', () => {
     if (!result.ok) expect(result.error.kind).toBe('asset-not-supported');
   });
 
+  describe('networks', () => {
+    /* "USDT" does not say whether a student is being shown a Tron deposit or an
+       Ethereum one, and picking the first listed for them would silently put a
+       stablecoin on the expensive chain. */
+    it('refuses USDT with no network, naming both options', async () => {
+      const ctx = build();
+      const result = await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'USDT',
+        amount: '500',
+        issuedBy: BOB,
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe('network-required');
+      if (result.error.kind !== 'network-required') return;
+      expect(result.error.options).toContain('Tron');
+      expect(result.error.options).toContain('Ethereum');
+    });
+
+    it('refuses a network the asset does not travel on', async () => {
+      const ctx = build();
+      const result = await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'USDT',
+        network: 'solana',
+        amount: '500',
+        issuedBy: BOB,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe('network-not-supported');
+    });
+
+    /* One network is no choice at all, so not making it is not an omission. */
+    it('defaults to the only network an asset has', async () => {
+      const ctx = build();
+      const result = await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'TRX',
+        amount: '100',
+        issuedBy: BOB,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.networkLabel).toBe('Tron');
+      expect(ctx.accounts.posted[0]?.reference).toContain('on tron');
+    });
+
+    /* The property the whole feature rests on: USDT over Tron and USDT over
+       Ethereum are one balance, exactly as on a real exchange. The network is the
+       route in, not a pot of its own — if this ever splits, a student will be
+       shown two USDT balances that do not add up to what they were given. */
+    it('credits one balance whichever chain it came in on', async () => {
+      const ctx = build();
+
+      await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'USDT',
+        network: 'tron',
+        amount: '400',
+        issuedBy: BOB,
+      });
+      await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'USDT',
+        network: 'ethereum',
+        amount: '600',
+        issuedBy: BOB,
+      });
+
+      const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT'));
+      expect(alice?.balance.toDecimalString()).toBe('1000.000000');
+      expectBooksBalance(ctx.accounts);
+    });
+  });
+
   /* The point of the exercise, in a workshop: the student requests a withdrawal
      against demo funds and the tutor decides on it. Nothing about the grant makes
      the balance a second-class one. */
   it('is spendable, and the books still balance when it is spent', async () => {
     const ctx = build();
-    await ctx.grantDemo({ userId: ALICE, asset: 'BTC', amount: '1', issuedBy: BOB });
+    await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '1',
+      issuedBy: BOB,
+    });
 
     const requested = await ctx.request({
       userId: ALICE,
@@ -465,6 +595,175 @@ describe('demo funds', () => {
     expectBooksBalance(ctx.accounts);
   });
 });
+
+describe('what a movement says about its chain', () => {
+  /** The eight magic bytes the proof validator sniffs for, padded to a plausible size. */
+  function png(): Uint8Array {
+    const bytes = new Uint8Array(512);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    return bytes;
+  }
+
+  /* The statement is where a customer reads this, and USDT is why it matters: one
+     asset, one balance, two networks that are not interchangeable. */
+  it('records the network and a chain-shaped hash on a demo credit', async () => {
+    const ctx = build();
+    const granted = await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'USDT',
+      network: 'tron',
+      amount: '500',
+      issuedBy: BOB,
+    });
+
+    expect(granted.ok).toBe(true);
+    if (!granted.ok) return;
+
+    const [transfer] = ctx.accounts.posted;
+    expect(transfer?.network).toBe('tron');
+    // Tron writes bare hex, so no 0x — the prefix is catalogue data per network.
+    expect(transfer?.txHash).toMatch(/^[0-9a-f]{64}$/);
+    // What the console reports is read back off the transfer, not recomputed.
+    expect(granted.value.txHash).toBe(transfer?.txHash);
+  });
+
+  it("uses the chain's own hash format, so Ethereum gets its prefix", async () => {
+    const ctx = build();
+    await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'USDT',
+      network: 'ethereum',
+      amount: '500',
+      issuedBy: BOB,
+    });
+
+    expect(ctx.accounts.posted[0]?.network).toBe('ethereum');
+    expect(ctx.accounts.posted[0]?.txHash).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  /* The one place a real transaction hash enters this ledger: the customer gave
+     it as their evidence and an operator agreed it was right. */
+  it("carries the customer's own hash onto an approved deposit", async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '0.25',
+      reference: '0xdeadbeefcafe',
+      proof: png(),
+    } as Parameters<ReturnType<typeof createSubmitDepositClaim>>[0]);
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+    });
+
+    const [transfer] = ctx.accounts.posted;
+    expect(transfer?.network).toBe('bitcoin');
+    expect(transfer?.txHash).toBe('0xdeadbeefcafe');
+  });
+
+  /*
+   * The honest end of this platform's payout path.
+   *
+   * Approval moves money to `payable` and nothing broadcasts it, because there is
+   * no chain client here. A hash on this row would tell a customer their
+   * withdrawal was sent, which is the one thing that has not happened — so if this
+   * test ever starts failing, the statement has begun asserting a payment.
+   */
+  it('gives an approved withdrawal a network and never a hash', async () => {
+    const ctx = build();
+    await ctx.grantDemo({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '1',
+      issuedBy: BOB,
+    });
+
+    // $5,000 at the fake oracle's price, which is one signature. A larger one
+    // needs two, would stay pending, and would post no transfer at all — see
+    // `approvalsRequired`.
+    const requested = await ctx.request({
+      userId: ALICE,
+      asset: 'BTC',
+      amount: '0.05',
+      network: 'bitcoin',
+      destination: BTC_ADDRESS,
+    });
+    if (!requested.ok) throw new Error('setup failed');
+
+    const decided = await ctx.decide({
+      withdrawalId: requested.value.withdrawalId,
+      operatorId: BOB,
+      decision: 'approve',
+      reason: '',
+    });
+    expect(decided.ok).toBe(true);
+
+    const payout = ctx.accounts.posted.find((transfer) => transfer.kind === 'withdrawal');
+    expect(payout?.network).toBe('bitcoin');
+    expect(payout?.txHash).toBeNull();
+  });
+});
+
+describe('the demo funds email', () => {
+  /* Not a receipt, and it must not read like one: a message with "Completed"
+     under a green tick would undo everything the separate transfer kind does to
+     keep workshop money and real money apart. */
+  it('says what the funds are in the subject and in both bodies', async () => {
+    const ctx = build();
+    const result = await ctx.emailDemo({
+      userId: ALICE,
+      asset: 'USDT',
+      amount: '500.000000',
+      networkLabel: 'Tron (TRC-20)',
+      txHash: '5f2a91c4e8b7d3a60f1c8e2b4d7a90f3c6e1b8d4a7f2c9e0b3d6a1f4c7e2b9d0',
+      note: 'Tuesday workshop',
+      balance: '500.000000',
+    });
+
+    expect(result.ok).toBe(true);
+    const [message] = ctx.outbox;
+
+    expect(message?.subject).toContain('Demo funds');
+    // Trailing zeros dropped for reading. The record keeps its own precision.
+    expect(message?.subject).toContain('500 USDT');
+    for (const body of [message?.text ?? '', message?.html ?? '']) {
+      expect(body).toContain('demo funds');
+      expect(body).toContain('Tron (TRC-20)');
+      expect(body).toContain('Tuesday workshop');
+    }
+    // The word a receipt uses under its outcome mark. This message has neither.
+    expect(message?.html).not.toContain('Completed');
+  });
+
+  it('reports a missing address rather than throwing', async () => {
+    // The price oracle is left alone; the second argument is what this is about.
+    const ctx = build(undefined, {
+      directory: {
+        async emailFor() {
+          return null;
+        },
+      },
+    });
+    const result = await ctx.emailDemo({
+      userId: ALICE,
+      asset: 'TRX',
+      amount: '100.000000',
+      networkLabel: 'Tron',
+      txHash: 'b9d0e2c7f4a1d6b3e0c9f2a4d8b1e6c3f0a9d7b4e2c8a1f6d3b7e4c1a0f9d2b5',
+      balance: '100.000000',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('receipt-no-address');
+  });
+});
+
 
 describe('deposits', () => {
   it('credits the customer and debits custody', async () => {
@@ -957,6 +1256,156 @@ describe('deposit claims', () => {
     expect(ctx.proofs.store.size).toBe(0);
   });
 
+  describe('confirming on chain', () => {
+    /* The state exists so a customer can tell "nobody has looked" from "we have
+       looked, blocks are slow". Nothing about it may move money. */
+    it('changes the status, credits nothing, and decides nothing', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      const marked = await ctx.markConfirming({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+        note: '  3 of 6 confirmations, ~20 min  ',
+      });
+
+      expect(marked.ok).toBe(true);
+      expect(ctx.accounts.posted).toHaveLength(0);
+
+      const stored = await ctx.claims.find(submitted.value.claimId);
+      expect(stored?.status).toBe('confirming');
+      // Trimmed, and shown to the customer verbatim.
+      expect(stored?.confirmingNote).toBe('3 of 6 confirmations, ~20 min');
+      expect(stored?.confirmingBy).toBe(BOB);
+      expect(stored?.confirmingAt).toEqual(NOW);
+      // Not a decision. These two are what "decided" means on this record.
+      expect(stored?.decidedAt).toBeNull();
+      expect(stored?.decidedBy).toBeNull();
+      // And not a refusal: the note has its own field so the wallet cannot render
+      // it as one.
+      expect(stored?.reason).toBeNull();
+    });
+
+    it('leaves an empty note null rather than storing a blank', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      await ctx.markConfirming({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+        note: '   ',
+      });
+
+      const stored = await ctx.claims.find(submitted.value.claimId);
+      expect(stored?.confirmingNote).toBeNull();
+    });
+
+    /* A queue that dropped confirming claims would be a list of work an operator
+       can lose track of by marking something as in progress. */
+    it('stays in the operator queue', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      await ctx.markConfirming({ claimId: submitted.value.claimId, operatorId: BOB });
+
+      const queue = await ctx.claims.listPending(10);
+      expect(queue.map((entry) => entry.id)).toContain(submitted.value.claimId);
+    });
+
+    it('can still be approved afterwards, and credits normally', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      await ctx.markConfirming({ claimId: submitted.value.claimId, operatorId: BOB });
+      const decided = await ctx.decideClaim({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+        decision: 'approve',
+      });
+
+      expect(decided.ok).toBe(true);
+      const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+      expect(alice?.balance.toDecimalString()).toBe('0.25000000');
+      expectBooksBalance(ctx.accounts);
+    });
+
+    /* Marking something as confirming must not trap it there — a transaction that
+       never arrives has to be refusable with its reason. */
+    it('can still be rejected afterwards', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      await ctx.markConfirming({ claimId: submitted.value.claimId, operatorId: BOB });
+      const decided = await ctx.decideClaim({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+        decision: 'reject',
+        reason: 'It never confirmed',
+      });
+
+      expect(decided.ok).toBe(true);
+      const stored = await ctx.claims.find(submitted.value.claimId);
+      expect(stored?.status).toBe('rejected');
+      expect(ctx.accounts.posted).toHaveLength(0);
+    });
+
+    /* Re-marking would overwrite the timestamp that says how long the wait has
+       been running, which is the one figure the state exists to carry. */
+    it('refuses to mark the same claim twice', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      await ctx.markConfirming({ claimId: submitted.value.claimId, operatorId: BOB });
+      const again = await ctx.markConfirming({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+      });
+
+      expect(again.ok).toBe(false);
+    });
+
+    it('refuses to mark a claim that has already been decided', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      await ctx.decideClaim({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+        decision: 'approve',
+      });
+      const marked = await ctx.markConfirming({
+        claimId: submitted.value.claimId,
+        operatorId: BOB,
+      });
+
+      expect(marked.ok).toBe(false);
+    });
+
+    /* Nothing is credited by marking, so there is no self-dealing to guard
+       against — the worst an operator can do to their own claim here is tell
+       themselves to keep waiting. */
+    it('lets an operator mark their own claim', async () => {
+      const ctx = build();
+      const submitted = await ctx.submitClaim(claim());
+      if (!submitted.ok) throw new Error('setup failed');
+
+      const marked = await ctx.markConfirming({
+        claimId: submitted.value.claimId,
+        operatorId: ALICE,
+      });
+
+      expect(marked.ok).toBe(true);
+      expect(ctx.accounts.posted).toHaveLength(0);
+    });
+  });
+
   it('credits the balance on approval and the books balance', async () => {
     const ctx = build();
     const submitted = await ctx.submitClaim(claim());
@@ -1038,7 +1487,19 @@ describe('deposit claims', () => {
 
   /* Crediting is the cheaper fraud — it needs no counterparty and only surfaces
      when custody is next reconciled. */
-  it('refuses an operator approving their own deposit', async () => {
+  /*
+   * Self-approval is currently ALLOWED, and this test asserts that on purpose.
+   *
+   * The rule is commented out in `DepositClaim.approve` for a workshop deployment,
+   * where a tutor demonstrating on their own account is the ordinary case. A test
+   * that still asserted the old behaviour would be a failing suite somebody
+   * eventually silences; one that asserts the new behaviour fails the moment the
+   * rule is restored, which is exactly when somebody should be made to look here.
+   *
+   * To restore it: uncomment the check in `approve` and invert this test back to
+   * expecting `approval-refused`.
+   */
+  it('currently allows an operator to approve their own deposit', async () => {
     const ctx = build();
     const submitted = await ctx.submitClaim(claim());
     if (!submitted.ok) throw new Error('setup failed');
@@ -1049,9 +1510,10 @@ describe('deposit claims', () => {
       decision: 'approve',
     });
 
-    expect(decided.ok).toBe(false);
-    if (!decided.ok) expect(decided.error.kind).toBe('approval-refused');
-    expect(ctx.accounts.posted).toHaveLength(0);
+    expect(decided.ok).toBe(true);
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+    expect(alice?.balance.toDecimalString()).toBe('0.25000000');
+    expectBooksBalance(ctx.accounts);
   });
 
   it('refuses a second decision on a decided claim', async () => {

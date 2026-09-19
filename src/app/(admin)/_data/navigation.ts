@@ -67,7 +67,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { label: 'Announcements', href: '/admin/announcements', icon: Megaphone },
       /* No `queue` key, for the reason 'Transactions' has none: nothing is waiting
          on an operator here. It is a tool they reach for, not work outstanding. */
-      { label: 'Demo funds', href: '/admin/demo-funds', icon: Coins },
+      { label: 'Fund User', href: '/admin/demo-funds', icon: Coins },
     ],
   },
   {

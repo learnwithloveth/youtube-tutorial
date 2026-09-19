@@ -58,6 +58,15 @@ export interface AssetNetwork {
   /** Rough time to finality, shown on the withdrawal form. */
   readonly eta: string;
   /**
+   * What this chain puts in front of a transaction hash, if anything.
+   *
+   * `0x` on Ethereum, nothing on Bitcoin or Tron. Catalogue data rather than a
+   * branch inside a formatter, because it is a fact about the chain in the same
+   * way the address pattern is — and the next network added brings its own
+   * convention rather than needing a special case written for it somewhere else.
+   */
+  readonly txHashPrefix: string;
+  /**
    * A pattern the destination must match.
    *
    * Deliberately loose: this catches a truncated paste or an address for the wrong

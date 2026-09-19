@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
-import { Clock, TriangleAlert, Wallet2 } from 'lucide-react';
+import { BadgeCheck, Ban, Clock, TriangleAlert, Wallet2 } from 'lucide-react';
 
 import { requireUser } from '@/server/auth';
 import { depositAddressesFor } from '@/server/deposit-addresses';
-import { getWalletFor, withdrawableAssets } from '@/server/ledger';
+import type { DepositClaimView } from '@/server/ledger';
+import { getDepositClaimsFor, getWalletFor, withdrawableAssets } from '@/server/ledger';
 import { getInstruments } from '@/server/market-data';
-import { formatClock, formatDate } from '@/shared/lib/format';
+import { formatDate } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
@@ -15,6 +16,8 @@ import type { UserId } from '@/shared/kernel/ids';
 import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { usd } from '../_lib/format-usd';
+import { ReceiptLink } from '../_components/receipt-link';
+import { CUSTOMER_STATUS } from '../_lib/record-status';
 import { WithdrawForm } from './_components/withdraw-form';
 import { shortenDecimalString } from '@/shared/kernel';
 
@@ -87,11 +90,28 @@ export default async function WalletPage() {
    * no reason. Neither rejects — both degrade to an empty result — so there is no
    * unattached rejection to leak.
    */
-  const [wallet, instruments] = await Promise.all([
+  const [claims, wallet, instruments] = await Promise.all([
+    // The customer's own side of the deposit flow. Read here for the first time:
+    // `getDepositClaimsFor` has existed since claims did and nothing rendered it,
+    // so somebody who reported a deposit could see it only as a notification that
+    // scrolled away. That gap is what made "confirming" worth adding a state for —
+    // a wait nobody can look at is indistinguishable from nothing happening.
+    getDepositClaimsFor(user.id as UserId),
     getWalletFor(user.id as UserId),
     getInstruments(),
   ]);
   const marks = new Map(instruments.map((i) => [i.symbol, { glyph: i.glyph, hue: i.hue }]));
+
+  /*
+   * Only what is still going on, plus anything refused.
+   *
+   * An approved claim is not dropped because it is uninteresting — it is dropped
+   * because it is already on the balances table below and in the statement, and
+   * listing it a third time would have the same deposit appear to have happened
+   * repeatedly. A rejection stays: nothing else on this page records it, and the
+   * reason is the whole point of having refused in words.
+   */
+  const open = claims.filter((claim) => claim.status !== 'approved');
 
   const assets = withdrawableAssets();
   // Counting rows for a caption, not summing money — the one place a coercion is
@@ -178,22 +198,67 @@ export default async function WalletPage() {
             column grows to fit it — which on a phone meant the whole page scrolled
             sideways by 200px instead of the table scrolling inside its own box. */}
         <div className="min-w-0 space-y-4">
-          <Panel>
-            <PanelHeader
-              title="Daily limits"
-              subtitle={`${wallet.limits.tier} tier · resets ${formatClock(wallet.limits.resetsAt)} UTC`}
-            />
-            <LimitBar
-              label="Withdrawals today"
-              used={wallet.limits.usedUsd}
-              cap={wallet.limits.capUsd}
-            />
-            <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
-              The limit is measured in dollars rather than per asset, so it cannot be
-              sidestepped by withdrawing something else. It resets at midnight UTC —
-              one instant for everyone, not one per timezone.
-            </p>
-          </Panel>
+        
+
+          {open.length > 0 ? (
+            <Panel>
+              <PanelHeader
+                title="Deposits you have reported"
+                subtitle="Pending until an operator has matched it to the transaction on the chain"
+              />
+              <ul className="divide-y divide-line/60">
+                {open.map((claim) => (
+                  <li key={claim.id} className="py-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <DepositMark status={claim.status} />
+                      <span className="font-mono text-sm text-fg">
+                        {shortenDecimalString(claim.claimedAmount)} {claim.asset}
+                      </span>
+                      <span className="text-2xs text-fg-subtle">{claim.network}</span>
+                      <span className="ml-auto text-2xs text-fg-subtle">
+                        {formatDate(claim.submittedAt)}
+                      </span>
+                      {/* The same three words this account's other screens use.
+                          This panel used to say "Reported" where the transactions
+                          page said "Awaiting review" about the very same row. */}
+                      <Badge tone={CUSTOMER_STATUS[claim.status].tone}>
+                        {CUSTOMER_STATUS[claim.status].label}
+                      </Badge>
+                      <ReceiptLink
+                        kind="deposit"
+                        recordId={claim.id}
+                        status={claim.status === 'confirming' ? 'confirming' : claim.status}
+                      />
+                    </div>
+                    {/* The operator's own words, whichever kind they are. A note
+                        while it confirms and a reason for a refusal are different
+                        fields on the record precisely so this line cannot present
+                        one as the other. */}
+                    {claim.status === 'confirming' ? (
+                      <p className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
+                        {claim.confirmingNote ?? CUSTOMER_STATUS.confirming.hint}
+                      </p>
+                    ) : null}
+                    {claim.status === 'pending' ? (
+                      <p className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
+                        {CUSTOMER_STATUS.pending.hint}
+                      </p>
+                    ) : null}
+                    {claim.reason !== null && claim.status === 'rejected' ? (
+                      <p className="mt-1.5 text-2xs leading-relaxed text-down">
+                        {claim.reason}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 border-t border-line pt-4 text-2xs leading-relaxed text-fg-subtle">
+                A transaction is spendable once it has enough confirmations on its
+                network and an operator has matched it to your report. Until then it
+                is not part of your balance.
+              </p>
+            </Panel>
+          ) : null}
 
           {wallet.pendingWithdrawals.length > 0 ? (
             <Panel>
@@ -219,6 +284,14 @@ export default async function WalletPage() {
                         ? `${withdrawal.approvalsHeld}/${withdrawal.approvalsRequired} approvals`
                         : 'Pending'}
                     </Badge>
+                    {/* Every one of these is still pending, so the link reads
+                        "View" rather than "Receipt" — the document it opens heads
+                        itself "Transaction pending" and says it is not one. */}
+                    <ReceiptLink
+                      kind="withdrawal"
+                      recordId={withdrawal.id}
+                      status="pending"
+                    />
                   </li>
                 ))}
               </ul>
@@ -293,41 +366,6 @@ export default async function WalletPage() {
   );
 }
 
-
-function LimitBar({ label, used, cap }: { label: string; used: string; cap: string }) {
-  // Percentages are for a bar's width, which is a rendering concern rather than an
-  // accounting one — this is the one place a number is acceptable, and it never
-  // feeds back into a figure anyone reads.
-  const pct = Number(cap) > 0 ? Math.min(100, (Number(used) / Number(cap)) * 100) : 0;
-
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="text-fg-muted">{label}</span>
-        <span className="tabular-nums text-fg">
-          {usd(used)} <span className="text-fg-subtle">/ {usd(cap)}</span>
-        </span>
-      </div>
-      <div
-        role="meter"
-        aria-valuenow={Math.round(pct)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={label}
-        className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-strong"
-      >
-        <div
-          className={cn(
-            'h-full rounded-full transition-[width] duration-700',
-            pct > 80 ? 'bg-warn' : 'bg-[var(--chart-1)]',
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function Notice({ tone, title, body }: { tone: 'warn' | 'down'; title: string; body: string }) {
   return (
     <div
@@ -345,4 +383,28 @@ function Notice({ tone, title, body }: { tone: 'warn' | 'down'; title: string; b
       </p>
     </div>
   );
+}
+
+
+/**
+ * How a reported deposit reads on the customer's own page.
+ *
+ * Four states rather than three, and the extra one is the point: `pending` means
+ * nobody has looked yet, `confirming` means somebody has and the network is what
+ * is being waited on. Before that distinction existed a customer watching
+ * "Reported" for an hour had no way to tell a slow queue from a slow chain, and
+ * those want completely different responses from them — chase us, or wait.
+ */
+/**
+ * One mark per state the customer is shown, which is three and not four.
+ *
+ * `pending` and `confirming` share the clock deliberately. They read as one word
+ * on the badge beside this, and a glyph that split them again would be the only
+ * thing on the screen claiming there are two states — a distinction that is the
+ * operator's to act on and nothing the customer can do anything about.
+ */
+function DepositMark({ status }: { status: DepositClaimView['status'] }) {
+  if (status === 'approved') return <BadgeCheck className="size-4 shrink-0 text-up" />;
+  if (status === 'rejected') return <Ban className="size-4 shrink-0 text-down" />;
+  return <Clock className="size-4 shrink-0 text-warn" />;
 }

@@ -97,8 +97,24 @@ export const transfers = ledgerSchema.table(
     kind: text('kind', {
       enum: ['deposit', 'withdrawal', 'withdrawal-fee', 'adjustment', 'demo-credit'],
     }).notNull(),
-    /** What this was for: a transaction hash, a withdrawal id, a ticket number. */
+    /** What this was for, in words: the operator's note, the withdrawal's id. */
     reference: text('reference').notNull(),
+
+    /**
+     * The chain it happened on, by network id, and the transaction on it.
+     *
+     * Both nullable, and for different reasons. A withdrawal fee crosses no chain,
+     * so it has no network. A withdrawal has a network and never a hash — nothing
+     * is broadcast by this platform, and a column that invented one would make the
+     * statement assert a payment that did not happen.
+     *
+     * Stored rather than derived on read, even for the demo credits whose hash is
+     * a pure function of the transfer id: a later change to that function must not
+     * be able to rewrite what a customer was already shown.
+     */
+    network: text('network'),
+    txHash: text('tx_hash'),
+
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -261,11 +277,28 @@ export const depositClaims = ledgerSchema.table(
     /** Key of the stored proof image. Never a filename the customer chose. */
     proofId: text('proof_id').notNull(),
 
-    status: text('status', { enum: ['pending', 'approved', 'rejected'] })
+    // `confirming` sits between pending and a decision: an operator has seen the
+    // evidence and the chain is what is being waited on. It is not terminal — see
+    // `DepositClaimStatus` for why it is a status rather than a note.
+    status: text('status', { enum: ['pending', 'confirming', 'approved', 'rejected'] })
       .notNull()
       .default('pending'),
 
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
+
+    /**
+     * When an operator said it was waiting on the chain, and who.
+     *
+     * Beside the decided pair rather than sharing it: they answer different
+     * questions, and a claim approved straight from pending has one and not the
+     * other. The note is the operator's words to the customer while they wait,
+     * kept out of `reason` because that column means "why this was refused"
+     * everywhere it is rendered.
+     */
+    confirmingAt: timestamp('confirming_at', { withTimezone: true }),
+    confirmingBy: text('confirming_by'),
+    confirmingNote: text('confirming_note'),
+
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     decidedBy: text('decided_by'),
     /** Required on a rejection: the customer is shown it. */

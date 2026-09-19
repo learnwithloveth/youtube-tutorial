@@ -30,6 +30,15 @@ import type { GrantFormState } from './form-state';
  * into a void. Identity is asked first, so a typo or a stale form produces a
  * refusal rather than an orphaned account that shows up in a reconciliation
  * months later with no owner to attach it to.
+ *
+ * ── The email is awaited, unlike every other mail in this codebase ────────────
+ * Elsewhere a message goes out in `after`, because nobody asked for it and a slow
+ * mail server must not hold up a form. Here an operator ticked a box, so whether
+ * it went is part of what they asked for — reporting "funded" while the message
+ * silently failed in the background would answer a different question from the one
+ * they put. It still cannot fail the grant: the send happens after the credit has
+ * committed, and its failure is reported beside the success rather than instead of
+ * it.
  */
 export async function grantDemoFundsAction(
   _previous: GrantFormState,
@@ -37,9 +46,16 @@ export async function grantDemoFundsAction(
 ): Promise<GrantFormState> {
   const operator = await requireAdmin('/admin/demo-funds');
 
+  const refuse = (message: string): GrantFormState => ({
+    status: 'error',
+    message,
+    emailed: null,
+    emailProblem: null,
+  });
+
   const context = ledger();
   if (context === null) {
-    return { status: 'error', message: 'The ledger is unavailable on this deployment.' };
+    return refuse('The ledger is unavailable on this deployment.');
   }
 
   // A hand-edited form field is an ordinary way to arrive here with something
@@ -48,22 +64,27 @@ export async function grantDemoFundsAction(
   try {
     userId = toUserId(String(formData.get('userId') ?? ''));
   } catch {
-    return { status: 'error', message: 'That is not an account this platform knows.' };
+    return refuse('That is not an account this platform knows.');
   }
 
   const accounts = await identity().describeUsers([userId]);
   const recipient = accounts.get(userId);
   if (recipient === undefined) {
-    return { status: 'error', message: 'That account no longer exists.' };
+    return refuse('That account no longer exists.');
   }
 
   const asset = String(formData.get('asset') ?? '');
+  const network = String(formData.get('network') ?? '');
   const amount = String(formData.get('amount') ?? '');
   const note = String(formData.get('note') ?? '');
+  // An unchecked checkbox submits nothing at all, which is why this reads as a
+  // presence test rather than comparing to 'false'.
+  const notify = formData.get('notify') !== null;
 
   const result = await context.grantDemoFunds({
     userId,
     asset,
+    network,
     amount,
     note,
     issuedBy: operator.id as UserId,
@@ -76,9 +97,10 @@ export async function grantDemoFundsAction(
       reason: result.error.kind,
       userId,
     });
-    return { status: 'error', message: presentLedgerError(result.error) };
+    return refuse(presentLedgerError(result.error));
   }
 
+  const shown = trimDecimalString(amount.trim());
   const request = await describeRequest();
 
   // Recorded against the *recipient*, not the operator, for the reason every
@@ -91,7 +113,7 @@ export async function grantDemoFundsAction(
     reference: `by ${operator.email}`,
     // Trimmed: an 18-decimal asset would otherwise put
     // "1.000000000000000000 ETH" in the customer's notification bell.
-    detail: `${trimDecimalString(amount.trim())} ${result.value.asset}`,
+    detail: `${shown} ${result.value.asset} on ${result.value.networkLabel}`,
     location: request.location,
     agent: request.agent,
     ipDigest: request.ipDigest,
@@ -103,7 +125,34 @@ export async function grantDemoFundsAction(
     userId,
     asset: result.value.asset,
     transferId: result.value.transferId,
+    txHash: result.value.txHash,
   });
+
+  let emailed: boolean | null = null;
+  let emailProblem: string | null = null;
+
+  if (notify) {
+    const sent = await context.sendDemoFundsEmail({
+      userId,
+      asset: result.value.asset,
+      amount: amount.trim(),
+      networkLabel: result.value.networkLabel,
+      txHash: result.value.txHash,
+      note,
+      balance: result.value.balance,
+    });
+
+    emailed = sent.ok;
+    if (!sent.ok) {
+      emailProblem = presentLedgerError(sent.error);
+      logger.warn({
+        event: 'demo_funds_email_failed',
+        module: 'ledger',
+        reason: sent.error.kind,
+        userId,
+      });
+    }
+  }
 
   // Their balance moved, so every surface that states one is now stale. The
   // operator's own list is revalidated too — they may well have just funded
@@ -115,6 +164,8 @@ export async function grantDemoFundsAction(
 
   return {
     status: 'granted',
-    message: `${trimDecimalString(amount.trim())} ${result.value.asset} added to ${recipient.name}. Their balance is now ${trimDecimalString(result.value.balance)} ${result.value.asset}.`,
+    message: `${shown} ${result.value.asset} on ${result.value.networkLabel} added to ${recipient.name}. Their balance is now ${trimDecimalString(result.value.balance)} ${result.value.asset}.`,
+    emailed,
+    emailProblem,
   };
 }
