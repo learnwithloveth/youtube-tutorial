@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
-import { BadgeCheck, Ban, Clock, TriangleAlert, Wallet2 } from 'lucide-react';
+import { Clock, TriangleAlert, Wallet2 } from 'lucide-react';
 
 import { requireUser } from '@/server/auth';
 import { depositAddressesFor } from '@/server/deposit-addresses';
-import type { DepositClaimView } from '@/server/ledger';
 import { getDepositClaimsFor, getWalletFor, withdrawableAssets } from '@/server/ledger';
 import { getInstruments } from '@/server/market-data';
 import { formatDate } from '@/shared/lib/format';
@@ -17,6 +16,7 @@ import { PageHeader, Panel, PanelHeader } from '../../../_console/components/pag
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { usd } from '../_lib/format-usd';
 import { ReceiptLink } from '../_components/receipt-link';
+import { networkLabelFor, networkLabels } from '../_lib/network-label';
 import { CUSTOMER_STATUS } from '../_lib/record-status';
 import { WithdrawForm } from './_components/withdraw-form';
 import { shortenDecimalString } from '@/shared/kernel';
@@ -114,6 +114,9 @@ export default async function WalletPage() {
   const open = claims.filter((claim) => claim.status !== 'approved');
 
   const assets = withdrawableAssets();
+  // "Tron (TRC-20)", not "tron". The token standard is the part somebody has to
+  // get right when they check an address against what they pasted.
+  const labels = networkLabels(assets);
   // Counting rows for a caption, not summing money — the one place a coercion is
   // harmless, because the result never becomes a figure anyone reads.
   const held = wallet.balances.filter((balance) => Number(balance.held) > 0);
@@ -210,11 +213,24 @@ export default async function WalletPage() {
                 {open.map((claim) => (
                   <li key={claim.id} className="py-3">
                     <div className="flex flex-wrap items-center gap-3">
-                      <DepositMark status={claim.status} />
+                      {/* The coin carrying its chain's badge, in place of the clock
+                          that used to sit here. The status is already spelled out
+                          in words on the badge at the end of this row, and what the
+                          glyph was doing — saying "not finished yet" a second time —
+                          is worth less than saying *which USDT this is*. */}
+                      <AssetMark
+                        symbol={claim.asset}
+                        glyph={marks.get(claim.asset)?.glyph ?? claim.asset.slice(0, 1)}
+                        hue={marks.get(claim.asset)?.hue ?? 'var(--chart-1)'}
+                        network={claim.network}
+                        size="xs"
+                      />
                       <span className="font-mono text-sm text-fg">
                         {shortenDecimalString(claim.claimedAmount)} {claim.asset}
                       </span>
-                      <span className="text-2xs text-fg-subtle">{claim.network}</span>
+                      <span className="text-2xs text-fg-subtle">
+                        {networkLabelFor(labels, claim.asset, claim.network)}
+                      </span>
                       <span className="ml-auto text-2xs text-fg-subtle">
                         {formatDate(claim.submittedAt)}
                       </span>
@@ -269,12 +285,22 @@ export default async function WalletPage() {
               <ul className="divide-y divide-line/60">
                 {wallet.pendingWithdrawals.map((withdrawal) => (
                   <li key={withdrawal.id} className="flex flex-wrap items-center gap-3 py-3">
-                    <Clock className="size-4 shrink-0 text-warn" />
+                    {/* Which chain this is leaving on is the single most consequential
+                        fact on the row: USDT sent over Tron to an Ethereum address is
+                        gone. It was rendering as the raw id next to a generic clock. */}
+                    <AssetMark
+                      symbol={withdrawal.asset}
+                      glyph={marks.get(withdrawal.asset)?.glyph ?? withdrawal.asset.slice(0, 1)}
+                      hue={marks.get(withdrawal.asset)?.hue ?? 'var(--chart-1)'}
+                      network={withdrawal.network}
+                      size="xs"
+                    />
                     <span className="font-mono text-sm text-fg">
-                      {withdrawal.amount} {withdrawal.asset}
+                      {shortenDecimalString(withdrawal.amount)} {withdrawal.asset}
                     </span>
                     <span className="text-2xs text-fg-subtle">
-                      to {withdrawal.destination} · {withdrawal.network}
+                      {networkLabelFor(labels, withdrawal.asset, withdrawal.network)} · to{' '}
+                      <span className="font-mono">{withdrawal.destination}</span>
                     </span>
                     <span className="ml-auto text-2xs text-fg-subtle">
                       {formatDate(withdrawal.requestedAt)}
@@ -395,16 +421,3 @@ function Notice({ tone, title, body }: { tone: 'warn' | 'down'; title: string; b
  * "Reported" for an hour had no way to tell a slow queue from a slow chain, and
  * those want completely different responses from them — chase us, or wait.
  */
-/**
- * One mark per state the customer is shown, which is three and not four.
- *
- * `pending` and `confirming` share the clock deliberately. They read as one word
- * on the badge beside this, and a glyph that split them again would be the only
- * thing on the screen claiming there are two states — a distinction that is the
- * operator's to act on and nothing the customer can do anything about.
- */
-function DepositMark({ status }: { status: DepositClaimView['status'] }) {
-  if (status === 'approved') return <BadgeCheck className="size-4 shrink-0 text-up" />;
-  if (status === 'rejected') return <Ban className="size-4 shrink-0 text-down" />;
-  return <Clock className="size-4 shrink-0 text-warn" />;
-}

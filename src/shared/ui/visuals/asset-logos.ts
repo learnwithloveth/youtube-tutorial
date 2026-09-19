@@ -47,6 +47,9 @@ export const ASSET_LOGOS: Readonly<Record<string, string>> = {
  *
  * The network ids are the ledger's — `ethereum`, `tron` — so a key here lines up
  * with the network a withdrawal or a deposit address was actually recorded against.
+ *
+ * For USDT these are not a *preference* over a plain mark, they are the only marks
+ * there are — see the note where its entry would have been in `ASSET_LOGOS`.
  */
 export const NETWORK_LOGOS: Readonly<Record<string, string>> = {
   'USDT:ethereum': '/usdt-eth.png',
@@ -69,7 +72,9 @@ export interface AssetLogo {
  * Null is the ordinary case — most of the catalogue has no logo file — and the
  * caller renders the lettered mark for it rather than a gap. An unknown network
  * falls back to the asset's plain logo rather than to nothing: the coin is still
- * the coin.
+ * the coin. For USDT there is no plain logo to fall back to, on purpose, so an
+ * unknown network there lands on the lettered ₮ rather than on a mark that would
+ * name a chain nobody recorded.
  */
 export function assetLogoFor(symbol: string, network?: string | null): AssetLogo | null {
   const code = symbol.trim().toUpperCase();

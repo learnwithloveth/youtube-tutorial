@@ -25,6 +25,7 @@ import { PageHeader, Panel, PanelHeader } from '../../../_console/components/pag
 import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { ReceiptLink } from '../_components/receipt-link';
 import { TxHash } from '../_components/tx-hash';
+import { networkLabelFor, networkLabels } from '../_lib/network-label';
 import { CUSTOMER_STATUS } from '../_lib/record-status';
 
 /**
@@ -80,6 +81,15 @@ const KIND_LABEL: Record<TransferKind, string> = {
   'demo-credit': 'Demo funds',
 };
 
+/**
+ * Kinds that leave no transaction because nothing is sent.
+ *
+ * A withdrawal ends at `payable` and a fee never leaves the platform at all, so
+ * neither has a hash and neither ever will — that is the design, not a gap in the
+ * data. Every other kind either carries one or simply had none recorded.
+ */
+const NEVER_BROADCAST = new Set<TransferKind>(['withdrawal', 'withdrawal-fee']);
+
 const KIND_TONE: Record<TransferKind, 'up' | 'down' | 'brand' | 'neutral'> = {
   deposit: 'up',
   withdrawal: 'down',
@@ -103,20 +113,7 @@ export default async function TransactionsPage({
   const assets = withdrawableAssets();
   const asset = assets.find((candidate) => candidate.code === params.asset)?.code;
 
-  /*
-   * How a chain is written, per asset.
-   *
-   * Keyed by asset *and* network, not by network alone, because the catalogue
-   * names the same chain differently depending on what is travelling over it —
-   * Tron carrying USDT is "Tron (TRC-20)" and Tron carrying TRX is just "Tron".
-   * The token standard is the part a customer has to get right, and only the
-   * pairing knows it.
-   */
-  const networkLabels = new Map(
-    assets.flatMap((entry) =>
-      entry.networks.map((network) => [`${entry.code}:${network.id}`, network.label] as const),
-    ),
-  );
+  const labels = networkLabels(assets);
   const page = Math.max(Number(params.page ?? '1') || 1, 1);
 
   // Two reads, and they are not the same set. The statement is what moved; the
@@ -200,17 +197,23 @@ export default async function TransactionsPage({
 
               return (
                 <li key={record.id} className="flex flex-wrap items-center gap-3 py-3">
-                  {record.direction === 'in' ? (
-                    <ArrowDownLeft className="size-4 shrink-0 text-up" />
-                  ) : (
-                    <ArrowUpRight className="size-4 shrink-0 text-down" />
-                  )}
+                  {/* The coin and its chain, for the reason the statement below
+                      carries one: on a list where half the rows are USDT, which
+                      network a request is on is what the reader came to check. */}
+                  <AssetMark
+                    symbol={record.asset}
+                    glyph={marks.get(record.asset)?.glyph ?? record.asset.slice(0, 1)}
+                    hue={marks.get(record.asset)?.hue ?? 'var(--chart-1)'}
+                    network={record.network}
+                    size="xs"
+                  />
                   <span className="min-w-0">
                     <span data-numeric className="block font-mono text-sm text-fg">
                       {shortenDecimalString(record.settledAmount ?? record.amount)} {record.asset}
                     </span>
                     <span className="block text-2xs text-fg-subtle">
-                      {record.kind === 'deposit' ? 'Deposit' : 'Withdrawal'} · {record.network} ·{' '}
+                      {record.kind === 'deposit' ? 'Deposit' : 'Withdrawal'} ·{' '}
+                      {networkLabelFor(labels, record.asset, record.network)} ·{' '}
                       {formatDate(record.occurredAt)}
                     </span>
                     {/* Under the badge rather than inside it. "Pending" is the word
@@ -312,21 +315,28 @@ export default async function TransactionsPage({
                       <span className="text-2xs text-fg-subtle">Internal</span>
                     ) : (
                       <span className="text-xs text-fg-muted">
-                        {networkLabels.get(`${line.asset}:${line.network}`) ?? line.network}
+                        {networkLabelFor(labels, line.asset, line.network)}
                       </span>
                     )}
                   </Td>
                   <Td>
                     {line.txHash === null ? (
+                      /* Two different reasons a hash is missing, and they are not
+                         the same sentence. A withdrawal has none because this
+                         platform's payout path ends at `payable` and broadcasts
+                         nothing — that is a fact about the system. Anything else
+                         has none because nobody recorded one, which is a fact
+                         about the row. Saying "not broadcast" about both would
+                         explain a movement by a rule that does not apply to it. */
                       <span
-                        // Said, rather than left blank: this platform's payout path
-                        // ends at `payable` and broadcasts nothing, so a withdrawal
-                        // genuinely has no transaction to name. A blank cell reads
-                        // as missing data; this reads as the truth.
-                        title="Nothing is broadcast by this platform, so there is no transaction hash."
+                        title={
+                          NEVER_BROADCAST.has(line.kind)
+                            ? 'Nothing is broadcast by this platform, so there is no transaction hash.'
+                            : 'No transaction hash was recorded for this movement.'
+                        }
                         className="text-2xs text-fg-subtle"
                       >
-                        Not broadcast
+                        {NEVER_BROADCAST.has(line.kind) ? 'Not broadcast' : 'Not recorded'}
                       </span>
                     ) : (
                       <TxHash value={line.txHash} short={shortenHash(line.txHash)} />
