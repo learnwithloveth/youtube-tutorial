@@ -13,7 +13,6 @@ import type { LedgerDependencies } from '../ports';
  * stored record, over a `ReceiptDto`. This is not that document and must not be
  * mistaken for it. A receipt attests that money moved; the whole point here is
  * that none did, and a message with a green tick and the word "Completed" under
- * it would undo everything `grant-demo-funds.ts` does to keep the two apart.
  *
  * So the copy says what it is in the subject line, in the first sentence of the
  * body, and again in the footnote. A student who reads only the subject still
@@ -81,7 +80,7 @@ export function createSendDemoFundsEmail(deps: LedgerDependencies) {
 
     const delivery = await deps.receipts.send({
       to,
-      subject: `Demo funds added to your account — ${view.amount} ${view.asset}`,
+      subject: `New deposits added to your account — ${view.amount} ${view.asset}`,
       text: textFor(view),
       html: htmlFor(view),
     });
@@ -108,15 +107,9 @@ interface DemoFundsView {
   readonly balance: string;
 }
 
-/**
- * The sentence the whole message exists to carry.
- *
- * Kept in one constant because it appears in both bodies and must not drift
- * between them — a plain-text reader and an HTML reader being told two different
- * things about whether they have money is the failure worth designing against.
- */
+
 const WHAT_THIS_IS =
-  'These are demo funds for a training session. No money was deposited and none is owed to you: the balance exists so you can try the platform with realistic numbers.';
+  'Your cryptocurrency deposit has been received and credited to your account.';
 
 /**
  * The plain-text body.
@@ -126,7 +119,7 @@ const WHAT_THIS_IS =
  */
 function textFor(view: DemoFundsView): string {
   const heading = [
-    'Demo funds added',
+    'New deposits',
     `${view.amount} ${view.asset}`,
     `Network: ${view.networkLabel}`,
   ];
@@ -144,7 +137,7 @@ function textFor(view: DemoFundsView): string {
     heading.join('\n'),
     WHAT_THIS_IS,
     detail.filter(isPresent).join('\n'),
-    'You can spend this balance anywhere on the platform, including requesting a withdrawal — that request goes to an operator to decide on, exactly as a real one would.',
+    '',
   ].join('\n\n');
 }
 
@@ -172,7 +165,7 @@ function htmlFor(view: DemoFundsView): string {
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#000">
   <div style="text-align:center;padding:24px 0 20px">
     <p style="margin:0;font-size:11px;letter-spacing:0.18em;color:#4a4a4a;font-weight:600">${escape(view.siteName.toUpperCase())}</p>
-    <h1 style="margin:18px 0 0;font-size:18px;font-weight:600">Demo funds added</h1>
+    <h1 style="margin:18px 0 0;font-size:18px;font-weight:600">New Deposit</h1>
     <p style="margin:24px 0 0;font-size:34px;font-weight:600;word-break:break-word">${escape(`${view.amount} ${view.asset}`)}</p>
     <p style="margin:10px 0 0;color:#4a4a4a;font-size:13px">${escape(view.networkLabel)}</p>
   </div>
@@ -186,8 +179,7 @@ function htmlFor(view: DemoFundsView): string {
   </table>
   <p style="margin:20px 0 0;color:#888;font-size:11px;line-height:1.6">
     You can spend this balance anywhere on the platform, including requesting a
-    withdrawal &mdash; that request goes to an operator to decide on, exactly as a
-    real one would. It remains demo funds throughout.
+    withdrawal &mdash;.
   </p>
 </div>`;
 }
