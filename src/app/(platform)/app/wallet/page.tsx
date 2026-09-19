@@ -16,6 +16,7 @@ import { PageHeader, Panel, PanelHeader } from '../../../_console/components/pag
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { usd } from '../_lib/format-usd';
 import { WithdrawForm } from './_components/withdraw-form';
+import { shortenDecimalString } from '@/shared/kernel';
 
 /**
  * The wallet.
@@ -262,13 +263,15 @@ export default async function WalletPage() {
                         </span>
                       </Td>
                       <Td numeric className="font-mono">
-                        {balance.available}
+                        {/* Shortened for the same reason the withdrawal form is:
+                            an 18-decimal asset fills the column with zeros. */}
+                        {shortenDecimalString(balance.available)}
                       </Td>
                       <Td numeric className="font-mono">
                         {balance.held === '0' || Number(balance.held) === 0 ? (
                           <span className="text-fg-subtle">—</span>
                         ) : (
-                          balance.held
+                          shortenDecimalString(balance.held)
                         )}
                       </Td>
                       <Td numeric>

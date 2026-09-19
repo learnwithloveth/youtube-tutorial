@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { PASSWORD_MIN_LENGTH } from '@/modules/identity';
 import { cn } from '@/shared/lib/cn';
 
 export function AuthHeading({ title, body }: { title: string; body: ReactNode }) {
@@ -89,13 +90,22 @@ export function SocialAuth({
   );
 }
 
-/** Four-band strength meter driven by length, class variety and repetition. */
+/**
+ * Four-band strength meter driven by length and class variety.
+ *
+ * The first band is the *accepted* minimum, not a recommended one — the policy now
+ * takes {@link PASSWORD_MIN_LENGTH} characters, and a meter that still said "Too
+ * short" about a password the server accepts would be telling the reader something
+ * untrue about the form they are filling in. The second band is the length that
+ * actually buys safety, so a short-but-valid password reads "Weak" rather than
+ * rejected: advice, which is what a meter is, instead of a rule, which it is not.
+ */
 export function PasswordStrength({ value }: { value: string }) {
   const checks = [
+    value.length >= PASSWORD_MIN_LENGTH,
     value.length >= 12,
     /[a-z]/.test(value) && /[A-Z]/.test(value),
-    /\d/.test(value),
-    /[^A-Za-z0-9]/.test(value),
+    /\d/.test(value) || /[^A-Za-z0-9]/.test(value),
   ];
   const score = checks.filter(Boolean).length;
   const labels = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
@@ -115,7 +125,9 @@ export function PasswordStrength({ value }: { value: string }) {
         ))}
       </div>
       <p className="mt-2 text-xs text-fg-subtle">
-        {value ? labels[score] : 'Use 12+ characters with a mix of cases, digits and symbols.'}
+        {value
+          ? labels[score]
+          : `At least ${PASSWORD_MIN_LENGTH} characters. Longer is stronger — 12 or more with a mix of cases, digits and symbols.`}
       </p>
     </div>
   );

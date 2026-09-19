@@ -31,9 +31,15 @@ export async function requestWithdrawalAction(
   _previous: WithdrawalFormState,
   formData: FormData,
 ): Promise<WithdrawalFormState> {
+  // Read first, and attached to every reply below: the form uses them to tell an
+  // answer about the route on screen from one about the route it used to show.
+  const asset = String(formData.get('asset') ?? '');
+  const network = String(formData.get('network') ?? '');
+  const about = { asset, network } as const;
+
   const user = await getCurrentUser();
   if (!user) {
-    return { status: 'error', message: 'Sign in to withdraw.', withdrawalId: null };
+    return { status: 'error', message: 'Sign in to withdraw.', withdrawalId: null, ...about };
   }
 
   const context = ledger();
@@ -42,13 +48,14 @@ export async function requestWithdrawalAction(
       status: 'error',
       message: 'Withdrawals are unavailable right now. Nothing has been taken from your balance.',
       withdrawalId: null,
+      ...about,
     };
   }
 
   const result = await context.requestWithdrawal({
     userId: user.id as UserId,
-    asset: String(formData.get('asset') ?? ''),
-    network: String(formData.get('network') ?? ''),
+    asset,
+    network,
     destination: String(formData.get('destination') ?? ''),
     // A string all the way down. Parsing to a number here would defeat every
     // precaution the ledger takes below it.
@@ -65,6 +72,7 @@ export async function requestWithdrawalAction(
       status: 'error',
       message: presentLedgerError(result.error),
       withdrawalId: null,
+      ...about,
     };
   }
 
@@ -95,5 +103,6 @@ export async function requestWithdrawalAction(
         ? `Submitted. Withdrawals of this size need two approvals, so this one may take longer.`
         : 'Submitted for approval. Your balance is on hold until it is reviewed.',
     withdrawalId: result.value.withdrawalId,
+    ...about,
   };
 }

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Bell, IdCard, ShieldCheck, SlidersHorizontal, User } from 'lucide-react';
+import { Bell, IdCard, ShieldCheck, User } from 'lucide-react';
 
 import type {
   CurrentUserDto,
@@ -10,13 +10,11 @@ import type {
   VerificationStandingDto,
 } from '@/modules/identity';
 import { BRAND } from '@/modules/content';
-import type { DailyLimitDto } from '@/modules/ledger';
 import { usePush } from '@/shared/firebase/use-push';
 import { cn } from '@/shared/lib/cn';
 
 import { PageHeader, Panel, PanelHeader } from '../../../../_console/components/page-header';
 import { pushScopeFor } from '../../../../_lib/console-app';
-import { usd } from '../../_lib/format-usd';
 import { IdentityVerification } from './identity-verification';
 import { PreciseLocationControl } from './precise-location-control';
 import { ProfileForm } from './profile-form';
@@ -25,12 +23,18 @@ import { SignInMethods } from './sign-in-methods';
 /**
  * Settings.
  *
- * ── Two tabs are gone, and most of a third ─────────────────────────────────────
+ * ── Three tabs are gone, and most of a fourth ──────────────────────────────────
  * This screen carried five tabs, of which one and a half were real. API keys was a
  * table of invented keys with invented scopes and a revoke button that did nothing —
  * there is no API key context, so the tab is gone rather than mocked. Trading
  * controls and six of seven notification switches went the same way: no matching
  * engine, no alerting, nothing that would have honoured them.
+ *
+ * Limits went last, and for a different reason: it was real, but it was a second
+ * copy. The wallet page already states the daily cap, what has been used against
+ * it and when it resets, beside the withdrawal form where that number decides
+ * something. The cap itself is untouched — `checkDailyLimit` still refuses a
+ * withdrawal over it. Only the duplicate readout is gone.
  *
  * What is left is what the platform can actually do. The principle is the one the
  * approvals queue applied to its risk scores — a control that looks like it works
@@ -51,7 +55,6 @@ const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'verification', label: 'Verification', icon: IdCard },
   { id: 'security', label: 'Security', icon: ShieldCheck },
-  { id: 'limits', label: 'Limits', icon: SlidersHorizontal },
   { id: 'notifications', label: 'Notifications', icon: Bell },
 ] as const;
 
@@ -187,7 +190,6 @@ function PushNotificationToggle({ userId, scope }: { userId: string; scope: stri
  */
 export function SettingsShell({
   user,
-  limits,
   sessions,
   verification,
   signInMethods,
@@ -196,8 +198,6 @@ export function SettingsShell({
   initialTab,
 }: {
   user: CurrentUserDto;
-  /** Null when the ledger could not be read. A missing limit is not a zero limit. */
-  limits: DailyLimitDto | null;
   sessions: ReactNode;
   verification: VerificationStandingDto;
   /** Null when the read failed. A missing answer is not "no password". */
@@ -310,35 +310,6 @@ export function SettingsShell({
             </>
           ) : null}
 
-          {tab === 'limits' ? (
-            <Panel>
-              <PanelHeader
-                title="Daily withdrawal limit"
-                subtitle={
-                  limits ? `${limits.tier} tier · resets 00:00 UTC` : 'Could not be read'
-                }
-              />
-              {limits === null ? (
-                <p className="text-xs leading-relaxed text-fg-subtle">
-                  Your limit could not be read just now. This is a failed request, not
-                  a limit of zero.
-                </p>
-              ) : (
-                <>
-                  <LimitMeter used={limits.usedUsd} cap={limits.capUsd} />
-                  <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
-                    {/* The rule, stated where it bites. A per-asset cap would be
-                        avoidable by withdrawing a different coin, which is why the
-                        cap is on value leaving the platform. */}
-                    The cap is on value, not on any one asset — a withdrawal is measured
-                    in dollars at the price when you request it. Card, bank and API
-                    limits are not shown because none of those routes exist yet.
-                  </p>
-                </>
-              )}
-            </Panel>
-          ) : null}
-
           {tab === 'notifications' ? (
             <Panel>
               <PanelHeader title="Notifications" subtitle="Per device, not per account" />
@@ -358,31 +329,3 @@ export function SettingsShell({
   );
 }
 
-/**
- * Used against the cap.
- *
- * Both arrive as exact decimal strings and are converted once, here, purely to
- * compute a bar width — the *labels* are rendered straight from the strings, so no
- * displayed number has passed through a float.
- */
-function LimitMeter({ used, cap }: { used: string; cap: string }) {
-  const capValue = Number(cap);
-  const pct = capValue > 0 ? Math.min(100, (Number(used) / capValue) * 100) : 0;
-
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="text-fg-muted">Withdrawals</span>
-        <span data-numeric className="text-fg">
-          {usd(used)} <span className="text-fg-subtle">of {usd(cap)}</span>
-        </span>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface">
-        <div
-          className={cn('h-full rounded-full', pct > 80 ? 'bg-warn' : 'bg-brand')}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}

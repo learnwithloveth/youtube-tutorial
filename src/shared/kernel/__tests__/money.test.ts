@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Money } from '../money';
+import { Money, shortenDecimalString, trimDecimalString } from '../money';
 
 describe('Money', () => {
   describe('construction from decimal strings', () => {
@@ -182,6 +182,39 @@ describe('Money', () => {
     it('rejects non-finite input', () => {
       expect(() => Money.fromUnsafeNumber(Number.NaN, 'USD', 2)).toThrow(TypeError);
       expect(() => Money.fromUnsafeNumber(Number.POSITIVE_INFINITY, 'USD', 2)).toThrow(TypeError);
+    });
+  });
+
+  describe('shortening a decimal for display', () => {
+    /* The bug it exists for: ether is stored at 18 decimals, so an empty balance
+       printed straight reads "0.000000000000000000". */
+    it('turns eighteen decimals of nothing into a zero', () => {
+      expect(shortenDecimalString('0.000000000000000000')).toBe('0');
+    });
+
+    it('keeps at most six decimals and drops the trailing zeros', () => {
+      expect(shortenDecimalString('1.500000000000000000')).toBe('1.5');
+      expect(shortenDecimalString('12.340000')).toBe('12.34');
+      expect(shortenDecimalString('0.123456789012345678')).toBe('0.123456');
+    });
+
+    it('never rounds up, because an overstated balance is a promise', () => {
+      // 0.9999999 truncated is 0.999999 — less than the real figure, never more.
+      expect(shortenDecimalString('0.999999999999999999')).toBe('0.999999');
+    });
+
+    it('leaves a whole number and a short one alone', () => {
+      expect(shortenDecimalString('1200')).toBe('1200');
+      expect(shortenDecimalString('10.5')).toBe('10.5');
+    });
+
+    it('honours a different limit', () => {
+      expect(shortenDecimalString('1.23456789', 2)).toBe('1.23');
+      expect(shortenDecimalString('1.99', 0)).toBe('1');
+    });
+
+    it('agrees with trimDecimalString when nothing needs cutting', () => {
+      expect(shortenDecimalString('0.500000')).toBe(trimDecimalString('0.500000'));
     });
   });
 });

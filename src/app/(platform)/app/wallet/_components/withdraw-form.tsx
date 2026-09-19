@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import type { AssetOptionDto, BalanceDto } from '@/modules/ledger';
+import { shortenDecimalString } from '@/shared/kernel';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/primitives/button';
 import { SegmentedControl } from '@/shared/ui/primitives/segmented-control';
@@ -180,7 +181,7 @@ export function WithdrawForm({
               Amount
               {balance ? (
                 <span className="tabular-nums">
-                  {balance.available} {assetCode} available
+                  {shortenDecimalString(balance.available)} {assetCode} available
                 </span>
               ) : null}
             </span>
@@ -196,13 +197,25 @@ export function WithdrawForm({
             />
             {asset ? (
               <span className="mt-1.5 block text-2xs text-fg-subtle">
-                Minimum {asset.minimumWithdrawal} {asset.code}
-                {network ? ` · ${network.fee} ${asset.code} network fee` : ''}
+                Minimum {shortenDecimalString(asset.minimumWithdrawal)} {asset.code}
+                {network
+                  ? ` · ${shortenDecimalString(network.fee)} ${asset.code} network fee`
+                  : ''}
               </span>
             ) : null}
           </label>
 
-          {state.message ? (
+          {/*
+            Hidden the moment the selection moves on.
+
+            `useActionState` keeps its last reply until the next submit, so a
+            refusal for ETH survived a switch to TRX and sat under the new form
+            describing the old balance. The reply says which route it was about;
+            anything else is last question's answer.
+          */}
+          {state.message !== null &&
+          (state.asset === null ||
+            (state.asset === assetCode && state.network === (network?.id ?? ''))) ? (
             <p
               role="status"
               className={cn(
@@ -389,7 +402,7 @@ function NetworkChooser({
             </span>
             {withFormField ? (
               <span className="text-2xs text-fg-subtle">
-                {option.fee} {assetCode} · {option.eta}
+                {shortenDecimalString(option.fee)} {assetCode} · {option.eta}
               </span>
             ) : (
               <span className="text-2xs text-fg-subtle">{option.eta}</span>

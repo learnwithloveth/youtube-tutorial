@@ -1,8 +1,24 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { BellRing, Check, Loader2, MonitorDown, RotateCw, ShieldAlert } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  BellRing,
+  Check,
+  CheckCircle2,
+  Loader2,
+  MonitorDown,
+  RotateCw,
+  ShieldAlert,
+  X,
+} from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 
 import { usePush, type PushState } from '@/shared/firebase/use-push';
 import { cn } from '@/shared/lib/cn';
@@ -30,7 +46,27 @@ import {
  * granting permission is what actually delivers them.
  *
  * So this covers the whole console — mounted in `(admin)/layout.tsx`, above every
- * route under it — and has no dismiss. There is nothing to read behind it.
+ * route under it.
+ *
+ * ── Two ways out, and they mean different things ──────────────────────────────
+ * It used to have neither, which was defensible when both checks were reliable and
+ * is not once they are not: an operator whose device is genuinely set up can still
+ * be shown this — the app was installed from a different browser profile, or the
+ * push state reads `default` because the subscription was pruned — and a wall with
+ * no door leaves them unable to work.
+ *
+ *  - **Close** dismisses this page load. The checks keep running and the gate
+ *    returns on the next visit, because closing it is not a claim about anything.
+ *  - **"I have set this up"** is that claim, and it is remembered: written under
+ *    {@link DISMISS_KEY} for that operator, and the gate does not appear for them
+ *    on this device again.
+ *
+ * The confirmation is per operator *and* per device, which is the honest scope for
+ * both halves of what it asserts — installation and notification permission are
+ * facts about a browser, not about an account, so a claim about them cannot travel
+ * to the next machine. Nothing here is a security control: the gate has only ever
+ * been a reminder, and an operator who says the reminder is wrong is taken at
+ * their word.
  *
  * ── Checked in the background, and only then shown ────────────────────────────
  * Neither answer is available during render. The display mode is known on the
@@ -57,6 +93,58 @@ import {
 /** Long enough for the install offer and the push state to settle. */
 const SETTLE_MS = 1_500;
 
+/**
+ * Where the confirmation is remembered.
+ *
+ * Suffixed with the operator's id, so one operator's answer is not another's on a
+ * shared machine — and so signing in as somebody else shows the gate again rather
+ * than inheriting a claim they never made.
+ */
+const DISMISS_KEY = 'novex.console-readiness.confirmed';
+
+/* ── The confirmation, as an external store ──────────────────────────────────────
+   `localStorage` is not React state, and reading it into state inside an effect is
+   the cascading render the lint rule is about. It is read through
+   `useSyncExternalStore` for the same reason the unread marker in
+   `admin-notifications` is: a server snapshot of `false` hydrates cleanly, and the
+   `storage` event means confirming in the app window also closes the gate in a tab
+   left open beside it. */
+
+const confirmationListeners = new Set<() => void>();
+
+function subscribeToConfirmation(listener: () => void): () => void {
+  confirmationListeners.add(listener);
+  window.addEventListener('storage', listener);
+  return () => {
+    confirmationListeners.delete(listener);
+    window.removeEventListener('storage', listener);
+  };
+}
+
+function readConfirmation(operatorId: string): boolean {
+  try {
+    return window.localStorage.getItem(`${DISMISS_KEY}:${operatorId}`) === '1';
+  } catch {
+    // Storage refused — a locked-down profile, private browsing. Nothing is
+    // remembered, so the gate behaves as it did before this existed.
+    return false;
+  }
+}
+
+function writeConfirmation(operatorId: string): void {
+  try {
+    window.localStorage.setItem(`${DISMISS_KEY}:${operatorId}`, '1');
+  } catch {
+    /* Unwritable storage costs a repeat of this dialog next visit, nothing more. */
+  }
+  for (const listener of confirmationListeners) listener();
+}
+
+/** The server has no storage, and nothing is confirmed until the browser says so. */
+function confirmationOnServer(): boolean {
+  return false;
+}
+
 export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
   const where = useConsoleWindow();
   const offered = useInstallOffer();
@@ -69,6 +157,17 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const confirmed = useSyncExternalStore(
+    subscribeToConfirmation,
+    useCallback(() => readConfirmation(operatorId), [operatorId]),
+    confirmationOnServer,
+  );
+
+  /** Closed for this page load only. Deliberately not persisted — see the header. */
+  const [closed, setClosed] = useState(false);
+
+  const confirm = useCallback(() => writeConfirmation(operatorId), [operatorId]);
+
   const installed = where === 'app';
   // `unconfigured` is a deployment with no push service at all — there is no
   // switch for an operator to find, so it is not demanded of them. It is also the
@@ -76,7 +175,8 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
   // resolves later the gate appears then.
   const demandable = state !== 'unconfigured';
   const notified = state === 'granted';
-  const blocking = settled && (!installed || (demandable && !notified));
+  const blocking =
+    settled && !confirmed && !closed && (!installed || (demandable && !notified));
 
   useScrollLock(blocking);
 
@@ -87,12 +187,21 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
 
     node.focus();
     // Keyboard focus is kept inside: the console behind this is not to be
-    // operated, and a tab away from the dialog would reach it.
+    // operated, and a tab away from the dialog would reach it. Escape is the one
+    // key that leaves, and it does what the close button does — a modal that traps
+    // focus and ignores Escape is a trap in the other sense.
     const contain = (event: FocusEvent) => {
       if (!node.contains(event.target as Node | null)) node.focus();
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setClosed(true);
+    };
     document.addEventListener('focusin', contain);
-    return () => document.removeEventListener('focusin', contain);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('focusin', contain);
+      document.removeEventListener('keydown', escape);
+    };
   }, [blocking]);
 
   if (!blocking) return null;
@@ -114,17 +223,28 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
       >
         <header className="flex gap-3.5 border-b border-line px-6 py-5">
           <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full border border-warn/40 text-warn">
-            <ShieldAlert className="size-[18px]" />
+            <ShieldAlert className="size-4.5" />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 id="console-readiness-title" className="text-base font-medium text-fg">
               Finish setting up this device
             </h2>
+            {/* Was "the console stays locked on this device until it can reach you",
+                which stopped being true the moment this dialog got a close button.
+                What is still true is why it is being asked for. */}
             <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-              Approvals and support wait on an operator. The console stays locked on
-              this device until it can reach you.
+              Approvals and support wait on an operator. Until this device can reach
+              you, nothing waiting in the console will.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setClosed(true)}
+            aria-label="Close"
+            className="-mr-2 -mt-1 grid size-8 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg"
+          >
+            <X className="size-4" />
+          </button>
         </header>
 
         <ol className="divide-y divide-line">
@@ -160,9 +280,20 @@ export function ConsoleReadinessGate({ operatorId }: { operatorId: string }) {
           </Step>
         </ol>
 
-        <footer className="border-t border-line px-6 py-3.5 text-2xs leading-relaxed text-fg-subtle">
-          This check runs continuously. The console unlocks itself the moment both
-          steps are done — no reload needed.
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-6 py-4">
+          <p className="min-w-0 flex-1 text-2xs leading-relaxed text-fg-subtle">
+            This check runs continuously — it closes itself the moment both steps are
+            done, with no reload. Already done both? Say so and it will stop asking on
+            this device.
+          </p>
+          <button
+            type="button"
+            onClick={confirm}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-medium text-fg-muted transition-colors hover:border-brand-soft/60 hover:text-fg"
+          >
+            <CheckCircle2 className="size-3.5" />
+            I have set this up
+          </button>
         </footer>
       </motion.div>
     </div>

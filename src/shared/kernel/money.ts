@@ -248,6 +248,34 @@ function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
  * is `1.0000000000000002`, and an 18-decimal asset produces values past a double's
  * precision every day.
  */
+/**
+ * A decimal string cut down to something a person can read.
+ *
+ * ── Why 18 zeros is a bug and not a detail ────────────────────────────────────
+ * An asset's scale is the protocol's precision, not a display choice: ether is
+ * stored at 18 decimals because a wei is 10^-18 of one. Printed straight, an empty
+ * ether balance reads "0.000000000000000000", which is noise where a sentence
+ * wanted a number — and on a line that is already telling somebody their
+ * withdrawal was refused.
+ *
+ * ── It truncates, and only ever downward ──────────────────────────────────────
+ * Digits past the limit are dropped, never rounded. For the balances this is used
+ * on that is the safe direction: a rounded-up "available" figure is a promise of
+ * money that is not there, and a truncated one is an understatement nobody can act
+ * on badly. Trailing zeros then go, so 18 decimals of nothing become "0" rather
+ * than "0.000000".
+ *
+ * Presentation only. It loses information by design, so nothing that will be
+ * stored, compared or added to anything else may pass through it — that is what
+ * the exact string on the `Money` is for.
+ */
+export function shortenDecimalString(decimal: string, maximumDecimals = 6): string {
+  const point = decimal.indexOf('.');
+  if (point === -1) return decimal;
+
+  return trimDecimalString(decimal.slice(0, point + 1 + maximumDecimals));
+}
+
 export function trimDecimalString(decimal: string): string {
   // A scale of zero has no point to trim behind, and "1200" must survive intact.
   if (!decimal.includes('.')) return decimal;

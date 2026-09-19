@@ -1,3 +1,5 @@
+import { shortenDecimalString } from '@/shared/kernel';
+
 /**
  * Failures this context returns as values.
  *
@@ -133,11 +135,13 @@ export function presentLedgerError(error: LedgerError): string {
     case 'amount-invalid':
       return error.reason;
     case 'amount-below-minimum':
-      return `The smallest ${error.asset} withdrawal is ${error.minimum}.`;
+      return `The smallest ${error.asset} withdrawal is ${shortenDecimalString(error.minimum)}.`;
     case 'destination-invalid':
       return error.reason;
     case 'insufficient-funds':
-      return `You have ${error.available} ${error.asset} available.`;
+      // Shortened: an ether balance is stored at 18 decimals, and "you have
+      // 0.000000000000000000 ETH" is a sentence nobody reads to the end.
+      return `You have ${shortenDecimalString(error.available)} ${error.asset} available.`;
     case 'gas-token-required':
       // Says the coin, the chain and what to do with it. A customer who has only
       // ever held USDT has no reason to know that sending it costs something else.

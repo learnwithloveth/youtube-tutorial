@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { fixedClock } from '@/shared/kernel/clock';
 
 import { EmailAddress } from '../../domain/email-address';
-import { PasswordHash } from '../../domain/password';
+import { PASSWORD_MIN_LENGTH, PasswordHash } from '../../domain/password';
 import { Session, STEP_UP_WINDOW_MS } from '../../domain/session';
 import { User } from '../../domain/user';
 import type { IdentityDependencies } from '../ports';
 import { createChangePassword } from '../use-cases/change-password';
+
+/** One character under the policy minimum, whatever that minimum currently is. */
+const TOO_SHORT = 'a'.repeat(PASSWORD_MIN_LENGTH - 1);
+
 import { FakeConnectedAccounts } from './fake-connected-accounts';
 import { fakeSealer, FakeHasher, FakeProfiles, FakeSessions, FakeUsers } from './fake-identity';
 
@@ -120,7 +124,7 @@ describe('changing a password', () => {
     const result = await createChangePassword(deps)({
       userId: user.id,
       currentPassword: CURRENT,
-      newPassword: 'short',
+      newPassword: TOO_SHORT,
       sealedSession: sealed,
     });
 

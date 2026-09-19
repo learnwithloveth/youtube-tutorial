@@ -4,6 +4,7 @@ import { fixedClock } from '@/shared/kernel/clock';
 import { toUserId } from '@/shared/kernel/ids';
 
 import { EmailAddress } from '../../domain/email-address';
+import { PASSWORD_MIN_LENGTH } from '../../domain/password';
 import { Session, type SessionId } from '../../domain/session';
 import { User } from '../../domain/user';
 import { VerificationToken } from '../../domain/verification-token';
@@ -35,6 +36,8 @@ import { FakeDocuments, FakeVerifications } from './fake-verifications';
  * the absence of an enumeration oracle. That is the return on declaring ports.
  */
 
+/** One character under the policy minimum, whatever that minimum currently is. */
+const TOO_SHORT = 'a'.repeat(PASSWORD_MIN_LENGTH - 1);
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const USER_ID = toUserId('11111111-1111-4111-8111-111111111111');
 
@@ -280,7 +283,7 @@ describe('resetPassword', () => {
   });
 
   it('rejects a password that fails policy, leaving the link usable', async () => {
-    const result = await createResetPassword(context.deps)({ token, newPassword: 'short' });
+    const result = await createResetPassword(context.deps)({ token, newPassword: TOO_SHORT });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

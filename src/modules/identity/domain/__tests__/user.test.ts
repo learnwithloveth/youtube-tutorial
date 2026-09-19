@@ -53,7 +53,10 @@ describe('password policy', () => {
   it('requires length rather than character classes', () => {
     // NIST SP 800-63B advises against composition rules: they produce Password1!
     expect(validatePasswordPolicy('correct horse battery staple').ok).toBe(true);
-    expect(validatePasswordPolicy('Ab1!').ok).toBe(false);
+    // All-lowercase, no digit, no symbol — and accepted, because composition is
+    // not a rule here. Only length and the blocklist are.
+    expect(validatePasswordPolicy('abcdef').ok).toBe(true);
+    expect(validatePasswordPolicy('a'.repeat(PASSWORD_MIN_LENGTH - 1)).ok).toBe(false);
   });
 
   it('rejects anything under the minimum', () => {

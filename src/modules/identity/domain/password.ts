@@ -19,10 +19,19 @@ export type PasswordPolicyError =
  *
  * NIST SP 800-63B explicitly recommends against mandatory character-class rules:
  * they push people toward `Password1!` — predictable to an attacker, hard for a
- * human — while adding little entropy. Length plus a blocklist of known-breached
- * values is the guidance we follow.
+ * human — while adding little entropy. A blocklist of known-breached values is the
+ * part of that guidance we still follow.
+ *
+ * ── The minimum is 4, and that is a product decision, not a security one ───────
+ * It was 12, which is what SP 800-63B asks of a memorised secret. The product
+ * asked for 4: people were abandoning sign-up at the password field. Four
+ * characters is inside brute-force range and no comment here can argue otherwise —
+ * what carries the account's safety now is everything around the password: the
+ * sign-in rate limit, the blocklist below, and the fact that a session is only
+ * ever issued by a real sign-in. Raise this the day sign-up conversion stops
+ * being the binding constraint.
  */
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 4;
 
 /**
  * 72 bytes is bcrypt's silent truncation point. We use scrypt, which has no such
