@@ -76,15 +76,6 @@ const KIND_LABEL: Record<TransferKind, string> = {
   'demo-credit': 'Deposit',
 };
 
-/**
- * Kinds that leave no transaction because nothing is sent.
- *
- * A withdrawal ends at `payable` and a fee never leaves the platform at all, so
- * neither has a hash and neither ever will — that is the design, not a gap in the
- * data. Every other kind either carries one or simply had none recorded.
- */
-const NEVER_BROADCAST = new Set<TransferKind>(['withdrawal', 'withdrawal-fee']);
-
 const KIND_TONE: Record<TransferKind, 'up' | 'down' | 'brand' | 'neutral'> = {
   deposit: 'up',
   withdrawal: 'down',
@@ -316,22 +307,16 @@ export default async function TransactionsPage({
                   </Td>
                   <Td>
                     {line.txHash === null ? (
-                      /* Two different reasons a hash is missing, and they are not
-                         the same sentence. A withdrawal has none because this
-                         platform's payout path ends at `payable` and broadcasts
-                         nothing — that is a fact about the system. Anything else
-                         has none because nobody recorded one, which is a fact
-                         about the row. Saying "not broadcast" about both would
-                         explain a movement by a rule that does not apply to it. */
+                      /* Rare now that every movement is given a reference when it
+                         is written. What reaches this branch is a row stored before
+                         that was true — `pnpm ledger:backfill-hashes` fills them —
+                         so the copy describes the row rather than a rule about the
+                         system, which is all that can honestly be said about it. */
                       <span
-                        title={
-                          NEVER_BROADCAST.has(line.kind)
-                            ? 'Nothing is broadcast by this platform, so there is no transaction hash.'
-                            : 'No transaction hash was recorded for this movement.'
-                        }
+                        title="No transaction reference was recorded for this movement."
                         className="text-2xs text-fg-subtle"
                       >
-                        {NEVER_BROADCAST.has(line.kind) ? 'Not broadcast' : 'Not recorded'}
+                        Not recorded
                       </span>
                     ) : (
                       <TxHash value={line.txHash} short={shortenHash(line.txHash)} />

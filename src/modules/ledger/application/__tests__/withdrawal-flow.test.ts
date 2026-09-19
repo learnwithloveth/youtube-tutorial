@@ -29,6 +29,7 @@ import type {
   ReceiptSender,
   WithdrawalRepository,
 } from '../ports';
+import { derivedTransactionHash } from '../../domain/chain-reference';
 import { createDecideWithdrawal } from '../use-cases/decide-withdrawal';
 import { createSendReceipt, createSendTransactionEmail } from '../use-cases/send-receipt';
 import { createDecideDepositClaim } from '../use-cases/decide-deposit-claim';
@@ -667,14 +668,19 @@ describe('what a movement says about its chain', () => {
   });
 
   /*
-   * The honest end of this platform's payout path.
+   * An approved withdrawal now carries a derived reference.
    *
-   * Approval moves money to `payable` and nothing broadcasts it, because there is
-   * no chain client here. A hash on this row would tell a customer their
-   * withdrawal was sent, which is the one thing that has not happened — so if this
-   * test ever starts failing, the statement has begun asserting a payment.
+   * It used to carry none, on the reasoning that this platform broadcasts nothing
+   * and a hash would assert a payment that never happened. That reasoning is
+   * unchanged and still written down in `chain-reference.ts`; what changed is the
+   * product decision — a teaching deployment's statement has to read like a real
+   * one, and a transaction column empty on most rows teaches nobody anything.
+   *
+   * What this test pins is that the value is *derived*, deterministically, from
+   * the transfer id: the same movement always names the same transaction. A value
+   * drawn at random would change under a reader between two loads of the page.
    */
-  it('gives an approved withdrawal a network and never a hash', async () => {
+  it('gives an approved withdrawal a network and a derived reference', async () => {
     const ctx = build();
     await ctx.grantDemo({
       userId: ALICE,
@@ -706,7 +712,55 @@ describe('what a movement says about its chain', () => {
 
     const payout = ctx.accounts.posted.find((transfer) => transfer.kind === 'withdrawal');
     expect(payout?.network).toBe('bitcoin');
-    expect(payout?.txHash).toBeNull();
+    // Bitcoin writes bare hex — the prefix comes from the network in the catalogue.
+    expect(payout?.txHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(payout?.txHash).toBe(derivedTransactionHash(payout?.id ?? '', ''));
+  });
+
+  /* The rule that matters most now that everything else is manufactured: a hash a
+     customer actually evidenced is never overwritten by a derived one. */
+  it('keeps the customer own hash rather than deriving over it', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '0.25',
+      reference: 'a-real-looking-hash-the-customer-gave',
+      proof: png(),
+    } as Parameters<ReturnType<typeof createSubmitDepositClaim>>[0]);
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+    });
+
+    expect(ctx.accounts.posted[0]?.txHash).toBe('a-real-looking-hash-the-customer-gave');
+  });
+
+  /* And a claim filed without one still gets a reference, because the column is
+     no longer allowed to be empty on a statement people are learning from. */
+  it('derives a reference for a claim submitted without a hash', async () => {
+    const ctx = build();
+    const submitted = await ctx.submitClaim({
+      userId: ALICE,
+      asset: 'BTC',
+      network: 'bitcoin',
+      amount: '0.25',
+      reference: '   ',
+      proof: png(),
+    } as Parameters<ReturnType<typeof createSubmitDepositClaim>>[0]);
+    if (!submitted.ok) throw new Error('setup failed');
+
+    await ctx.decideClaim({
+      claimId: submitted.value.claimId,
+      operatorId: BOB,
+      decision: 'approve',
+    });
+
+    expect(ctx.accounts.posted[0]?.txHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

@@ -158,17 +158,27 @@ export class Withdrawal {
    * Returns whether the withdrawal is now fully approved, because the caller has to
    * know whether to move money or merely to note a signature.
    *
-   * Two rules, and both exist because of the same insider risk:
+   * Two rules existed here, against the same insider risk. One is still enforced:
    *
    *  - An operator cannot approve twice. Otherwise dual control is one person
-   *    clicking the same button in two tabs.
-   *  - An operator cannot approve their own withdrawal. The threshold that makes a
-   *    payment need two signatures is worth nothing if one of them may be the
-   *    person being paid.
+   *    clicking the same button in two tabs. This one holds, in the domain and in
+   *    a unique index on `withdrawal_approvals`.
+   *  - An operator cannot approve their own withdrawal — **currently lifted**. The
+   *    threshold that makes a payment need two signatures is worth nothing if one
+   *    of them may be the person being paid, so this is a real control and not a
+   *    formality. It is commented out below rather than deleted, for a deployment
+   *    used to teach people how withdrawals work, where an operator walking through
+   *    the flow on their own account is the ordinary case.
+   *
+   * Restore it before this platform holds anybody's real money. With it off, an
+   * operator can pay themselves out to any address up to the dual-control
+   * threshold on a single signature, and the record will look perfectly ordinary.
+   * The matching rule on deposits is lifted too — see `DepositClaim.approve`.
    */
   approve(operatorId: UserId, required: number, now: Date): boolean {
     this.assertPending();
 
+    // Restore this to re-enable the rule. See the note above for what it costs.
     // if (operatorId === this.userId) {
     //   throw new RangeError('An operator cannot approve their own withdrawal.');
     // }

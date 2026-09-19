@@ -2,7 +2,7 @@ import { Money, err, ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { platformOwner, userOwner } from '../../domain/account';
-import { demoTransactionHash } from '../../domain/chain-reference';
+import { derivedTransactionHash } from '../../domain/chain-reference';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
 import { Transfer } from '../../domain/transfer';
 import type { LedgerDependencies } from '../ports';
@@ -141,7 +141,7 @@ export function createGrantDemoFunds(deps: LedgerDependencies) {
         ? `demo funds on ${network.id} (${note}) by ${command.issuedBy}`
         : `demo funds on ${network.id} by ${command.issuedBy}`,
       network: network.id,
-      txHash: demoTransactionHash(transferId, network.txHashPrefix),
+      txHash: derivedTransactionHash(transferId, network.txHashPrefix),
       entries: [
         { accountId: account.id, delta: amount },
         { accountId: source.id, delta: amount.negate() },

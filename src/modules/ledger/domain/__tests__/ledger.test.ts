@@ -226,11 +226,30 @@ describe('withdrawal approval', () => {
     expect(withdrawal.status).toBe('pending');
   });
 
-  /* A threshold that makes a payment need two signatures is worth nothing if one
-     of them may be the person being paid. */
-  it('refuses self-approval', () => {
+  /*
+   * Self-approval is currently ALLOWED, and this asserts that on purpose.
+   *
+   * The rule is commented out in `Withdrawal.approve` for a deployment used to
+   * teach people how withdrawals work. A test still asserting the old behaviour
+   * would be a failing suite somebody eventually silences; one asserting the new
+   * behaviour fails the moment the rule comes back, which is exactly when a reader
+   * should be sent to that comment.
+   *
+   * To restore: uncomment the check in `approve` and invert this back to
+   * `toThrow(RangeError)`.
+   */
+  it('currently allows self-approval', () => {
     const withdrawal = pending(usd('5000.00'), BOB);
-    expect(() => withdrawal.approve(BOB, 1, NOW)).toThrow(RangeError);
+    expect(() => withdrawal.approve(BOB, 1, NOW)).not.toThrow();
+  });
+
+  /* This half of dual control is untouched, and is the one that still makes the
+     second signature mean a second person. */
+  it('still refuses the same operator approving twice', () => {
+    const withdrawal = pending(usd('5000.00'), BOB);
+    withdrawal.approve(CAROL, 2, NOW);
+
+    expect(() => withdrawal.approve(CAROL, 2, NOW)).toThrow(RangeError);
   });
 
   it('refuses a decision on something already decided', () => {

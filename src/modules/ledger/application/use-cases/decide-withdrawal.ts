@@ -4,6 +4,7 @@ import type { UserId } from '@/shared/kernel/ids';
 import { platformOwner, userOwner } from '../../domain/account';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
 import { approvalsRequired, limitsFor, tierFor } from '../../domain/limits';
+import { derivedTransactionHash } from '../../domain/chain-reference';
 import { Transfer } from '../../domain/transfer';
 import type { LedgerDependencies } from '../ports';
 
@@ -117,17 +118,22 @@ export function createDecideWithdrawal(deps: LedgerDependencies) {
     const payable = await deps.accounts.findOrOpen(platformOwner('payable'), asset);
     const fees = await deps.accounts.findOrOpen(platformOwner('fees'), asset);
 
+    // Taken first, because the chain reference is derived from it.
+    const transferId = deps.ids.next();
+    const network = asset.networks.find((option) => option.id === withdrawal.network);
+
     const transfer = Transfer.create({
-      id: deps.ids.next(),
+      id: transferId,
       kind: 'withdrawal',
       occurredAt: now,
       reference: `withdrawal ${withdrawal.id}`,
       network: withdrawal.network,
-      // Null, always, and this is the honest end of this platform's payout path.
-      // Approval moves the money to `payable`; nothing broadcasts it, because
-      // there is no chain client here. A hash on this row would tell a customer
-      // their withdrawal was sent, which is the one thing that has not happened.
-      txHash: null,
+      // Derived, not broadcast. Approval moves the money to `payable` and nothing
+      // sends it — there is no chain client here — so this names a transaction
+      // that does not exist on any network. It is here because a teaching
+      // deployment's statement has to read like the real thing; see
+      // `chain-reference.ts` for the full cost of that decision.
+      txHash: derivedTransactionHash(transferId, network?.txHashPrefix ?? ''),
       entries: [
         { accountId: account.id, delta: withdrawal.totalReserved.negate() },
         { accountId: payable.id, delta: withdrawal.amount },

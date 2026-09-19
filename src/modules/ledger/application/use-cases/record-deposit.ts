@@ -3,6 +3,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { platformOwner, userOwner } from '../../domain/account';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
+import { derivedTransactionHash } from '../../domain/chain-reference';
 import { Transfer } from '../../domain/transfer';
 import type { LedgerDependencies } from '../ports';
 
@@ -81,19 +82,26 @@ export function createRecordDeposit(deps: LedgerDependencies) {
     const account = await deps.accounts.findOrOpen(userOwner(command.userId), asset);
     const custody = await deps.accounts.findOrOpen(platformOwner('custody'), asset);
 
+    const transferId = deps.ids.next();
+    // No network on this command, so no chain to take a prefix from. Bare hex is
+    // the shape three of the four listed chains use, and the one this falls back
+    // to rather than guessing Ethereum.
     const transfer = Transfer.create({
-      id: deps.ids.next(),
+      id: transferId,
       kind: 'deposit',
       occurredAt: deps.clock.now(),
       reference: `deposit ${reference} by ${command.recordedBy}`,
-      // Both null, and not an oversight. This command carries an asset and a free
-      // text reference that may be a transaction hash, a bank reference or a
-      // ticket number — there is no way to tell which from here, and putting a
-      // bank reference in a column called `tx_hash` is how a statement starts
-      // lying quietly. The chain listener this use case was written for knows both
-      // and will pass them; until one exists, the honest answer is nothing.
+      // The network stays null: this command does not carry one, and guessing a
+      // chain is a different and worse thing than deriving a reference on a chain
+      // somebody named. The chain listener this use case was written for knows it
+      // and will pass it.
+      //
+      // `reference` is deliberately not reused as the hash — it may be a bank
+      // reference or a ticket number, and there is no way to tell from here, so
+      // putting it in a column called `tx_hash` is how a statement starts lying
+      // quietly. The derived value is at least honestly labelled as derived.
       network: null,
-      txHash: null,
+      txHash: derivedTransactionHash(transferId, ''),
       entries: [
         { accountId: account.id, delta: amount },
         { accountId: custody.id, delta: amount.negate() },

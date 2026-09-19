@@ -3,6 +3,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { platformOwner, userOwner } from '../../domain/account';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
+import { derivedTransactionHash } from '../../domain/chain-reference';
 import { Transfer } from '../../domain/transfer';
 import type { LedgerDependencies } from '../ports';
 
@@ -96,20 +97,33 @@ export function createDecideDepositClaim(deps: LedgerDependencies) {
     const account = await deps.accounts.findOrOpen(userOwner(claim.userId), asset);
     const custody = await deps.accounts.findOrOpen(platformOwner('custody'), asset);
 
+    const transferId = deps.ids.next();
+    const network = asset.networks.find((option) => option.id === claim.network);
+    const evidenced = claim.reference.trim();
+
     const transfer = Transfer.create({
-      id: deps.ids.next(),
+      id: transferId,
       kind: 'deposit',
       occurredAt: now,
       // The customer's reference and the operator who accepted it. This is the line
       // an auditor reads, so it names both the external evidence and the person who
       // decided it was good.
       reference: `deposit ${claim.reference} confirmed by ${command.operatorId}`,
-      // Straight off the claim. The customer named the chain when they reported it
-      // and gave the hash as their evidence, and an operator approving the claim is
-      // agreeing that both are right — so this is the one place a real transaction
-      // hash enters the ledger.
+      // The customer's own hash wins, always. They named the chain when they
+      // reported it and gave the hash as their evidence, and an operator approving
+      // the claim is agreeing both are right — this is the one place a genuine
+      // transaction reference enters the ledger, and a derived value must never
+      // overwrite one.
+      //
+      // The fallback is for a claim submitted without a reference, which the form
+      // allows: rather than a blank column, the movement gets a derived reference
+      // like every other row. It is not evidence of anything and
+      // `chain-reference.ts` says so.
       network: claim.network,
-      txHash: claim.reference.trim().length > 0 ? claim.reference.trim() : null,
+      txHash:
+        evidenced.length > 0
+          ? evidenced
+          : derivedTransactionHash(transferId, network?.txHashPrefix ?? ''),
       entries: [
         { accountId: account.id, delta: credited },
         { accountId: custody.id, delta: credited.negate() },
