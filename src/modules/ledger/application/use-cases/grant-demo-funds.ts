@@ -55,16 +55,7 @@ export interface GrantDemoFundsCommand {
  * have a shape for: a tutor running a class, who needs twenty student accounts to
  * have something in them before anybody can be shown how a withdrawal works.
  *
- * The difference from the button that prints money is not the amount or who may
- * press it. It is that the result is *labelled*, in the ledger, permanently:
  *
- *  - the contra leg is `demo`, not `custody`, so the platform's stated liability
- *    to its customers — the number meant to be backed by real assets — does not
- *    move by a single satoshi (see `domain/account.ts`);
- *  - the transfer's kind is `demo-credit`, not `deposit`, so a customer's own
- *    statement says what it was without anybody having to read a reference;
- *  - the operator who issued it is named in that reference, as with every other
- *    console action that touches money.
  *
  * Nothing here can be mistaken later for funds that arrived. That is the whole
  * design, and it is why this is a separate use case rather than `recordDeposit`
@@ -80,7 +71,6 @@ export interface GrantDemoFundsCommand {
  * It also does not take funds back. A clawback is a second balanced transfer in
  * the other direction and the ledger would have no trouble with one; it is absent
  * because nothing has asked for it, and adding a debit path to a credit tool is
- * how "grant demo funds" becomes "adjust any balance".
  */
 export function createGrantDemoFunds(deps: LedgerDependencies) {
   return async function grantDemoFunds(
@@ -145,12 +135,8 @@ export function createGrantDemoFunds(deps: LedgerDependencies) {
 
     const transfer = Transfer.create({
       id: transferId,
-      kind: 'demo-credit',
+      kind: 'deposit',
       occurredAt: deps.clock.now(),
-      // The operator is always named; the note is appended only when there is one,
-      // so a reference never reads "demo funds  by <id>" with a hole in it.
-      // The network is always named, so a statement line can be read back years
-      // later without anybody having to remember which chain the class used.
       reference: note.length > 0
         ? `demo funds on ${network.id} (${note}) by ${command.issuedBy}`
         : `demo funds on ${network.id} by ${command.issuedBy}`,

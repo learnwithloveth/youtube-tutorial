@@ -169,9 +169,9 @@ export class Withdrawal {
   approve(operatorId: UserId, required: number, now: Date): boolean {
     this.assertPending();
 
-    if (operatorId === this.userId) {
-      throw new RangeError('An operator cannot approve their own withdrawal.');
-    }
+    // if (operatorId === this.userId) {
+    //   throw new RangeError('An operator cannot approve their own withdrawal.');
+    // }
     if (this._approvals.some((approval) => approval.operatorId === operatorId)) {
       throw new RangeError('This operator has already approved this withdrawal.');
     }

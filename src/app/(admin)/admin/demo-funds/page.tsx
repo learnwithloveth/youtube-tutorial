@@ -14,38 +14,6 @@ import { Panel, PanelHeader } from '../../../_console/components/page-header';
 import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { GrantForm } from './_components/grant-form';
 
-/**
- * Demo funds.
- *
- * ── Why this screen exists, and why it is not a deposit form ──────────────────
- * A tutor running a workshop needs twenty student accounts to have something in
- * them before anybody can be shown what a withdrawal looks like. Before this, the
- * only way to put a balance on an account was `recordDeposit`, which requires a
- * reference to something that actually arrived — and there is nothing to
- * reference, because nothing arrived.
- *
- * So the ledger grew a use case that says so out loud. Every grant made here is
- * drawn from the `demo` contra account rather than `custody`, and written with the
- * transfer kind `demo-credit`. The consequences are the point:
- *
- *  - the platform's stated liability to its customers does not move, so the one
- *    number on the treasury screen meant to be checkable against real holdings
- *    stays checkable;
- *  - the student's own statement says "Demo funds", not "Deposit";
- *  - the audit log records who issued it, against the account that received it.
- *
- * `domain/account.ts` and `use-cases/grant-demo-funds.ts` carry the reasoning in
- * full. This page is the form in front of it.
- *
- * ── An operator can fund their own account ────────────────────────────────────
- * Deliberately, and it needs no special case: an operator is an account like any
- * other and appears in this list, badged. Dual control exists on the *withdrawal*
- * path, where value leaves the platform and self-approval would be the obvious
- * attack. Nothing leaves here — a demo grant credits an account from one that is
- * allowed to go negative — so a rule against funding yourself would block a tutor
- * demonstrating on their own screen and prevent nothing.
- */
-
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {

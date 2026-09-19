@@ -28,16 +28,6 @@ export type TransferKind =
   | 'withdrawal'
   | 'withdrawal-fee'
   | 'adjustment'
-  /**
-   * Funds an operator issued for a workshop, drawn from the `demo` account.
-   *
-   * Its own kind rather than a `deposit` with a telling reference, for the reason
-   * `deposit-rejected` was split out of `withdrawal-rejected` in the activity
-   * trail: the reference is not indexed, not filtered on, and not what a reader
-   * sees first. A customer's statement says "demo credit" because that is what
-   * happened, and nothing has to read the reference to find out that no money
-   * arrived.
-   */
   | 'demo-credit';
 
 export interface Entry {

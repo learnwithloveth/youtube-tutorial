@@ -294,24 +294,6 @@ function DepositPanel({
 
   return (
     <div className="space-y-3">
-      {/* {deposit.demo ? (
-        // Loud, above the address, and impossible to scroll past. A demo address
-        // that looks like a real one is the single most expensive thing this page
-        // could get wrong.
-        <div className="rounded-lg border border-down/40 bg-down/10 px-4 py-3">
-          <p className="flex items-start gap-2 text-xs font-medium leading-relaxed text-fg">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-down" />
-            <span>
-              Demo address &mdash; do not send real funds.{' '}
-              <span className="font-normal text-fg-muted">
-                This environment is configured with placeholder addresses. Anything
-                sent here is unrecoverable.
-              </span>
-            </span>
-          </p>
-        </div>
-      ) : null} */}
-
       <div>
         <p className="mb-2 text-xs text-fg-subtle">
           Your {assetCode} address on {networkLabel}

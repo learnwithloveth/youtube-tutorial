@@ -107,7 +107,6 @@ export function createRequestWithdrawal(deps: LedgerDependencies) {
      * A token cannot pay its own network fee.
      *
      * USDT on Ethereum is moved by an Ethereum transaction, and Ethereum charges
-     * ETH for it; on Tron the same token costs TRX. So a customer holding nothing
      * but USDT has a balance that cannot leave, and until now the request was
      * accepted, held, queued, and only discovered to be unsendable by the operator
      * who tried to send it — or worse, not discovered at all.

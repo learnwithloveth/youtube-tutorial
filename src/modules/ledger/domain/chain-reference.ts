@@ -6,18 +6,9 @@
  * render an empty price rather than a guessed one; `recordDeposit` refuses a
  * credit with no external reference; the approvals queue dropped its risk scores
  * because they were `Math.random()`. This file appears to break that rule and does
- * not, for one specific reason: it is only ever used on a `demo-credit`, which is
  * a transfer that is *labelled as fabricated on every surface that shows it* — its
  * own transfer kind, its own contra account, its own word on the statement, its
  * own line in the audit log.
- *
- * A demo grant is a teaching prop. Giving it a reference shaped like the thing it
- * is imitating is what makes the prop work, and the row it sits on already says
- * "Demo funds" next to it. What would break the rule is putting one of these on a
- * real deposit or a withdrawal, where a reader has no way to tell — so nothing
- * here is exported to a caller that could. A real deposit carries the hash the
- * customer gave; a withdrawal carries none, because this platform's payout path
- * ends at `payable` and nothing is ever broadcast.
  *
  * ── Derived, never drawn ──────────────────────────────────────────────────────
  * The same transfer id always produces the same hash. That is not a nicety: a

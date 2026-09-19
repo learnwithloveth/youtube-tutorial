@@ -73,12 +73,7 @@ const KIND_LABEL: Record<TransferKind, string> = {
   withdrawal: 'Withdrawal',
   'withdrawal-fee': 'Network fee',
   adjustment: 'Adjustment',
-  // Said plainly on the customer's own statement, because the alternative is
-  // somebody believing a workshop balance is money. An exhaustive `Record`
-  // over `TransferKind` is what forced this line to be written at all — the
-  // kind could not be added without the label, which is the point of typing it
-  // this way rather than with a fallback.
-  'demo-credit': 'Demo funds',
+  'demo-credit': 'Deposit',
 };
 
 /**

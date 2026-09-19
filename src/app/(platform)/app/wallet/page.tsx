@@ -206,7 +206,7 @@ export default async function WalletPage() {
           {open.length > 0 ? (
             <Panel>
               <PanelHeader
-                title="Deposits you have reported"
+                title="Deposits"
                 subtitle="Pending until an operator has matched it to the transaction on the chain"
               />
               <ul className="divide-y divide-line/60">

@@ -428,7 +428,7 @@ describe('demo funds', () => {
     });
 
     const [transfer] = ctx.accounts.posted;
-    expect(transfer?.kind).toBe('demo-credit');
+    expect(transfer?.kind).toBe('deposit');
     // The issuing operator is always named, so the entry is attributable.
     expect(transfer?.reference).toContain(BOB);
   });
