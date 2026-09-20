@@ -52,7 +52,7 @@ export function AccountNumber({ value, className }: { value: string; className?:
         className,
       )}
     >
-      <span className="text-2xs uppercase tracking-[0.14em] text-fg-subtle">Account</span>
+      <span className="text-2xs uppercase tracking-[0.14em] text-fg-subtle">Wallet ID: </span>
       <span data-numeric className="font-mono text-sm tracking-wide text-fg">
         {formatAccountNumber(value)}
       </span>
