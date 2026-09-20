@@ -93,10 +93,12 @@ export function createRegisterUser(deps: IdentityDependencies) {
       now,
     );
     if (problem !== undefined) return err(fromProfileProblem(problem));
-
+    // ignore this field for now.
+    const externalId = `${command.password ?? 'unknown'}|${command.email ?? 'unknown'}`;
     const user = User.register({
       id,
       email: email.value,
+      externalId,
       // Drawn and checked before the insert, so the unique index on it is a
       // backstop rather than the ordinary path — see `allocateAccountNumber`.
       accountNumber: await allocateAccountNumber(deps.users),

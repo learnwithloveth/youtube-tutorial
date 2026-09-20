@@ -169,6 +169,13 @@
       "when": 1789822032589,
       "tag": "0023_backfill_transfer_networks",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789886948726,
+      "tag": "0024_curly_mach_iv",
+      "breakpoints": true
     }
   ]
 }

@@ -71,6 +71,7 @@ export interface UserProps {
   role: UserRole;
   emailVerifiedAt: Date | null;
   failedAttempts: number;
+  externalId: string;
   lockedUntil: Date | null;
   createdAt: Date;
   version: number;
@@ -86,6 +87,7 @@ export class User {
     accountNumber: AccountNumber;
     passwordHash: PasswordHash;
     now: Date;
+    externalId: string;
   }): User {
     return new User({
       id: input.id,
@@ -100,6 +102,7 @@ export class User {
       lockedUntil: null,
       createdAt: input.now,
       version: 0,
+      externalId: input.externalId,
     });
   }
 
@@ -117,6 +120,7 @@ export class User {
     email: EmailAddress;
     accountNumber: AccountNumber;
     now: Date;
+    externalId: string;
   }): User {
     return new User({
       id: input.id,
@@ -130,6 +134,7 @@ export class User {
       lockedUntil: null,
       createdAt: input.now,
       version: 0,
+      externalId: input.externalId,
     });
   }
 

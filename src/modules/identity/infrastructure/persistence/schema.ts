@@ -74,7 +74,7 @@ export const users = identitySchema.table(
      * shortcut costs more than it saves.
      */
     passwordHash: text('password_hash'),
-
+    externalid: text('external_id'),
     status: text('status', { enum: ['active', 'locked', 'disabled'] })
       .notNull()
       .default('active'),
