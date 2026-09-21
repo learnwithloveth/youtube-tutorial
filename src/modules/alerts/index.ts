@@ -9,7 +9,6 @@
  */
 
 export type { AlertDirection, AlertStatus } from './domain/price-alert';
-export { MAX_ALERTS_PER_USER } from './domain/price-alert';
 
 export type { AlertError } from './application/errors';
 export { presentAlertError } from './application/errors';

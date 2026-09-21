@@ -165,7 +165,11 @@ export function TransactionDetail({
                 <span data-numeric>{usd(transaction.valueUsd)}</span>
               ) : (
                 <span className="text-fg-subtle">
-                  {deposit ? 'Not valued — a claim is not checked against a limit' : 'Unpriced'}
+                  {/* Was "a claim is not checked against a limit", which read as
+                      the contrast with a withdrawal. Withdrawals are not checked
+                      against a limit either now, so the two cases say the same
+                      plain thing: the feed had no price. */}
+                  {deposit ? 'Not valued' : 'Unpriced'}
                 </span>
               )}
             </Field>

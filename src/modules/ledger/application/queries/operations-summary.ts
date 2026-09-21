@@ -2,7 +2,6 @@ import { logger } from '@/platform/observability/logger';
 import { Money } from '@/shared/kernel';
 
 import type { DepositClaim } from '../../domain/deposit-claim';
-import { approvalsRequired, limitsFor, tierFor } from '../../domain/limits';
 import type { Withdrawal } from '../../domain/withdrawal';
 import type { DecisionTally, LedgerDependencies } from '../ports';
 
@@ -53,8 +52,15 @@ export interface OperationsSummaryDto {
   readonly pending: {
     readonly withdrawals: number;
     readonly deposits: number;
-    /** Withdrawals large enough to need a second operator — see `approvalsRequired`. */
-    readonly needingSecondSignature: number;
+    /**
+     * Pending withdrawals the feed could not put a USD value on.
+     *
+     * This slot used to hold `needingSecondSignature`. Dual control is gone — one
+     * operator releases any amount — so that number would have been zero on every
+     * render. An unpriced request is the thing actually worth flagging in its
+     * place: the queue's held-value total goes null while one is waiting.
+     */
+    readonly unpriced: number;
   };
   /**
    * Total value reserved against pending withdrawals, or null when any of them
@@ -76,7 +82,7 @@ const DEFAULT_DECISION_DAYS = 7;
 const DEFAULT_RECENT = 7;
 
 const EMPTY: OperationsSummaryDto = {
-  pending: { withdrawals: 0, deposits: 0, needingSecondSignature: 0 },
+  pending: { withdrawals: 0, deposits: 0, unpriced: 0 },
   heldValueUsd: null,
   decisionsByDay: [],
   recentDecisions: [],
@@ -115,7 +121,6 @@ export async function getOperationsSummary(
     return EMPTY;
   }
 
-  const limits = limitsFor(tierFor());
   const held = pendingWithdrawals.value;
   const unpriced = held.some((withdrawal) => withdrawal.valuedAtUsd === null);
 
@@ -133,9 +138,7 @@ export async function getOperationsSummary(
         claimCounts.status === 'fulfilled'
           ? (claimCounts.value.find((row) => row.status === 'pending')?.total ?? 0)
           : 0,
-      needingSecondSignature: held.filter(
-        (withdrawal) => approvalsRequired(withdrawal.valuedAtUsd, limits) > 1,
-      ).length,
+      unpriced: held.filter((withdrawal) => withdrawal.valuedAtUsd === null).length,
     },
     heldValueUsd: unpriced
       ? null

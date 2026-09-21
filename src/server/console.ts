@@ -215,7 +215,7 @@ function settled<T>(result: PromiseSettledResult<T | null>): T | null {
 }
 
 const UNAVAILABLE_OPERATIONS: OperationsSummaryDto = {
-  pending: { withdrawals: 0, deposits: 0, needingSecondSignature: 0 },
+  pending: { withdrawals: 0, deposits: 0, unpriced: 0 },
   heldValueUsd: null,
   decisionsByDay: [],
   recentDecisions: [],

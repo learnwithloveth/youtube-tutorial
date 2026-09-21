@@ -26,7 +26,6 @@ export type LedgerError =
    */
   | { readonly kind: 'network-required'; readonly asset: string; readonly options: string }
   | { readonly kind: 'amount-invalid'; readonly reason: string }
-  | { readonly kind: 'amount-below-minimum'; readonly minimum: string; readonly asset: string }
   | { readonly kind: 'destination-invalid'; readonly reason: string }
   | { readonly kind: 'insufficient-funds'; readonly available: string; readonly asset: string }
   /**
@@ -45,19 +44,14 @@ export type LedgerError =
       /** How the network is named on the form — "Tron (TRC-20)". */
       readonly network: string;
     }
-  | {
-      readonly kind: 'daily-limit-exceeded';
-      readonly remainingUsd: string;
-      readonly capUsd: string;
-    }
-  /**
-   * The withdrawal could not be valued, so the daily limit could not be checked.
-   *
-   * Separate from a generic failure because the operator response is different:
-   * this is the price feed being down, not the customer doing anything wrong, and
-   * the page says so rather than implying they are over a limit.
+  /*
+   * Three refusals used to sit here: 'amount-below-minimum', 'daily-limit-exceeded'
+   * and 'valuation-unavailable'. All three enforced a ceiling or a floor on what an
+   * account could withdraw, and this deployment enforces neither — see
+   * `domain/approvals.ts`. What remains below refuses only things that genuinely
+   * cannot be executed: an unlisted asset, a wrong-chain address, an amount that
+   * does not parse, a balance that is not there, a chain fee with no gas to pay it.
    */
-  | { readonly kind: 'valuation-unavailable'; readonly asset: string }
   | { readonly kind: 'withdrawal-not-found'; readonly id: string }
   | { readonly kind: 'deposit-claim-not-found'; readonly id: string }
   /** The uploaded proof is not an image we will store. Carries the reason shown. */
@@ -87,11 +81,6 @@ export const LedgerErrors = {
     options,
   }),
   amountInvalid: (reason: string): LedgerError => ({ kind: 'amount-invalid', reason }),
-  amountBelowMinimum: (minimum: string, asset: string): LedgerError => ({
-    kind: 'amount-below-minimum',
-    minimum,
-    asset,
-  }),
   destinationInvalid: (reason: string): LedgerError => ({
     kind: 'destination-invalid',
     reason,
@@ -105,15 +94,6 @@ export const LedgerErrors = {
   insufficientFunds: (available: string, asset: string): LedgerError => ({
     kind: 'insufficient-funds',
     available,
-    asset,
-  }),
-  dailyLimitExceeded: (remainingUsd: string, capUsd: string): LedgerError => ({
-    kind: 'daily-limit-exceeded',
-    remainingUsd,
-    capUsd,
-  }),
-  valuationUnavailable: (asset: string): LedgerError => ({
-    kind: 'valuation-unavailable',
     asset,
   }),
   withdrawalNotFound: (id: string): LedgerError => ({ kind: 'withdrawal-not-found', id }),
@@ -150,8 +130,6 @@ export function presentLedgerError(error: LedgerError): string {
       return `${error.asset} moves on more than one network. Choose ${error.options}.`;
     case 'amount-invalid':
       return error.reason;
-    case 'amount-below-minimum':
-      return `The smallest ${error.asset} withdrawal is ${shortenDecimalString(error.minimum)}.`;
     case 'destination-invalid':
       return error.reason;
     case 'insufficient-funds':
@@ -162,10 +140,6 @@ export function presentLedgerError(error: LedgerError): string {
       // Says the coin, the chain and what to do with it. A customer who has only
       // ever held USDT has no reason to know that sending it costs something else.
       return `Sending ${error.asset} over ${error.network} costs a network fee paid in ${error.nativeAsset}, and you have none. Add some ${error.nativeAsset} to your wallet and try again.`;
-    case 'daily-limit-exceeded':
-      return `That is over today's remaining limit of ${error.remainingUsd} of ${error.capUsd}.`;
-    case 'valuation-unavailable':
-      return `We cannot price ${error.asset} right now, so we cannot check your daily limit. Withdrawals reopen when pricing is restored.`;
     case 'withdrawal-not-found':
       return 'That withdrawal no longer exists.';
     case 'deposit-claim-not-found':

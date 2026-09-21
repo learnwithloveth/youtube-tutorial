@@ -205,13 +205,6 @@ const UNAVAILABLE_WALLET: WalletDto = {
   balances: [],
   totalValueUsd: null,
   valuationIncomplete: true,
-  limits: {
-    tier: 'standard',
-    capUsd: '0.00',
-    usedUsd: '0.00',
-    remainingUsd: '0.00',
-    resetsAt: new Date(0).toISOString(),
-  },
   pendingWithdrawals: [],
   degraded: true,
 };
@@ -219,8 +212,8 @@ const UNAVAILABLE_WALLET: WalletDto = {
 /**
  * One customer's wallet.
  *
- * Deduplicated per request, so a page showing a total, a balance table and a limits
- * panel costs one read between them rather than three.
+ * Deduplicated per request, so a page showing a total, a balance table and a
+ * pending list costs one read between them rather than three.
  */
 export const getWalletFor = cache(async (userId: UserId): Promise<WalletDto> => {
   const context = ledger();
@@ -233,7 +226,7 @@ export const getWalletFor = cache(async (userId: UserId): Promise<WalletDto> => 
 export const getApprovalQueue = cache(async (): Promise<ApprovalQueueDto> => {
   const context = ledger();
   if (context === null) {
-    return { withdrawals: [], heldValueUsd: null, needingDualControl: 0, degraded: true };
+    return { withdrawals: [], heldValueUsd: null, unpriced: 0, degraded: true };
   }
 
   return listPendingApprovals(context.dependencies);

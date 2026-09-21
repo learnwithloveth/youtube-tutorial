@@ -1,14 +1,25 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowRight, PieChart, TriangleAlert, Wallet2 } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Clock,
+  PieChart,
+  TriangleAlert,
+  Wallet2,
+} from 'lucide-react';
 
+import { shortenHash } from '@/modules/ledger';
 import { requireUser } from '@/server/auth';
-import { getWalletFor } from '@/server/ledger';
+import { getStatementFor, getWalletFor } from '@/server/ledger';
 import { getMarkets } from '@/server/market-data';
-import { formatPercent } from '@/shared/lib/format';
+import { shortenDecimalString } from '@/shared/kernel';
+import { formatDate, formatPercent } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
 import { StatTile } from '@/shared/ui/charts/stat-tile';
+import { Sparkline } from '@/shared/ui/visuals/sparkline';
 import type { DonutSlice } from '@/shared/ui/charts/donut-chart';
 import { AssetMark } from '@/shared/ui/visuals/asset-mark';
 import type { UserId } from '@/shared/kernel/ids';
@@ -36,6 +47,13 @@ import { AllocationDonut } from './_components/allocation-donut';
  * "What fraction of my portfolio is bitcoin" needs only current balances and
  * current prices, both of which are real. It is shown, with the unpriceable
  * holdings called out rather than folded in at zero.
+ *
+ * ── What arrived from the overview ─────────────────────────────────────────────
+ * The recent-movements list and the market strip used to sit on `/app`, beside a
+ * holdings table that duplicated the one below. The overview is now a balance and
+ * a token list — see that page — and the detail lives here, on the screen somebody
+ * opens *in order to* read detail. The holdings table was the duplicate, and only
+ * this copy survives.
  */
 
 export const dynamic = 'force-dynamic';
@@ -48,9 +66,10 @@ export const metadata: Metadata = {
 export default async function PortfolioPage() {
   const user = await requireUser('/app/portfolio');
 
-  const [wallet, markets] = await Promise.all([
+  const [wallet, markets, statement] = await Promise.all([
     getWalletFor(user.id as UserId),
     getMarkets(),
+    getStatementFor(user.id as UserId, { limit: 8 }),
   ]);
 
   const marks = new Map(markets.map((m) => [m.symbol, m]));
@@ -84,7 +103,7 @@ export default async function PortfolioPage() {
         />
       ) : null}
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="Portfolio value"
           value={wallet.totalValueUsd === null ? '—' : usd(wallet.totalValueUsd)}
@@ -119,6 +138,21 @@ export default async function PortfolioPage() {
             direction: 'flat',
             period: '',
           }}
+        />
+        {/* Moved from the overview with the panels below. `upIsGood={false}`
+            because a queue of withdrawals waiting on an operator is not an
+            achievement — the tile must not go green as it grows. */}
+        <StatTile
+          label="Awaiting approval"
+          value={String(wallet.pendingWithdrawals.length)}
+          delta={{
+            value:
+              wallet.pendingWithdrawals.length === 0 ? 'nothing pending' : 'held, not moved',
+            direction: 'flat',
+            period: '',
+          }}
+          upIsGood={false}
+          icon={<Clock className="size-4" />}
         />
       </div>
 
@@ -266,6 +300,126 @@ export default async function PortfolioPage() {
           </Panel>
         </div>
       )}
+
+      {/* ── Arrived from the overview ──────────────────────────────────────── */}
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <Panel>
+          <PanelHeader
+            title="Recent movements"
+            subtitle={`Straight from the ledger · ${statement.total} in total`}
+            actions={
+              <Link
+                href="/app/transactions"
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-soft hover:underline"
+              >
+                All
+                <ArrowRight className="size-3" />
+              </Link>
+            }
+          />
+          {statement.lines.length === 0 ? (
+            <p className="py-8 text-center text-sm text-fg-subtle">Nothing has moved yet.</p>
+          ) : (
+            <ul className="divide-y divide-line/60">
+              {statement.lines.map((line) => (
+                <li key={line.id} className="flex items-center gap-3 py-3">
+                  {/* The coin, carrying its chain's badge where the two differ.
+                      On a list where half the rows are USDT, which chain a
+                      movement was on is the thing a reader is looking for, and an
+                      arrow says nothing about it. */}
+                  <AssetMark
+                    symbol={line.asset}
+                    glyph={marks.get(line.asset)?.glyph ?? line.asset.slice(0, 1)}
+                    hue={marks.get(line.asset)?.hue ?? 'var(--chart-1)'}
+                    network={line.network}
+                    size="xs"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm capitalize text-fg">
+                      {line.kind.replace('-', ' ')}
+                    </span>
+                    <span className="block truncate text-2xs text-fg-subtle">
+                      {formatDate(line.occurredAt)}
+                      {line.txHash === null ? null : (
+                        <>
+                          {' · '}
+                          <span className="font-mono">{shortenHash(line.txHash, 6, 4)}</span>
+                        </>
+                      )}
+                    </span>
+                  </span>
+                  {line.direction === 'in' ? (
+                    <ArrowDownLeft className="size-3.5 shrink-0 text-up" />
+                  ) : (
+                    <ArrowUpRight className="size-3.5 shrink-0 text-down" />
+                  )}
+                  <span
+                    className={cn(
+                      'shrink-0 font-mono text-sm',
+                      line.direction === 'in' ? 'text-up' : 'text-fg',
+                    )}
+                  >
+                    {shortenDecimalString(line.delta)} {line.asset}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            title="Markets"
+            subtitle="Live prices"
+            actions={
+              <Link
+                href="/markets"
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-soft hover:underline"
+              >
+                All
+                <ArrowRight className="size-3" />
+              </Link>
+            }
+          />
+          <ul className="divide-y divide-line/60">
+            {markets.slice(0, 6).map((market) => (
+              <li key={market.symbol} className="flex items-center gap-3 py-3">
+                <AssetMark
+                  symbol={market.symbol}
+                  glyph={market.glyph}
+                  hue={market.hue}
+                  size="sm"
+                />
+                <span className="min-w-0 flex-1 truncate text-sm text-fg">{market.symbol}</span>
+
+                {market.quote.state === 'unavailable' ? (
+                  // Never a zero and never a dash pretending to be a price: the
+                  // feed has not spoken, and the row says so.
+                  <Badge tone="neutral">No price</Badge>
+                ) : (
+                  <>
+                    {market.quote.sparkline ? (
+                      <Sparkline
+                        id={`portfolio-${market.symbol}`}
+                        data={market.quote.sparkline}
+                        color={market.quote.change24hPercent >= 0 ? 'var(--up)' : 'var(--down)'}
+                        width={56}
+                        height={20}
+                        filled={false}
+                        strokeWidth={1.5}
+                      />
+                    ) : null}
+                    <span className="shrink-0 text-sm tabular-nums text-fg">
+                      {usd(market.quote.price)}
+                    </span>
+                    {market.quote.state === 'stale' ? <Badge tone="warn">Stale</Badge> : null}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
     </>
   );
 }

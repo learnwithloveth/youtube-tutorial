@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Bell, IdCard, ShieldCheck, User } from 'lucide-react';
+import { Bell, IdCard, ShieldCheck, User, Wallet } from 'lucide-react';
 
 import type {
   CurrentUserDto,
@@ -19,6 +19,7 @@ import { IdentityVerification } from './identity-verification';
 import { PreciseLocationControl } from './precise-location-control';
 import { ProfileForm } from './profile-form';
 import { SignInMethods } from './sign-in-methods';
+import { WalletIntegrationGate } from './wallet-integration-gate';
 
 /**
  * Settings.
@@ -55,6 +56,10 @@ const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'verification', label: 'Verification', icon: IdCard },
   { id: 'security', label: 'Security', icon: ShieldCheck },
+  /* Off by default for every account, and the tab says so rather than being
+     hidden: somebody who has never connected a wallet should still be able to
+     find out that they could. See `WalletIntegrationGate`. */
+  { id: 'wallets', label: 'Wallets', icon: Wallet },
   { id: 'notifications', label: 'Notifications', icon: Bell },
 ] as const;
 
@@ -195,6 +200,8 @@ export function SettingsShell({
   signInMethods,
   googleConfigured,
   googleNotice,
+  wallets,
+  walletsEnabled,
   initialTab,
 }: {
   user: CurrentUserDto;
@@ -206,6 +213,15 @@ export function SettingsShell({
   googleConfigured: boolean;
   /** The `?google=` outcome the OAuth callback redirected back with. */
   googleNotice?: string | undefined;
+  /**
+   * The wallet panels, server-rendered. Null when the account has not enabled it.
+   *
+   * A slot for the same reason `sessions` is one: this component is a client
+   * boundary, and the wallet table has no business hydrating. The page decides
+   * whether to build it at all, so a disabled account costs no database read.
+   */
+  wallets: ReactNode;
+  walletsEnabled: boolean;
   /**
    * The tab named by `?tab=`, so another page can link straight to one.
    *
@@ -308,6 +324,10 @@ export function SettingsShell({
 
               <Panel>{sessions}</Panel>
             </>
+          ) : null}
+
+          {tab === 'wallets' ? (
+            <WalletIntegrationGate enabled={walletsEnabled}>{wallets}</WalletIntegrationGate>
           ) : null}
 
           {tab === 'notifications' ? (

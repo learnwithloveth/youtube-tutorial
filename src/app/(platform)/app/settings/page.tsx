@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
 
-import { googleOAuthConfig } from '@/platform/env';
+import { BRAND } from '@/modules/content';
+import { env, googleOAuthConfig } from '@/platform/env';
 import { getSessions, getSignInMethodsFor, requireUser } from '@/server/auth';
 import { getVerificationStandingFor } from '@/server/verifications';
+import { getLinkedWalletsFor, isWalletLinkEnabledFor } from '@/server/wallet-link';
+import type { UserId } from '@/shared/kernel/ids';
 
 import { ActiveSessions } from './_components/active-sessions';
 import { SettingsShell } from './_components/settings-shell';
+import { WalletIntegration } from './_components/wallet-integration';
 
 /**
  * Settings.
@@ -48,11 +52,23 @@ export default async function SettingsPage({
   // The reads are independent and none is allowed to fail the page: a session list
   // that cannot be read is an empty panel, and a verification that cannot be read
   // says so rather than claiming the account is unverified.
-  const [sessions, verification, methods] = await Promise.allSettled([
+  const [sessions, verification, methods, walletsEnabled] = await Promise.allSettled([
     getSessions(),
     getVerificationStandingFor(user.id),
     getSignInMethodsFor(user.id),
+    isWalletLinkEnabledFor(user.id as UserId),
   ]);
+
+  /*
+   * The wallet board is read only when the account has turned the feature on.
+   *
+   * Off is the common case — most people here will never connect an external
+   * wallet — and reading a table to render nothing is a round trip per settings
+   * visit for no one's benefit. A rejected setting read degrades to `false`, which
+   * shows the enable panel: inert, and re-checked on every write regardless.
+   */
+  const walletsOn = walletsEnabled.status === 'fulfilled' && walletsEnabled.value;
+  const walletBoard = walletsOn ? await getLinkedWalletsFor(user.id as UserId) : null;
 
   return (
     <SettingsShell
@@ -65,6 +81,19 @@ export default async function SettingsPage({
       }
       signInMethods={methods.status === 'fulfilled' ? methods.value : null}
       googleConfigured={googleOAuthConfig() !== null}
+      walletsEnabled={walletsOn}
+      wallets={
+        walletBoard === null ? null : (
+          <WalletIntegration
+            board={walletBoard}
+            appUrl={env().APP_URL}
+            siteName={BRAND.name}
+            /* Absent is a supported configuration: the QR option is then not
+               offered at all, rather than offered and unable to pair. */
+            projectId={env().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? null}
+          />
+        )
+      }
       googleNotice={typeof google === 'string' ? google : undefined}
       // The callback lands here with `?google=`, so that outcome opens on the tab
       // that shows it rather than on Profile.

@@ -15,7 +15,6 @@ import { TeamTable } from './_components/team-table';
  * ── The permissions matrix is gone, and that is the honest change ──────────────
  * This page carried six roles — Owner, Compliance, Support, Treasury, Engineer,
  * Read-only — against twelve capabilities, under the heading "The console reads
- * this matrix — it is the policy, not a picture of it". It was a constant. Nothing
  * read it, and there are no such roles: this application has exactly two access
  * tiers, `customer` and `admin`, and `requireAdmin` is a single boolean gate.
  *

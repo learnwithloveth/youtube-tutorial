@@ -51,7 +51,7 @@ const FILTERS: readonly { id: string; label: string; kinds: readonly ActivityKin
   {
     id: 'security',
     label: 'Security',
-    kinds: ['sign-in', 'password-reset', 'email-verified', 'verification-approved', 'verification-rejected'],
+    kinds: ['sign-in', 'password-reset', 'email-verified', 'verification-approved', 'verification-rejected', 'wallet-linked', 'wallet-unlinked'],
   },
 ];
 

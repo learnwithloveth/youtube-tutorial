@@ -1,8 +1,8 @@
 import { logger } from '@/platform/observability/logger';
 import type { UserId } from '@/shared/kernel/ids';
 
+import { APPROVALS_REQUIRED } from '../../domain/approvals';
 import type { DepositClaim } from '../../domain/deposit-claim';
-import { approvalsRequired, limitsFor, tierFor } from '../../domain/limits';
 import type { Withdrawal } from '../../domain/withdrawal';
 import type { FeedCursor, FeedPageQuery, LedgerDependencies } from '../ports';
 
@@ -312,7 +312,7 @@ function toWithdrawalTransaction(withdrawal: Withdrawal): TransactionDto {
     confirmingNote: null,
     hasProof: false,
     approvalsHeld: snapshot.approvals.length,
-    approvalsRequired: approvalsRequired(snapshot.valuedAtUsd, limitsFor(tierFor())),
+    approvalsRequired: APPROVALS_REQUIRED,
     // An approved withdrawal does post a transfer, but the withdrawal row does not
     // record which one — the link runs the other way, in the transfer's reference.
     // Null here is the honest answer rather than a second query per row; giving the

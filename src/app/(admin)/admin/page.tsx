@@ -121,10 +121,13 @@ export default async function CommandCentrePage() {
           label="Awaiting a decision"
           value={String(waiting)}
           delta={{
+            /* Was "N need a second signature". Dual control is gone — one
+               operator releases any amount — so the count is now of requests the
+               feed could not value, which is what makes the held total go blank. */
             value:
-              operations.pending.needingSecondSignature > 0
-                ? `${operations.pending.needingSecondSignature} need a second signature`
-                : 'None need a second signature',
+              operations.pending.unpriced > 0
+                ? `${operations.pending.unpriced} could not be priced`
+                : 'All of them are valued',
             direction: 'flat',
             period: '',
           }}

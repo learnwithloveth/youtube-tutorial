@@ -33,8 +33,12 @@ export type AlertStatus = 'armed' | 'triggered' | 'muted';
 /** The scale every alert target is held at. Matches the quote scale of USD prices. */
 export const TARGET_SCALE = 8;
 
-/** Most alerts one account may hold. A guard on a table anybody can insert into. */
-export const MAX_ALERTS_PER_USER = 50;
+/*
+ * `MAX_ALERTS_PER_USER` used to be here, at 50. An account may now hold as many
+ * price alerts as it wants; the only rule left on creation is that two identical
+ * alerts are still refused, because a duplicate fires twice on one crossing and
+ * reads as a bug rather than as the duplicate it is.
+ */
 
 export interface PriceAlertSnapshot {
   readonly id: string;

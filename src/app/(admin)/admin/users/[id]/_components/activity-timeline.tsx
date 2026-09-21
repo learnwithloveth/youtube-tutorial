@@ -22,6 +22,8 @@ import {
   IdCard,
   BellRing,
   Headset,
+  Link2,
+  Link2Off,
 } from 'lucide-react';
 
 import type { ActivityEventDto, ActivityKind, EventLocation } from '@/modules/activity';
@@ -71,6 +73,8 @@ const KIND_META: Record<
   'price-alert-triggered': { label: 'Price alert fired', icon: BellRing, tone: 'neutral' },
   'visit-started': { label: 'Arrived on the site', icon: Wifi, tone: 'neutral' },
   'support-message-sent': { label: 'Wrote to support', icon: Headset, tone: 'brand' },
+  'wallet-linked': { label: 'Connected an external wallet', icon: Link2, tone: 'brand' },
+  'wallet-unlinked': { label: 'Disconnected an external wallet', icon: Link2Off, tone: 'neutral' },
 };
 
 export function ActivityTimeline({ events }: { events: readonly ActivityEventDto[] }) {

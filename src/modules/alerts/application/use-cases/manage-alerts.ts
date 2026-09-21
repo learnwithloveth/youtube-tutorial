@@ -1,12 +1,7 @@
 import { err, ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
-import {
-  MAX_ALERTS_PER_USER,
-  parseTarget,
-  PriceAlert,
-  type AlertDirection,
-} from '../../domain/price-alert';
+import { parseTarget, PriceAlert, type AlertDirection } from '../../domain/price-alert';
 import { AlertErrors, type AlertError } from '../errors';
 import type { AlertDependencies } from '../ports';
 
@@ -48,9 +43,6 @@ export function createCreateAlert(deps: AlertDependencies): CreateAlert {
     if (target.isZero || target.isNegative) return err(AlertErrors.targetInvalid());
 
     const existing = await deps.alerts.listForUser(command.userId);
-    if (existing.length >= MAX_ALERTS_PER_USER) {
-      return err(AlertErrors.tooMany(MAX_ALERTS_PER_USER));
-    }
 
     // Two identical alerts fire twice on one crossing, which reads as a bug in the
     // alerting rather than as the duplicate it is.

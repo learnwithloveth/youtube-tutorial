@@ -98,10 +98,10 @@ export async function requestWithdrawalAction(
 
   return {
     status: 'submitted',
-    message:
-      result.value.approvalsRequired > 1
-        ? `Submitted. Withdrawals of this size need two approvals, so this one may take longer.`
-        : 'Submitted for approval. Your balance is on hold until it is reviewed.',
+    /* One message, because there is one outcome. The other branch warned that
+       withdrawals over the dual-control threshold need two approvals; no amount
+       needs a second signature any more. */
+    message: 'Submitted for approval. Your balance is on hold until it is reviewed.',
     withdrawalId: result.value.withdrawalId,
     ...about,
   };

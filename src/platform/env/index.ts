@@ -145,6 +145,24 @@ const schema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
   /**
+   * WalletConnect's relay, for pairing a phone wallet with a desktop browser.
+   *
+   * ── Public by design, and validated anyway ─────────────────────────────────
+   * A `NEXT_PUBLIC_` value ships in every browser bundle. That is correct here:
+   * a project id identifies the application to the relay and authorises nothing
+   * — it is the same kind of value as the Firebase config above. It is listed
+   * here so a typo fails at boot rather than as a pairing that silently never
+   * completes.
+   *
+   * ── Absent is a supported configuration ────────────────────────────────────
+   * Unset, the QR option is not rendered at all, and connecting still works
+   * through a browser extension or a wallet's own in-app browser. A relay that
+   * cannot pair would produce a QR code somebody stands there scanning, which is
+   * worse than not offering one. Get a free id at https://dashboard.reown.com.
+   */
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().min(1).optional(),
+
+  /**
    * SMTP transport. Absent means messages are logged instead of sent, so a clone
    * with no `docker compose up` still completes a signup and prints the link.
    */

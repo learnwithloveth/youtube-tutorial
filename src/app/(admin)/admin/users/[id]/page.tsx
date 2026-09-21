@@ -8,6 +8,7 @@ import {
   MapPin,
   MonitorSmartphone,
   Radar,
+  Link2,
   Smartphone,
   Tablet,
   TriangleAlert,
@@ -17,6 +18,8 @@ import type { ActivityKind } from '@/modules/activity';
 import { SECURITY_KINDS } from '@/modules/activity';
 import { formatAccountNumber } from '@/modules/identity';
 import { getUserDetail } from '@/server/users';
+import { getLinkedWalletsFor } from '@/server/wallet-link';
+import { toUserId } from '@/shared/kernel/ids';
 import { formatDate, formatDuration } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Badge } from '@/shared/ui/primitives/badge';
@@ -27,6 +30,7 @@ import { countryFlag, countryName } from '../../live/_lib/geography';
 import { WorldMap, type MapMarker } from '@/shared/ui/visuals/world-map';
 
 import { ActivityTimeline } from './_components/activity-timeline';
+import { LinkedWallets } from './_components/linked-wallets';
 import { LiveMapOverlay } from './_components/live-map-overlay';
 
 /**
@@ -80,6 +84,16 @@ export default async function UserDetailPage({
   // An account that does not exist and an id that is not a UUID are the same
   // answer to an operator following a stale link.
   if (detail === null) notFound();
+
+  /*
+   * Read after the account, not beside it.
+   *
+   * `getUserDetail` already refused a malformed id, so `toUserId` cannot throw
+   * here — and running this in the same `Promise.all` would mean parsing the id
+   * twice, once without that guarantee. It degrades to an empty board on its own,
+   * so a wallet-link outage costs this panel rather than the page.
+   */
+  const walletBoard = await getLinkedWalletsFor(toUserId(detail.account.id));
 
   const { account, activity, liveTabs } = detail;
   const pageViews = activity.tallies.find((t) => t.kind === 'page-view')?.total ?? 0;
@@ -308,6 +322,30 @@ export default async function UserDetailPage({
           )}
         </Panel>
       </div>
+
+      {/* ── External wallets ───────────────────────────────────────────────── */}
+      <Panel className="mb-4">
+        <PanelHeader
+          title="External wallets"
+          subtitle={
+            walletBoard.unavailable
+              ? 'Unavailable on this deployment'
+              : walletBoard.degraded
+                ? 'This list could not be loaded'
+                : `${walletBoard.verified} verified by signature · ${walletBoard.watching} watch-only`
+          }
+          actions={
+            <Link2 className="size-4 text-fg-subtle" aria-hidden />
+          }
+        />
+        {walletBoard.degraded ? (
+          <p className="py-8 text-center text-sm text-warn">
+            This account&rsquo;s wallets could not be read just now.
+          </p>
+        ) : (
+          <LinkedWallets wallets={walletBoard.wallets} />
+        )}
+      </Panel>
 
       {/* ── The full timeline ──────────────────────────────────────────────── */}
       <Panel>

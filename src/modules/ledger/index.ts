@@ -13,7 +13,6 @@
 export type {
   AssetOptionDto,
   BalanceDto,
-  DailyLimitDto,
   WalletDto,
   WithdrawalDto,
 } from './application/dto';
@@ -22,8 +21,7 @@ export { maskDestination } from './application/dto';
 export type { LedgerError } from './domain/errors';
 export { presentLedgerError } from './domain/errors';
 
-export type { Tier, TierLimits } from './domain/limits';
-export { limitsFor, tierFor } from './domain/limits';
+export { APPROVALS_REQUIRED } from './domain/approvals';
 
 export type { WithdrawalStatus } from './domain/withdrawal';
 export type { DepositClaimStatus } from './domain/deposit-claim';

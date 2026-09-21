@@ -205,17 +205,6 @@ class FakeWithdrawals implements WithdrawalRepository {
       .sort((a, b) => (b.decidedAt?.getTime() ?? 0) - (a.decidedAt?.getTime() ?? 0))
       .slice(0, limit);
   }
-  async usedSince(userId: UserId, since: Date) {
-    return [...this.store.values()]
-      .filter(
-        (w) =>
-          w.userId === userId && w.requestedAt >= since && w.status !== 'rejected',
-      )
-      .reduce(
-        (sum, w) => sum.add(w.valuedAtUsd ?? Money.zero('USD', 2)),
-        Money.zero('USD', 2),
-      );
-  }
   async countByStatus() {
     const counts = new Map<WithdrawalStatus, number>();
     for (const w of this.store.values()) {
@@ -919,7 +908,13 @@ describe('requesting a withdrawal', () => {
     if (!result.ok) expect(result.error.kind).toBe('destination-invalid');
   });
 
-  it('refuses below the minimum', async () => {
+  /*
+   * Three cases used to sit here: a per-asset minimum, the $25,000 daily cap, and
+   * the refusal to proceed when the feed could not price the asset. None of those
+   * rules exist any more, so each assertion is inverted — what was refused is now
+   * accepted, which is the behaviour actually worth pinning down.
+   */
+  it('accepts an amount below what used to be the minimum', async () => {
     const result = await ctx.request({
       userId: ALICE,
       asset: 'BTC',
@@ -928,12 +923,11 @@ describe('requesting a withdrawal', () => {
       amount: '0.0001',
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe('amount-below-minimum');
+    expect(result.ok).toBe(true);
   });
 
-  /* The standard tier caps a day at $25,000; 0.3 BTC at $100k is $30,000. */
-  it('refuses over the daily limit', async () => {
+  /* 0.3 BTC at $100k is $30,000, which the old standard tier refused outright. */
+  it('accepts a withdrawal of any size, on one signature', async () => {
     const result = await ctx.request({
       userId: ALICE,
       asset: 'BTC',
@@ -942,39 +936,27 @@ describe('requesting a withdrawal', () => {
       amount: '0.3',
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe('daily-limit-exceeded');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.approvalsRequired).toBe(1);
   });
 
-  /* Pending withdrawals count against the day, or twenty requests inside a minute
-     would each pass individually and sum past the cap. */
-  it('counts pending requests against the daily limit', async () => {
-    for (let i = 0; i < 2; i += 1) {
+  /* Nothing counts a day, so the third request is no different from the first. */
+  it('does not count earlier requests against a daily allowance', async () => {
+    for (let i = 0; i < 3; i += 1) {
       const ok = await ctx.request({
         userId: ALICE,
         asset: 'BTC',
         network: 'bitcoin',
         destination: BTC_ADDRESS,
-        amount: '0.1', // $10,000 each
+        amount: '0.1', // $10,000 each — $30,000 in total
       });
       expect(ok.ok).toBe(true);
     }
-
-    const third = await ctx.request({
-      userId: ALICE,
-      asset: 'BTC',
-      network: 'bitcoin',
-      destination: BTC_ADDRESS,
-      amount: '0.1',
-    });
-
-    expect(third.ok).toBe(false);
-    if (!third.ok) expect(third.error.kind).toBe('daily-limit-exceeded');
   });
 
-  /* An exchange that keeps paying out while it has lost sight of what things are
-     worth is the one that discovers the problem afterwards. */
-  it('refuses when the asset cannot be priced, rather than skipping the limit', async () => {
+  /* The price was only ever needed to check the cap. With no cap, a quiet feed
+     costs the record its valuation and nothing else. */
+  it('accepts a withdrawal the feed cannot price', async () => {
     const blind = build({ async valueInUsd() { return null; } });
     await blind.deposit({
       userId: ALICE,
@@ -992,8 +974,7 @@ describe('requesting a withdrawal', () => {
       amount: '0.05',
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe('valuation-unavailable');
+    expect(result.ok).toBe(true);
   });
 });
 
@@ -1174,46 +1155,41 @@ describe('deciding a withdrawal', () => {
     expect(result.ok).toBe(false);
   });
 
-  describe('dual control', () => {
-    /* 0.15 BTC at $100k is $15,000 — over the $10,000 threshold. */
-    it('holds the money until a second, different operator signs', async () => {
+  /*
+   * This was a `dual control` suite: 0.15 BTC at $100k is $15,000, which used to
+   * be over the $10,000 threshold and therefore needed a second, different
+   * operator. There is no threshold any more, so the same amount settles on the
+   * first signature and the pair below records that instead.
+   */
+  describe('single signature', () => {
+    it('posts the transfer on the first approval, whatever the amount', async () => {
       const { ctx, id } = await seeded('0.15');
 
       const first = await ctx.decide({ withdrawalId: id, operatorId: BOB, decision: 'approve' });
       expect(first.ok).toBe(true);
       if (first.ok) {
-        expect(first.value.status).toBe('pending');
+        expect(first.value.status).toBe('approved');
         expect(first.value.approvalsHeld).toBe(1);
-        expect(first.value.approvalsRequired).toBe(2);
+        expect(first.value.approvalsRequired).toBe(1);
       }
 
-      // Nothing has moved yet, and the hold is untouched.
-      const midway = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
-      expect(midway?.held.toDecimalString()).toBe('0.15004000');
-      expect(ctx.accounts.posted).toHaveLength(1);
-
-      const second = await ctx.decide({
-        withdrawalId: id,
-        operatorId: CAROL,
-        decision: 'approve',
-      });
-      expect(second.ok).toBe(true);
-      if (second.ok) expect(second.value.status).toBe('approved');
+      // The hold is consumed by the debit it was reserving for.
+      const after = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'BTC'));
+      expect(after?.held.toDecimalString()).toBe('0.00000000');
 
       expect(ctx.accounts.posted).toHaveLength(2);
       expectBooksBalance(ctx.accounts);
     });
 
-    /* Otherwise dual control is one person clicking the same button twice. */
-    it('refuses the same operator as the second signature', async () => {
+    it('refuses a second approval, because the first one settled it', async () => {
       const { ctx, id } = await seeded('0.15');
 
       await ctx.decide({ withdrawalId: id, operatorId: BOB, decision: 'approve' });
       const again = await ctx.decide({ withdrawalId: id, operatorId: BOB, decision: 'approve' });
 
       expect(again.ok).toBe(false);
-      if (!again.ok) expect(again.error.kind).toBe('approval-refused');
-      expect(ctx.accounts.posted).toHaveLength(1);
+      if (!again.ok) expect(again.error.kind).toBe('withdrawal-already-decided');
+      expect(ctx.accounts.posted).toHaveLength(2);
     });
   });
 
@@ -1651,11 +1627,11 @@ describe('emails to the customer', () => {
     expect(mail?.text).not.toContain('Amount sent');
   });
 
-  it('reads the record, so one signature of two still reads as under review', async () => {
-    const { ctx, id } = await withdrawing('0.15'); // $15,000 — two signatures
-
-    const first = await ctx.decide({ withdrawalId: id, operatorId: BOB, decision: 'approve' });
-    expect(first.ok).toBe(true);
+  /* Was "one signature of two still reads as under review". One signature is all
+     there is, so the states the mail has to tell apart are before and after the
+     single decision — the same rule, still read off the record. */
+  it('reads the record, so an undecided withdrawal reads as under review', async () => {
+    const { ctx, id } = await withdrawing('0.15');
 
     await ctx.email({ kind: 'withdrawal', recordId: id });
     expect(ctx.outbox.at(-1)?.subject).toContain('is being reviewed');

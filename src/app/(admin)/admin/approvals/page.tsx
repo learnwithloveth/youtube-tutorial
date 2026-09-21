@@ -42,7 +42,9 @@ import { DepositDecision } from './_components/deposit-decision';
  * one screen where someone decides whether to release funds.
  *
  * What replaced them is smaller and true: the amount, its frozen valuation, the
- * destination, how long it has waited, and whether it needs a second signature.
+ * destination and how long it has waited. "Whether it needs a second signature"
+ * used to be on that list; dual control is gone, so one operator releases any
+ * amount and the answer was the same on every row.
  */
 
 export const dynamic = 'force-dynamic';
@@ -110,9 +112,16 @@ export default async function ApprovalsPage() {
           upIsGood={false}
         />
         <StatTile
-          label="Need two signatures"
-          value={String(queue.needingDualControl)}
-          delta={{ value: 'over the dual-control threshold', direction: 'flat', period: '' }}
+          label="Unpriced"
+          value={String(queue.unpriced)}
+          delta={{
+            value:
+              queue.unpriced === 0
+                ? 'every request is valued'
+                : 'no feed price when requested',
+            direction: 'flat',
+            period: '',
+          }}
           upIsGood={false}
           icon={<ShieldAlert className="size-4" />}
         />

@@ -3,7 +3,7 @@ import { Money } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { userOwner, type LedgerAccount } from '../../domain/account';
-import { approvalsRequired, limitsFor, tierFor } from '../../domain/limits';
+import { APPROVALS_REQUIRED } from '../../domain/approvals';
 import type { Withdrawal } from '../../domain/withdrawal';
 import {
   maskDestination,
@@ -12,18 +12,22 @@ import {
   type WithdrawalDto,
 } from '../dto';
 import type { LedgerDependencies } from '../ports';
-import { startOfDayUtc } from '../use-cases/request-withdrawal';
 
 /**
- * One customer's wallet: balances, what they are worth, and today's remaining room.
+ * One customer's wallet: balances and what they are worth.
  *
  * ── Degrades rather than propagating ───────────────────────────────────────────
  * A failed read returns an empty wallet flagged `degraded`. The page then says it
  * could not load rather than showing a total of zero, which on a money screen is
  * not a degraded state — it is a false statement about someone's savings.
+ *
+ * ── It no longer reads a daily allowance ───────────────────────────────────────
+ * This query used to also fetch how much had been withdrawn since midnight UTC and
+ * subtract it from a tier cap. There is no cap, so there is nothing to subtract and
+ * one fewer query to make.
  */
 
-const UNAVAILABLE: Omit<WalletDto, 'limits'> = {
+const UNAVAILABLE: WalletDto = {
   balances: [],
   totalValueUsd: null,
   valuationIncomplete: true,
@@ -35,42 +39,21 @@ export async function getWallet(
   deps: LedgerDependencies,
   userId: UserId,
 ): Promise<WalletDto> {
-  const limits = limitsFor(tierFor());
-  const now = deps.clock.now();
-  const resetsAt = new Date(startOfDayUtc(now).getTime() + 24 * 60 * 60_000);
-
-  const emptyLimits = {
-    tier: limits.tier,
-    capUsd: limits.dailyWithdrawalUsd.toDecimalString(),
-    usedUsd: '0.00',
-    remainingUsd: limits.dailyWithdrawalUsd.toDecimalString(),
-    resetsAt: resetsAt.toISOString(),
-  };
-
   // `allSettled`, not `all`: the realistic failure is an unreachable database, in
   // which case every one of these rejects. `Promise.all` would surface the first
   // and leave the rest unattached, and Node terminates the process on an unhandled
   // rejection by default.
-  const [accountsResult, usedResult, pendingResult] = await Promise.allSettled([
+  const [accountsResult, pendingResult] = await Promise.allSettled([
     deps.accounts.listForOwner(userOwner(userId)),
-    deps.withdrawals.usedSince(userId, startOfDayUtc(now)),
     deps.withdrawals.listForUser(userId, 20),
   ]);
 
   if (accountsResult.status === 'rejected') {
     logger.error({ event: 'wallet_read_failed', module: 'ledger', userId }, accountsResult.reason);
-    return { ...UNAVAILABLE, limits: emptyLimits };
+    return UNAVAILABLE;
   }
 
   const balances = await valueBalances(deps, accountsResult.value);
-
-  const used =
-    usedResult.status === 'fulfilled' ? usedResult.value : Money.zero('USD', 2);
-  if (usedResult.status === 'rejected') {
-    logger.warn({ event: 'wallet_limit_read_failed', module: 'ledger', userId }, usedResult.reason);
-  }
-
-  const remaining = limits.dailyWithdrawalUsd.subtract(used);
 
   const pending =
     pendingResult.status === 'fulfilled'
@@ -93,13 +76,6 @@ export async function getWallet(
           )
           .toDecimalString(),
     valuationIncomplete: incomplete,
-    limits: {
-      tier: limits.tier,
-      capUsd: limits.dailyWithdrawalUsd.toDecimalString(),
-      usedUsd: used.toDecimalString(),
-      remainingUsd: (remaining.isNegative ? Money.zero('USD', 2) : remaining).toDecimalString(),
-      resetsAt: resetsAt.toISOString(),
-    },
     pendingWithdrawals: pending,
     degraded: false,
   };
@@ -156,8 +132,6 @@ async function valueBalances(
 }
 
 export function toWithdrawalDto(withdrawal: Withdrawal): WithdrawalDto {
-  const required = approvalsRequired(withdrawal.valuedAtUsd, limitsFor(tierFor()));
-
   return {
     id: withdrawal.id,
     userId: withdrawal.userId,
@@ -172,6 +146,6 @@ export function toWithdrawalDto(withdrawal: Withdrawal): WithdrawalDto {
     decidedAt: withdrawal.decidedAt?.toISOString() ?? null,
     reason: withdrawal.reason,
     approvalsHeld: withdrawal.approvals.length,
-    approvalsRequired: required,
+    approvalsRequired: APPROVALS_REQUIRED,
   };
 }

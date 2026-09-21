@@ -214,7 +214,11 @@ describe('adminCopyFor', () => {
   it('copies every customer notification the bell shows, except what an operator sent', () => {
     for (const kind of NOTIFIABLE_KINDS) {
       const copy = adminCopyFor(event({ kind }), customer);
-      if (kind === 'receipt-sent') expect(copy).toBeNull();
+      // `wallet-unlinked` joins `receipt-sent` in being the customer's business
+      // and not an operator's: severing a link takes a claim away, and a console
+      // that announced every disconnection would be noise on the screen where a
+      // *connection* needs to be noticed.
+      if (kind === 'receipt-sent' || kind === 'wallet-unlinked') expect(copy).toBeNull();
       else expect(copy, kind).not.toBeNull();
     }
   });
@@ -240,6 +244,8 @@ const NOTIFIABLE_KINDS = [
   'email-verified',
   'sign-in',
   'receipt-sent',
+  'wallet-linked',
+  'wallet-unlinked',
 ] as const;
 
 /**

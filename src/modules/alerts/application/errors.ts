@@ -9,7 +9,6 @@ export type AlertError =
   | { readonly kind: 'not-found' }
   | { readonly kind: 'symbol-unknown'; readonly symbol: string }
   | { readonly kind: 'target-invalid' }
-  | { readonly kind: 'too-many'; readonly maximum: number }
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'unavailable' };
 
@@ -17,7 +16,6 @@ export const AlertErrors = {
   notFound: (): AlertError => ({ kind: 'not-found' }),
   symbolUnknown: (symbol: string): AlertError => ({ kind: 'symbol-unknown', symbol }),
   targetInvalid: (): AlertError => ({ kind: 'target-invalid' }),
-  tooMany: (maximum: number): AlertError => ({ kind: 'too-many', maximum }),
   duplicate: (): AlertError => ({ kind: 'duplicate' }),
   unavailable: (): AlertError => ({ kind: 'unavailable' }),
 } as const;
@@ -32,8 +30,6 @@ export function presentAlertError(error: AlertError): string {
       return `${error.symbol} is not a market on this platform.`;
     case 'target-invalid':
       return 'Enter a target price above zero.';
-    case 'too-many':
-      return `You already have ${error.maximum} alerts. Delete one to add another.`;
     case 'duplicate':
       // The rule, not just a refusal: two identical alerts would fire twice and
       // read as a bug in the alert system rather than as a duplicate.

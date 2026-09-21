@@ -46,6 +46,9 @@ export const DASH_NAV: DashNavGroup[] = [
     items: [
       { label: 'Wallet', href: '/app/wallet', icon: Wallet },
       { label: 'Transactions', href: '/app/transactions', icon: Receipt },
+      /* Wallet integration is not here. It is a Settings tab, off by default for
+         every account — so a permanent rail item would advertise a feature most
+         people have never switched on, next to the two that move their money. */
     ],
   },
   {

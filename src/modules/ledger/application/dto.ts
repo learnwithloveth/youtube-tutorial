@@ -1,4 +1,3 @@
-import type { Tier } from '../domain/limits';
 import type { WithdrawalStatus } from '../domain/withdrawal';
 
 /**
@@ -43,19 +42,16 @@ export interface WalletDto {
   readonly totalValueUsd: string | null;
   /** True when at least one holding had no price. Drives the caveat on the page. */
   readonly valuationIncomplete: boolean;
-  readonly limits: DailyLimitDto;
+  /*
+   * There was a `limits: DailyLimitDto` here — the tier, the daily cap, what had
+   * been used against it and when it reset. It is gone with the cap itself: this
+   * deployment does not bound what an account may withdraw, so there is no number
+   * to report and the wallet page's "left today" readout would have been stating
+   * a rule that no longer exists.
+   */
   readonly pendingWithdrawals: readonly WithdrawalDto[];
   /** True when the read degraded — an empty wallet and a failed query differ. */
   readonly degraded: boolean;
-}
-
-export interface DailyLimitDto {
-  readonly tier: Tier;
-  readonly capUsd: string;
-  readonly usedUsd: string;
-  readonly remainingUsd: string;
-  /** When the window rolls over. Always midnight UTC — see `startOfDayUtc`. */
-  readonly resetsAt: string;
 }
 
 export interface WithdrawalDto {

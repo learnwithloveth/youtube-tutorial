@@ -18,14 +18,21 @@ export interface ApprovalQueueDto {
   readonly withdrawals: readonly WithdrawalDto[];
   /** Total value awaiting a decision, or null when something could not be valued. */
   readonly heldValueUsd: string | null;
-  readonly needingDualControl: number;
+  /**
+   * How many of them the feed could not value.
+   *
+   * Replaces `needingDualControl`. No withdrawal needs a second signature any
+   * more — one operator releases any amount — so that count was zero on every
+   * render. This one explains why `heldValueUsd` goes null.
+   */
+  readonly unpriced: number;
   readonly degraded: boolean;
 }
 
 const EMPTY: ApprovalQueueDto = {
   withdrawals: [],
   heldValueUsd: null,
-  needingDualControl: 0,
+  unpriced: 0,
   degraded: true,
 };
 
@@ -37,7 +44,7 @@ export async function listPendingApprovals(
     const pending = await deps.withdrawals.listPending(limit);
     const withdrawals = pending.map(toWithdrawalDto);
 
-    const unpriced = withdrawals.some((withdrawal) => withdrawal.valueUsd === null);
+    const unpriced = withdrawals.filter((withdrawal) => withdrawal.valueUsd === null);
 
     return {
       withdrawals,
@@ -45,7 +52,7 @@ export async function listPendingApprovals(
       // an unvalued request understates what is actually held, and an operator
       // reading "value awaiting approval" would be reading a number that is wrong
       // by an unknown amount.
-      heldValueUsd: unpriced
+      heldValueUsd: unpriced.length > 0
         ? null
         : withdrawals
             .reduce(
@@ -54,7 +61,7 @@ export async function listPendingApprovals(
               Money.zero('USD', 2),
             )
             .toDecimalString(),
-      needingDualControl: withdrawals.filter((w) => w.approvalsRequired > 1).length,
+      unpriced: unpriced.length,
       degraded: false,
     };
   } catch (error) {

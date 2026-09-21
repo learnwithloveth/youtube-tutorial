@@ -3,7 +3,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { platformOwner, userOwner } from '../../domain/account';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
-import { approvalsRequired, limitsFor, tierFor } from '../../domain/limits';
+import { APPROVALS_REQUIRED } from '../../domain/approvals';
 import { derivedTransactionHash } from '../../domain/chain-reference';
 import { Transfer } from '../../domain/transfer';
 import type { LedgerDependencies } from '../ports';
@@ -88,7 +88,11 @@ export function createDecideWithdrawal(deps: LedgerDependencies) {
       return ok({ status: 'rejected', approvalsHeld: 0, approvalsRequired: 0 });
     }
 
-    const required = approvalsRequired(withdrawal.valuedAtUsd, limitsFor(tierFor()));
+    // One signature, whatever the amount. Dual control above a USD threshold is
+    // gone, so `complete` is true on the first approval every time and the
+    // `!complete` branch below is now unreachable in practice — it is kept because
+    // `Withdrawal.approve` still owns the counting.
+    const required = APPROVALS_REQUIRED;
 
     let complete: boolean;
     try {

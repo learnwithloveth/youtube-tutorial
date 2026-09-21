@@ -428,23 +428,6 @@ export class DrizzleWithdrawalRepository implements WithdrawalRepository {
     return this.hydrate(rows);
   }
 
-  async usedSince(userId: UserId, since: Date): Promise<Money> {
-    const rows = await this.db
-      .select({ total: sql<string>`coalesce(sum(${withdrawals.valuedAtUsd}), 0)` })
-      .from(withdrawals)
-      .where(
-        and(
-          eq(withdrawals.userId, userId),
-          gte(withdrawals.requestedAt, since),
-          // Pending counts. A rejected one does not — it never left, so it should
-          // not consume the customer's allowance for the day.
-          inArray(withdrawals.status, ['pending', 'approved']),
-        ),
-      );
-
-    return Money.fromDecimalString(rows[0]?.total ?? '0', 'USD', 2);
-  }
-
   async countByStatus(): Promise<{ status: WithdrawalStatus; total: number }[]> {
     const rows = await this.db
       .select({ status: withdrawals.status, total: count() })

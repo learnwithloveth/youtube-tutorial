@@ -25,10 +25,9 @@ import { shortenDecimalString } from '@/shared/kernel';
  * The wallet.
  *
  * ── Server reads, one client island ────────────────────────────────────────────
- * Balances, limits and pending withdrawals are read here, on the server, from the
- * ledger. The only interactive part is the deposit/withdraw panel, which is a leaf
- * — so the balance table and the limit meters ship as HTML rather than as JSON plus
- * the code to render it.
+ * Balances and pending withdrawals are read here, on the server, from the ledger.
+ * The only interactive part is the deposit/withdraw panel, which is a leaf — so the
+ * balance table ships as HTML rather than as JSON plus the code to render it.
  *
  * ── Every figure is an exact decimal string ────────────────────────────────────
  * Nothing on this page is a JavaScript number. Amounts arrive from the ledger as
@@ -140,11 +139,20 @@ export default async function WalletPage() {
         <Notice
           tone="warn"
           title="Some holdings could not be priced."
-          body="Your balances are exact; their dollar values are not shown where the market is not quoting. Withdrawals of those assets are paused until pricing returns."
+          /* The second sentence used to read "Withdrawals of those assets are
+             paused until pricing returns." It was true while an unpriceable asset
+             could not be checked against a USD daily cap. There is no cap, so a
+             quiet feed no longer stops anything and saying otherwise would be
+             telling the customer about a rule that is not there. */
+          body="Your balances are exact; their dollar values are not shown where the market is not quoting. You can still withdraw them."
         />
       ) : null}
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Three tiles, not four. The fourth was "Withdrawn today", whose whole
+          content was the daily allowance: the amount used, the amount left and the
+          cap it counted against. No cap is enforced, so the tile had nothing left
+          to report. */}
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatTile
           label="Total balance"
           value={wallet.totalValueUsd === null ? '—' : usd(wallet.totalValueUsd)}
@@ -163,16 +171,6 @@ export default async function WalletPage() {
             direction: 'flat',
             period: '',
           }}
-        />
-        <StatTile
-          label="Withdrawn today"
-          value={usd(wallet.limits.usedUsd)}
-          delta={{
-            value: `${usd(wallet.limits.remainingUsd)} left`,
-            direction: 'flat',
-            period: `of ${usd(wallet.limits.capUsd)}`,
-          }}
-          upIsGood={false}
         />
         <StatTile
           label="Awaiting approval"
@@ -305,11 +303,11 @@ export default async function WalletPage() {
                     <span className="ml-auto text-2xs text-fg-subtle">
                       {formatDate(withdrawal.requestedAt)}
                     </span>
-                    <Badge tone="warn">
-                      {withdrawal.approvalsRequired > 1
-                        ? `${withdrawal.approvalsHeld}/${withdrawal.approvalsRequired} approvals`
-                        : 'Pending'}
-                    </Badge>
+                    {/* Always "Pending" now. This used to read "0/2 approvals"
+                        for anything over the dual-control threshold; there is no
+                        threshold, so one signature releases any amount and the
+                        count would say 0/1 on every row. */}
+                    <Badge tone="warn">Pending</Badge>
                     {/* Every one of these is still pending, so the link reads
                         "View" rather than "Receipt" — the document it opens heads
                         itself "Transaction pending" and says it is not one. */}

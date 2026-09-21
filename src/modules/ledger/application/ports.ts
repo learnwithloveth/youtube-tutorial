@@ -143,14 +143,11 @@ export interface WithdrawalRepository {
    * the answer to "what just happened" is.
    */
   listPage(query: FeedPageQuery): Promise<Withdrawal[]>;
-  /**
-   * Total USD value of a user's withdrawals since an instant.
-   *
-   * Counts pending and approved, never rejected — see `checkDailyLimit` for why
-   * pending has to count. Summed in the database rather than by reading the rows,
-   * because the caller only wants the number.
+  /*
+   * `usedSince` used to be here — the SQL sum of a user's pending and approved
+   * withdrawals since midnight UTC, which existed only to be subtracted from the
+   * daily cap. There is no cap, so nobody asks the question.
    */
-  usedSince(userId: UserId, since: Date): Promise<Money>;
   countByStatus(): Promise<{ status: WithdrawalStatus; total: number }[]>;
 
   /**
@@ -174,9 +171,11 @@ export interface WithdrawalRepository {
  * the composition root above both, which is the only place allowed to know they
  * both exist.
  *
- * Returns null when the asset cannot be priced. Callers must treat that as a
- * refusal rather than a zero — a withdrawal whose value is unknown has not been
- * shown to be within the daily limit, and `Money.zero` would assert that it is.
+ * Returns null when the asset cannot be priced. Callers must carry that null
+ * through rather than substituting a zero: a withdrawal whose value is unknown is
+ * not a withdrawal worth nothing, and every screen that reads the valuation
+ * renders the two differently. It no longer gates anything — a missing price
+ * stopped being a refusal when the USD cap it was checked against was removed.
  */
 export interface PriceOracle {
   valueInUsd(amount: Money): Promise<Money | null>;

@@ -43,6 +43,11 @@ export const COPY: Partial<Record<ActivityKind, { title: string; tone: Notificat
   'password-reset': { title: 'Password changed', tone: 'warn' },
   'email-verified': { title: 'Email confirmed', tone: 'up' },
   'sign-in': { title: 'New sign-in', tone: 'warn' },
+  // `warn`, like a sign-in, and for the same reason: the notification exists so
+  // that somebody who did not do this finds out while it still matters. Attaching
+  // an address to an account moves no money, so it is not `up`.
+  'wallet-linked': { title: 'Wallet connected', tone: 'warn' },
+  'wallet-unlinked': { title: 'Wallet disconnected', tone: 'neutral' },
   'receipt-sent': { title: 'Receipt emailed', tone: 'neutral' },
 };
 
@@ -85,6 +90,8 @@ const PUSH_LINKS: Partial<Record<ActivityKind, string>> = {
   'verification-rejected': '/app/settings?tab=verification',
   'password-reset': '/app/settings?tab=security',
   'sign-in': '/app/settings?tab=security',
+  'wallet-linked': '/app/settings?tab=wallets',
+  'wallet-unlinked': '/app/settings?tab=wallets',
 };
 
 const FEED = '/app/notifications';
@@ -163,6 +170,7 @@ export const ADMIN_FEED_KINDS: readonly ActivityKind[] = [
   'price-alert-triggered',
   'password-reset',
   'email-verified',
+  'wallet-linked',
 ];
 
 /** An event as the console's copy reads it: the customer-facing fields, and where it happened. */
@@ -362,6 +370,10 @@ export function adminCopyFor(
       return { title: 'Password changed', body: about(event.detail), link: account, tone: 'warn' };
     case 'email-verified':
       return { title: 'Email confirmed', body: customer.email, link: account, tone: 'up' };
+    case 'wallet-linked':
+      // The address and whether control was proved are both in the detail, which
+      // is what tells an operator a verified connection from a bookmark.
+      return { title: 'Wallet connected', body: about(event.detail), link: account, tone: 'neutral' };
     default:
       return null;
   }

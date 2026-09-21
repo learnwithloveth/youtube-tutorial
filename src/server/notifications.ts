@@ -52,6 +52,10 @@ export const NOTIFIABLE: readonly ActivityKind[] = [
   'email-verified',
   'sign-in',
   'receipt-sent',
+  // An address attached to the account. In the bell for the reason `sign-in` is:
+  // the person it matters most to is the one who did not do it.
+  'wallet-linked',
+  'wallet-unlinked',
 ];
 
 export type { NotificationTone } from './notification-copy';

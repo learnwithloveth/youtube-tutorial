@@ -127,6 +127,8 @@ describe('retention', () => {
       'price-alert-triggered',
       'visit-started',
       'support-message-sent',
+      'wallet-linked',
+      'wallet-unlinked',
     ];
     expect(new Set([...SECURITY_KINDS, ...EPHEMERAL_KINDS])).toEqual(new Set(all));
   });

@@ -89,6 +89,8 @@ const LABELS: Record<ActivityEventDto['kind'], string> = {
   'price-alert-triggered': 'Price alert fired',
   'visit-started': 'Arrived on the site',
   'support-message-sent': 'Wrote to support',
+  'wallet-linked': 'Connected an external wallet',
+  'wallet-unlinked': 'Disconnected an external wallet',
 };
 
 export default async function AuditPage() {

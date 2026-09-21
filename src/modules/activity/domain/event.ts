@@ -134,7 +134,19 @@ export type ActivityKind =
    * audit table kept for a month is no place for the text of a conversation. The
    * reference is the conversation, which is all an operator needs to open it.
    */
-  | 'support-message-sent';
+  | 'support-message-sent'
+  /*
+   * An external wallet was attached to the account, or detached from it.
+   *
+   * Security kinds, kept for a year, for the same reason a sign-in is: "which
+   * addresses has this account claimed, and when" is the question asked after a
+   * dispute, and it is asked months later. The detail carries the shortened
+   * address and whether control was proved — an address somebody merely typed in
+   * and one that signed a challenge are different claims, and a trail that
+   * recorded them identically would lose the only part that matters.
+   */
+  | 'wallet-linked'
+  | 'wallet-unlinked';
 
 /** Everything that is not an ordinary page view — what a security review reads. */
 export const SECURITY_KINDS: readonly ActivityKind[] = [
@@ -157,6 +169,8 @@ export const SECURITY_KINDS: readonly ActivityKind[] = [
   'verification-submitted',
   'verification-approved',
   'verification-rejected',
+  'wallet-linked',
+  'wallet-unlinked',
 ];
 
 /**

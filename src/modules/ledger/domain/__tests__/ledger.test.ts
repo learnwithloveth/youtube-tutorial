@@ -4,7 +4,7 @@ import { Money } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
 import { accountIdFor, LedgerAccount, platformOwner, userOwner } from '../account';
-import { approvalsRequired, checkDailyLimit, limitsFor } from '../limits';
+import { APPROVALS_REQUIRED } from '../approvals';
 import { Transfer } from '../transfer';
 import { Withdrawal } from '../withdrawal';
 
@@ -289,35 +289,14 @@ describe('withdrawal approval', () => {
   });
 });
 
-describe('limits', () => {
-  const limits = limitsFor('standard');
-
-  it('allows a withdrawal inside the remaining room', () => {
-    const check = checkDailyLimit(usd('5000.00'), usd('1000.00'), limits);
-    expect(check.allowed).toBe(true);
-    expect(check.remainingUsd.toDecimalString()).toBe('24000.00');
-  });
-
-  it('refuses one that would exceed the cap', () => {
-    const check = checkDailyLimit(usd('5000.00'), usd('22000.00'), limits);
-    expect(check.allowed).toBe(false);
-  });
-
-  /* A cap lowered while withdrawals were already counted against it would otherwise
-     render as a negative allowance on the customer's page. */
-  it('never reports a negative allowance', () => {
-    const check = checkDailyLimit(usd('1.00'), usd('40000.00'), limits);
-    expect(check.remainingUsd.toDecimalString()).toBe('0.00');
-  });
-
-  it('requires two signatures above the dual-control threshold', () => {
-    expect(approvalsRequired(usd('9999.99'), limits)).toBe(1);
-    expect(approvalsRequired(usd('10000.00'), limits)).toBe(2);
-  });
-
-  /* Assuming an unvalued withdrawal is small would make a missing price the
-     cheapest way to bypass dual control. */
-  it('treats an unvalued withdrawal as needing two signatures', () => {
-    expect(approvalsRequired(null, limits)).toBe(2);
+/*
+ * The `limits` suite that used to be here covered a tier ladder, a daily USD cap
+ * and a dual-control threshold. None of those exist now — `domain/limits.ts` was
+ * replaced by `domain/approvals.ts`, which holds one number — so the tests that
+ * asserted where each boundary fell went with them.
+ */
+describe('approvals', () => {
+  it('needs one signature, whatever the amount', () => {
+    expect(APPROVALS_REQUIRED).toBe(1);
   });
 });

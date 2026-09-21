@@ -52,6 +52,10 @@ src/
 │   │   ├── domain/            Account, Transfer (balanced), Withdrawal, limits
 │   │   ├── application/       Ports, request/decide/deposit, wallet query
 │   │   └── infrastructure/    Drizzle, asset catalogue with storage scales
+│   ├── wallet-link/           External wallets an account has proved it controls
+│   │   ├── domain/            EvmAddress, LinkChallenge (EIP-4361), LinkedWallet
+│   │   ├── application/       Ports, issue/redeem/watch, board query
+│   │   └── infrastructure/    Drizzle, secp256k1 recovery and EIP-55 checksums
 │   └── content/               Supporting context: editorial copy
 │
 ├── platform/              ══ SHARED INFRASTRUCTURE ══
@@ -555,6 +559,7 @@ Each module's tables live in a Postgres schema named after the module:
 | `presence` | `visitors` | presence |
 | `activity` | `events` | activity |
 | `market_data` | `tickers` | market-data |
+| `wallet_link` | `linked_wallets`, `link_challenges`, `wallet_evidence`, `settings` | wallet-link |
 
 `public` holds nothing, and `platform/db` holds no table definitions at all — only
 the client.
@@ -698,23 +703,35 @@ customer's statement would show two movements for something that never happened.
 customer and has not left the platform. Marking it settled would assert a broadcast
 that does not happen, because there is no chain client behind this application.
 
-### Limits are in dollars, and refuse to guess
+### There are no withdrawal limits
 
-A per-asset cap would be trivially avoidable — someone at their bitcoin limit
-withdraws ether instead — so the cap is on value leaving the platform.
+This deployment enforces no ceiling on withdrawals. There was one, and the shape
+of it is worth recording because the code still reads as if something is missing
+where it used to be:
 
-The consequence is that a withdrawal cannot be checked without a price, and
-`requestWithdrawal` **refuses** when none is available. The price oracle accepts
-only a `live` quote, not a `stale` one: a stale price is good enough to render
-behind a "last updated" label and not good enough to decide how much money may
-leave. When the feed goes quiet, withdrawals stop rather than being approved
-against yesterday's prices.
+- A **tier ladder** (`standard` through `institutional`) in `domain/limits.ts`,
+  with a **daily cap in USD** per tier — on value rather than per asset, since
+  someone at their bitcoin limit would simply withdraw ether instead.
+- A **dual-control threshold** well below that cap, above which a second operator
+  had to sign.
+- A **per-asset minimum**, and a **refusal to proceed at all when the feed could
+  not price the asset**, because an unpriced withdrawal could not be shown to be
+  inside the USD cap.
 
-Dual control above a threshold is about the operator, not the customer: it makes a
-single compromised console account unable to move a large sum alone. An operator
-cannot sign twice, and cannot approve their own withdrawal. One operator can
-*reject* anything — declining to move money is always safe, and requiring a second
-signature to stop a payment would mean an operator who spots fraud cannot act.
+All of it is gone. `domain/limits.ts` was replaced by `domain/approvals.ts`, which
+holds a single constant: **one signature releases any amount.** `requestWithdrawal`
+now refuses only what cannot be executed — an unlisted asset, an address that does
+not match the chain, an amount that will not parse, a balance that is not there,
+and a token whose network fee has no gas to pay it. The valuation is still
+recorded when the feed has one, and `Withdrawal.valuedAtUsd` stays nullable,
+because the statement, the receipt and the operator queue all read it; nothing
+decides on it.
+
+Two operator-side rules survive, because neither is a ceiling on the customer: an
+operator still cannot approve their own withdrawal, and a decided withdrawal
+cannot be decided again. One operator can *reject* anything — declining to move
+money is always safe, and requiring a second signature to stop a payment would
+mean an operator who spots fraud cannot act.
 
 ### Deposits are operator-recorded, and that is a real limitation
 
@@ -756,3 +773,151 @@ Risk scores and surveillance signals are also absent from the approvals screen. 
 fixtures had them and they were `Math.random()`; a number presented as risk on the
 one screen where somebody decides whether to release funds is worse than no number
 at all.
+
+---
+
+## 15. Wallet link
+
+The `wallet-link` context answers one question: **which external addresses has this
+account proved it controls?** It backs the Wallets tab in customer settings and the
+external-wallets panel on the console's account page, and nothing else.
+
+### It is off until the account holder turns it on
+
+Most people with an account here will never connect an external wallet, so the tab
+opens on a single **Enable** button and the feature is absent until it is pressed.
+A row in `wallet_link.settings` is the setting — no boolean, because a boolean has
+three states in practice and every reader has to decide what "no row" means. Here
+the absence *is* off.
+
+The switch is a control rather than a curtain: `issueChallenge`, `linkWallet`,
+`watchAddress` and `attachEvidence` each read it back before doing anything, so an
+account with it off cannot have a wallet attached by a POST that skipped the UI. A
+Server Action is a public endpoint, and hiding a panel protects nothing.
+
+Turning it **off** is refused while any wallet is still attached. The tempting
+implementation hides the panel and leaves the rows — and then "off" means "you
+still have three wallets linked and cannot see them", while the addresses stay on
+an operator's screen. Disconnecting is one click per wallet and always available,
+so only the misleading shortcut is blocked.
+
+### It holds no key material, and has nowhere to put any
+
+Every column is either public — an address, a chain id — or ours: a row id, a
+nonce, a timestamp. There is no private key, no mnemonic, no keystore, and no
+encrypted blob that could be decrypted into one. That is a property of the design
+rather than of the current requirements.
+
+The reason is not squeamishness. A platform holding a recovery phrase can spend
+every account that phrase unlocks, instantly and irreversibly, and encryption at
+rest does not change it — the platform must be able to decrypt the phrase in order
+to use it, so anything that compromises the platform compromises the funds. There
+is no threat model in which storing one is acceptable, which is why the absence is
+structural: no field, no parameter, no code path.
+
+This matters for a second reason. "Connect your wallet manually with your seed
+phrase" is the standard framing of a crypto phishing page. A real exchange's
+wallet screen is the thing those pages imitate, so this one states plainly what it
+will never ask for — in the page header, beside the manual-entry form, and in the
+message the wallet itself displays. Somebody who reads it here is better prepared
+to refuse the same request somewhere else.
+
+### Two states, and the difference is the whole module
+
+| State | Means | Proves |
+| --- | --- | --- |
+| `verified` | A signature over a challenge we issued recovered to this address | Control, at that moment |
+| `watch-only` | Somebody typed the address in | Nothing |
+
+Watching an address is a legitimate thing to want — a cold wallet nobody wishes to
+connect — so it is supported, and marked. Conflating the two is what would make the
+verified badge meaningless, so `LinkedWallet.proves()` is the single place that
+answers whether a row is evidence of anything, and it accounts for revocation as
+well as status.
+
+### The challenge is EIP-4361, and every field in it is load-bearing
+
+A wallet shows the signer the exact bytes it will sign. A bare nonce is
+unreadable, and the habit that teaches — approve whatever the site asked for — is
+the habit every signature-based theft depends on. So the message is Sign-In with
+Ethereum: a structured statement naming the site, the account, the chain and an
+expiry, which a person can tell apart from a transaction.
+
+- **`domain` / `uri`** — a signature harvested by another site does not verify
+  here, because the text the victim signed names that site. Both come from
+  `APP_URL`, never from a request header, because a domain the caller supplies
+  binds a signature to nothing.
+- **`nonce`** — single use, enforced by a conditional `UPDATE … WHERE consumed_at
+  IS NULL … RETURNING`. A read-then-write would let two submissions of the same
+  signature both see an unspent challenge. Without this, a captured signature is a
+  bearer credential forever.
+- **`Expiration Time`** — five minutes, which bounds what an intercepted,
+  unredeemed challenge is worth.
+
+The message is **rebuilt from the stored row** at verification time, never taken
+from the request. Hashing a message the client sent proves the client signed
+something; it does not prove they signed what we issued.
+
+The nonce is spent *before* the signature is checked, and a failure does not put it
+back. That costs a legitimate customer one extra click and denies an attacker
+repeated attempts against a live nonce.
+
+### An attachment is not a second kind of proof
+
+A watch-only row may carry one screenshot — the wallet app showing the address, a
+hardware-wallet receipt. It exists for the case support actually meets: "this is
+my old wallet and the device is gone", where there is no signature to be had and
+an operator otherwise has nothing to look at.
+
+It proves nothing, and the code is arranged so it cannot start to. Attaching a
+file touches no status, `LinkedWallet` exposes no method that would, and
+`acceptsEvidence` is false for a verified row — so the upload is not even offered
+next to a signature. The tempting version of this feature, "upload a screenshot
+and we will mark it verified", would make the badge mean two different things, and
+the weaker meaning is the one that would spread. Both the customer's screen and
+the operator's say which it is.
+
+A signature supersedes it. When a watch-only row is upgraded, the pointer clears
+and **the bytes are deleted** — the image was held only because there was no
+proof, and holding it afterwards is personal data kept past its justification,
+which is the same argument `presence` makes for sweeping location fixes.
+
+The bytes go through `shared/kernel/image-bytes`, shared with deposit proofs and
+chat attachments: the type is sniffed from the leading bytes, the filename and the
+declared `Content-Type` are discarded, and SVG is refused outright. They are
+served from `api/wallet-link/evidence/[evidenceId]` with the same header set as a
+deposit proof — `nosniff`, a sandboxed CSP, `no-store` — because two upload paths
+with different hardening is one hardened path and one way in. The owner is derived
+from the key rather than accepted beside it, since everything in a URL is chosen
+by the caller. The 1 MB cap is half the ledger's, because this table grows with
+accounts rather than with claims.
+
+### Why two small crypto libraries and not a wallet SDK
+
+Verification is two primitives: keccak-256 and a secp256k1 public-key recovery.
+`@noble/hashes` and `@noble/curves` are audited, dependency-free implementations of
+exactly those — the same code the large Ethereum SDKs use underneath. `viem` or
+`ethers` would add a provider stack, an ABI encoder and a transaction builder to a
+server that broadcasts nothing, and each is surface on the path that decides
+whether a signature is genuine. Nothing in the adapter can *produce* a signature,
+only recover from one.
+
+The domain layer imports neither, because it imports nothing. An EIP-55 checksum
+needs keccak, so it lives behind the `WalletSignatures` port and the domain handles
+only the syntactic shape of an address — which is also why storage is lowercase
+(the unique index does case-insensitive comparison) and display is checksummed.
+
+### What is deliberately absent
+
+| Not supported | Why |
+| --- | --- |
+| EIP-1271 smart-contract wallets | Verifying one is an `eth_call` against the contract, and this module has no RPC. Those wallets fail verification and can still be watched. Accepting a signature we cannot check would make the badge a lie. |
+| On-chain balances | Needs an RPC port and the `live \| stale \| unavailable` discipline §3 requires. A balance rendered from a stale read is the same mistake as a stale price. |
+| Anything the link authorises | A proved address grants nothing — no withdrawal route, no limit, no tier. It is a recorded fact, and every consumer of it would need its own decision. |
+
+The WalletConnect relay is optional and off by default: without
+`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` the QR option is not rendered, rather than
+rendered and unable to pair. Browser extensions (EIP-6963) and a wallet's own
+in-app browser need no configuration at all. Its client is loaded by a dynamic
+`import()` inside the click handler, so the largest dependency in the application
+is fetched only by somebody who presses that button.

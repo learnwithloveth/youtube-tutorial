@@ -3,8 +3,8 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { userOwner } from '../../domain/account';
 import { matchesNetwork, requiresGasToken } from '../../domain/asset';
+import { APPROVALS_REQUIRED } from '../../domain/approvals';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
-import { checkDailyLimit, limitsFor, tierFor } from '../../domain/limits';
 import { Withdrawal } from '../../domain/withdrawal';
 import type { LedgerDependencies } from '../ports';
 
@@ -31,8 +31,15 @@ export interface RequestWithdrawalResult {
  * ── The order of the checks is the design ──────────────────────────────────────
  * Every check below is ordered cheapest-first *and* least-revealing-first, and the
  * two happen to agree. Parsing failures cost nothing and disclose nothing; the
- * balance check touches the database; the limit check needs a price. Running them
- * in the other order would mean a malformed amount cost a price lookup.
+ * balance check touches the database. Running them in the other order would mean a
+ * malformed amount cost a database round trip.
+ *
+ * What is left is only what has to be true for the request to be *executable*: a
+ * supported asset on a supported network, an address that belongs to that network,
+ * an amount that parses and is greater than zero, a balance that covers it, and
+ * gas to move it. Every policy ceiling that used to sit alongside them is gone —
+ * there is no per-asset minimum, no daily allowance in USD, and no size above
+ * which a second operator has to sign.
  *
  * ── Nothing moves ──────────────────────────────────────────────────────────────
  * This posts no transfer. It places a *hold*, which reserves the amount plus the
@@ -40,11 +47,13 @@ export interface RequestWithdrawalResult {
  * decide on. A rejection then leaves no trace on the customer's statement, because
  * nothing happened — see `Withdrawal` for why that matters.
  *
- * ── It refuses when it cannot price the asset ──────────────────────────────────
- * The daily limit is denominated in USD, so an unpriceable asset is one whose
- * withdrawal cannot be shown to be within the limit. The choice is to let it
- * through unchecked or to stop, and for money leaving a platform there is only one
- * defensible direction to fail.
+ * ── An unpriceable asset no longer blocks the request ──────────────────────────
+ * It used to: the daily cap was denominated in USD, so a withdrawal with no price
+ * could not be shown to be inside it and was refused. With the cap gone the price
+ * decides nothing, and refusing over a quiet feed would be stopping a withdrawal
+ * for the sake of a check that no longer exists. The valuation is still recorded
+ * when there is one, because the statement and the operator queue read it —
+ * `Withdrawal.valuedAtUsd` is nullable for exactly this case.
  */
 export function createRequestWithdrawal(deps: LedgerDependencies) {
   return async function requestWithdrawal(
@@ -86,10 +95,9 @@ export function createRequestWithdrawal(deps: LedgerDependencies) {
       return err(LedgerErrors.amountInvalid('Enter an amount greater than zero.'));
     }
 
-    const minimum = Money.fromDecimalString(asset.minimumWithdrawal, asset.code, asset.scale);
-    if (amount.compare(minimum) < 0) {
-      return err(LedgerErrors.amountBelowMinimum(asset.minimumWithdrawal, asset.code));
-    }
+    // No per-asset minimum is enforced. `asset.minimumWithdrawal` is still in the
+    // catalogue because the network fee makes a dust withdrawal pointless, but
+    // pointless is the customer's call, not a rule this refuses on.
 
     const owner = userOwner(command.userId);
     const account = await deps.accounts.findOrOpen(owner, asset);
@@ -136,22 +144,10 @@ export function createRequestWithdrawal(deps: LedgerDependencies) {
       }
     }
 
+    // Recorded, not gating. Null is a fine outcome — nothing below reads it to
+    // decide whether the withdrawal may proceed.
     const valuedAtUsd = await deps.prices.valueInUsd(amount);
-    if (valuedAtUsd === null) return err(LedgerErrors.valuationUnavailable(asset.code));
-
-    const limits = limitsFor(tierFor());
     const now = deps.clock.now();
-    const used = await deps.withdrawals.usedSince(command.userId, startOfDayUtc(now));
-
-    const limit = checkDailyLimit(valuedAtUsd, used, limits);
-    if (!limit.allowed) {
-      return err(
-        LedgerErrors.dailyLimitExceeded(
-          limit.remainingUsd.toDecimalString(),
-          limit.capUsd.toDecimalString(),
-        ),
-      );
-    }
 
     const withdrawal = Withdrawal.request({
       id: deps.ids.next(),
@@ -182,21 +178,15 @@ export function createRequestWithdrawal(deps: LedgerDependencies) {
       amount: amount.toDecimalString(),
       fee: fee.toDecimalString(),
       asset: asset.code,
-      approvalsRequired: valuedAtUsd.compare(limits.dualControlUsd) >= 0 ? 2 : 1,
+      approvalsRequired: APPROVALS_REQUIRED,
     });
   };
 }
 
 export type RequestWithdrawal = ReturnType<typeof createRequestWithdrawal>;
 
-/**
- * Midnight UTC before `now`.
- *
- * UTC rather than the customer's zone, and the wallet page says so. A limit that
- * reset at local midnight would reset at a different instant for each customer,
- * which is unenforceable across a platform and trivially gamed by anyone willing
- * to change their timezone.
+/*
+ * `startOfDayUtc` used to live here: the daily allowance reset at midnight UTC and
+ * both this use case and the wallet query needed the same instant. Nothing counts
+ * a day any more, so it is gone with the allowance.
  */
-export function startOfDayUtc(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}

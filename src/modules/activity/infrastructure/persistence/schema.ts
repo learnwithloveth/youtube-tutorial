@@ -57,6 +57,8 @@ export const events = activitySchema.table(
         'price-alert-triggered',
         'visit-started',
         'support-message-sent',
+        'wallet-linked',
+        'wallet-unlinked',
       ],
       // A Drizzle-level union over a `text` column, not a Postgres enum. That is
       // why adding a kind is a type change and not a migration — and why this list
