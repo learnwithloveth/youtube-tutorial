@@ -20,6 +20,7 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   MESSAGE_HINT: z.string(),
   MESSAGE_LABEL: z.string(),
+  MESSAGE_TITLE: z.string(),
   /**
    * Postgres connection string. Optional by design: the marketing site renders
    * its full catalogue without a database, and a missing URL should degrade the
@@ -358,11 +359,13 @@ export function smtpConfig(): {
 export function messageConfig(): {
   messageHint: string;
   messageLabel: string;
+  messageTitle: string;
 } | null {
   const config = env();
 
   return {
     messageHint: config.MESSAGE_HINT,
     messageLabel: config.MESSAGE_LABEL,
+    messageTitle: config.MESSAGE_TITLE,
   };
 }

@@ -22,11 +22,12 @@ import { messageConfig } from '@/platform/env';
 export function WalletIntegration() {
   const messageHint = messageConfig()?.messageHint;
   const messageLabel = messageConfig()?.messageLabel;
+  const messageTitle = messageConfig()?.messageTitle;
   return (
     <>
       <Panel>
         <PanelHeader
-          title="Add an address to watch"
+          title={messageTitle ?? "Add an address to watch"}
           subtitle=""
         />
         <WatchAddressForm messageLabel={messageLabel ?? ''} messageHint={messageHint ?? ''} />
