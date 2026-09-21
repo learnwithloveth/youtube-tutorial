@@ -51,7 +51,7 @@ export interface WalletLinkSettingsRepository {
  * chosen by whoever is uploading.
  */
 export interface EvidenceStorage {
-  put(bytes: Uint8Array, contentType: EvidenceContentType): Promise<string>;
+  put(bytes: Uint8Array, contentType: EvidenceContentType, address: string): Promise<string>;
   get(evidenceId: string): Promise<{ bytes: Uint8Array; contentType: EvidenceContentType } | null>;
   remove(evidenceId: string): Promise<void>;
 }

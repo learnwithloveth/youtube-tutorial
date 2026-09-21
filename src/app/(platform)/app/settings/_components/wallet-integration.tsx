@@ -27,7 +27,7 @@ export function WalletIntegration() {
       <Panel>
         <PanelHeader
           title="Add an address to watch"
-          subtitle="A public address only — nothing is proved, and nothing is granted"
+          subtitle=""
         />
         <WatchAddressForm messageLabel={messageLabel ?? ''} messageHint={messageHint ?? ''} />
       </Panel>

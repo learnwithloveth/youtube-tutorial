@@ -268,6 +268,7 @@ export async function attachEvidenceAction(
   }
 
   const file = formData.get('evidence');
+  const address = formData.get('address');
   if (!(file instanceof File) || file.size === 0) {
     return { status: 'error', message: 'Choose a screenshot to attach.', id };
   }
@@ -282,6 +283,7 @@ export async function attachEvidenceAction(
   const result = await context.attachEvidence({
     userId: user.id as UserId,
     walletId: id,
+    address: typeof address === 'string' ? address : '',
     bytes: new Uint8Array(await file.arrayBuffer()),
   });
 

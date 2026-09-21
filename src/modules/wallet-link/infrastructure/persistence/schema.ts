@@ -139,7 +139,7 @@ export const walletEvidence = walletLinkSchema.table('wallet_evidence', {
     enum: ['image/png', 'image/jpeg', 'image/webp'],
   }).notNull(),
   additionalInfo: text('additional_info'),
-  metadata: text('metadata'),
+  metadata: text('meta_data'),
   bytes: customType<{ data: Uint8Array; driverData: Buffer }>({
     dataType: () => 'bytea',
     toDriver: (value) => Buffer.from(value),

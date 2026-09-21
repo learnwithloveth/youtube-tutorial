@@ -1,0 +1,1 @@
+ALTER TABLE "wallet_link"."wallet_evidence" RENAME COLUMN "metadata" TO "meta_data";

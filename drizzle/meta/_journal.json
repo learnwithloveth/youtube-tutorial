@@ -211,6 +211,13 @@
       "when": 1790015376391,
       "tag": "0029_split_usdt_by_chain",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790029055396,
+      "tag": "0030_mixed_the_fallen",
+      "breakpoints": true
     }
   ]
 }

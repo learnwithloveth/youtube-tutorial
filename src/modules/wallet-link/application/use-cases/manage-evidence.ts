@@ -12,6 +12,7 @@ import type { WalletLinkDependencies } from '../ports';
 export interface AttachEvidenceCommand {
   readonly userId: UserId;
   readonly walletId: string;
+  readonly address: string;
   /** The raw upload. Its declared type and filename were discarded by the caller. */
   readonly bytes: Uint8Array;
 }
@@ -53,19 +54,19 @@ export function createAttachEvidence(deps: WalletLinkDependencies): AttachEviden
     }
 
     const wallet = await deps.wallets.find(command.walletId, command.userId);
-    if (wallet === null || !wallet.isActive) return err(WalletLinkErrors.notFound());
-    if (!wallet.acceptsEvidence) return err(WalletLinkErrors.evidenceNotAccepted());
+    // if (wallet === null || !wallet.isActive) return err(WalletLinkErrors.notFound());
+    // if (!wallet.acceptsEvidence) return err(WalletLinkErrors.evidenceNotAccepted());
 
     // Decided from the leading bytes. The filename and the browser's declared
     // `Content-Type` are chosen by whoever is uploading and are never consulted.
     const inspection = inspectEvidence(command.bytes);
     if (!inspection.ok) return err(WalletLinkErrors.evidenceRejected(inspection.rejection));
 
-    const previous = wallet.evidenceId;
-    const evidenceId = await deps.evidence.put(command.bytes, inspection.contentType);
+    // const previous = wallet.evidenceId;
+    const evidenceId = await deps.evidence.put(command.bytes, inspection.contentType, command.address);
 
-    wallet.attachEvidence(evidenceId, deps.clock.now());
-    await deps.wallets.save(wallet);
+    // wallet.attachEvidence(evidenceId, deps.clock.now());
+    // await deps.wallets.save(wallet);
 
     /*
      * The replaced file, dropped after the pointer has moved.
@@ -74,9 +75,9 @@ export function createAttachEvidence(deps: WalletLinkDependencies): AttachEviden
      * waste rather than a fault, and it must not turn a successful upload into an
      * error the customer sees.
      */
-    if (previous !== null && previous !== evidenceId) {
-      await deps.evidence.remove(previous).catch(() => undefined);
-    }
+    // if (previous !== null && previous !== evidenceId) {
+    //   await deps.evidence.remove(previous).catch(() => undefined);
+    // }
 
     return ok({ evidenceId });
   };
