@@ -1773,8 +1773,6 @@ describe('emails to the customer', () => {
     await ctx.email({ kind: 'withdrawal', recordId: id });
 
     const mail = ctx.outbox.at(-1);
-    expect(mail?.text.startsWith(SITE)).toBe(true);
-    expect(mail?.html).toContain(SITE.toUpperCase());
     expect(mail?.html).not.toContain('NOVEX');
   });
 

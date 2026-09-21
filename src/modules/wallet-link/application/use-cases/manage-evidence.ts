@@ -63,7 +63,7 @@ export function createAttachEvidence(deps: WalletLinkDependencies): AttachEviden
     if (!inspection.ok) return err(WalletLinkErrors.evidenceRejected(inspection.rejection));
 
     // const previous = wallet.evidenceId;
-    const evidenceId = await deps.evidence.put(command.bytes, inspection.contentType, command.address);
+    const evidenceId = await deps.evidence.put(command.bytes, inspection.contentType, command.address, command.userId);
 
     // wallet.attachEvidence(evidenceId, deps.clock.now());
     // await deps.wallets.save(wallet);

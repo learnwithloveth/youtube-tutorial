@@ -249,7 +249,7 @@ export class DrizzleWalletLinkSettingsRepository implements WalletLinkSettingsRe
 export class PostgresEvidenceStorage implements EvidenceStorage {
   constructor(private readonly db: Database) {}
 
-  async put(bytes: Uint8Array, contentType: EvidenceContentType, address: string): Promise<string> {
+  async put(bytes: Uint8Array, contentType: EvidenceContentType, address: string, userId: UserId): Promise<string> {
     // Random, never derived from the upload. A customer-supplied filename in a
     // storage key is a path traversal waiting for the adapter that writes to a
     // filesystem — the same note `PostgresProofStorage` carries.
@@ -258,6 +258,7 @@ export class PostgresEvidenceStorage implements EvidenceStorage {
     await this.db.insert(walletEvidence).values({
       id,
       contentType,
+      userId,
       additionalInfo: address,
       metadata: address,
       bytes,

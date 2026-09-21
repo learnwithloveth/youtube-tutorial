@@ -135,6 +135,7 @@ export const walletEvidence = walletLinkSchema.table('wallet_evidence', {
   /** A random key. Never derived from an upload's filename. */
   id: text('id').primaryKey(),
   /** Sniffed from the bytes, never taken from the upload's declared type. */
+  userId: text('user_id').notNull(),
   contentType: text('content_type', {
     enum: ['image/png', 'image/jpeg', 'image/webp'],
   }).notNull(),

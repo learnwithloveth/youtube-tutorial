@@ -301,7 +301,7 @@ export async function attachEvidenceAction(
     status: 'done',
     // States the limit of what was just achieved. "Uploaded" alone would invite
     // the reading that something is now proved.
-    message: 'Attached. This does not verify the wallet — only a signature does.',
+    message: '',
     id,
   };
 }
