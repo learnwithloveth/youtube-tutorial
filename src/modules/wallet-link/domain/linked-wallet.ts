@@ -71,7 +71,7 @@ export class LinkedWallet {
   private constructor(
     readonly id: string,
     readonly userId: UserId,
-    readonly address: EvmAddress,
+    readonly address: string,
     private chain: number,
     readonly status: LinkStatus,
     readonly connector: LinkConnector,
@@ -95,7 +95,7 @@ export class LinkedWallet {
   static verified(input: {
     id: string;
     userId: UserId;
-    address: EvmAddress;
+    address: string;
     chainId: number;
     connector: LinkConnector;
     label: string | null;
@@ -137,7 +137,7 @@ export class LinkedWallet {
   static watchOnly(input: {
     id: string;
     userId: UserId;
-    address: EvmAddress;
+    address: string;
     chainId: number;
     label: string | null;
     now: Date;
@@ -160,7 +160,7 @@ export class LinkedWallet {
   }
 
   static restore(snapshot: LinkedWalletSnapshot): LinkedWallet {
-    const address = EvmAddress.parse(snapshot.address);
+    const address = snapshot.address;
     if (address === null) {
       // A row that cannot be an address is a corrupt row, not a rejected input.
       // Throwing is correct here: it is a bug or a bad migration, and the caller
@@ -293,7 +293,7 @@ export class LinkedWallet {
     return {
       id: this.id,
       userId: this.userId,
-      address: this.address.value,
+      address: this.address,
       chainId: this.chain,
       status: this.status,
       connector: this.connector,

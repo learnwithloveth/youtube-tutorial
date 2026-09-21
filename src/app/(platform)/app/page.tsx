@@ -86,17 +86,29 @@ export default async function OverviewPage() {
   const balances = new Map(wallet.balances.map((balance) => [balance.asset, balance]));
   const tokens = withdrawableAssets().map((asset) => {
     const balance = balances.get(asset.code);
-    const market = marks.get(asset.code);
+    /*
+     * Looked up by the *quote* symbol, not the asset code.
+     *
+     * There are two tether assets and one tether market. Matching on the code
+     * would leave both permanently unpriced, and an unpriced balance renders as a
+     * dash — so the bug would look like a feed outage on exactly the two rows this
+     * split exists to separate.
+     */
+    const market = marks.get(asset.quoteSymbol);
 
     return {
       code: asset.code,
+      /* `USDT` for both tethers. What tells them apart is the name below it and
+         the chain badge on the coin — the same way a wallet app does it. */
+      ticker: asset.ticker,
       name: balance?.name ?? asset.name,
+      network: asset.networks.length === 1 ? (asset.networks[0]?.id ?? null) : null,
       total: balance?.total ?? '0',
       valueUsd: balance?.valueUsd ?? null,
       // Live only. A stale quote is rendered as no price at all rather than as a
       // figure with an unknown timestamp sitting next to somebody's balance.
       quote: market?.quote.state === 'live' ? market.quote : null,
-      glyph: market?.glyph ?? asset.code.slice(0, 1),
+      glyph: market?.glyph ?? asset.ticker.slice(0, 1),
       hue: market?.hue ?? 'var(--chart-1)',
     };
   });
@@ -275,7 +287,16 @@ export default async function OverviewPage() {
           <ul className="divide-y divide-line/60">
             {tokens.map((token) => (
               <li key={token.code} className="flex items-center gap-3 py-3.5">
-                <AssetMark symbol={token.code} glyph={token.glyph} hue={token.hue} size="md" />
+                {/* The chain badge is the distinction, on the two rows that need
+                    one. `AssetMark` resolves `USDT_ERC20:ethereum` to the badged
+                    mark — see `asset-logos.ts`. */}
+                <AssetMark
+                  symbol={token.code}
+                  glyph={token.glyph}
+                  hue={token.hue}
+                  network={token.network}
+                  size="md"
+                />
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-fg">{token.name}</p>
@@ -308,7 +329,7 @@ export default async function OverviewPage() {
                   {/* The exact ledger amount, shortened for width but never
                       rounded into a different number — see `shortenDecimalString`. */}
                   <p className="mt-0.5 font-mono text-2xs text-fg-subtle">
-                    {shortenDecimalString(token.total)} {token.code}
+                    {shortenDecimalString(token.total)} {token.ticker}
                   </p>
                 </div>
               </li>

@@ -18,8 +18,44 @@
  */
 
 export interface LedgerAsset {
+  /**
+   * The ledger's identity for this asset, and the value stored in every balance,
+   * entry and withdrawal row.
+   *
+   * ── One code per token *per chain* ─────────────────────────────────────────
+   * `USDT_ERC20` and `USDT_TRC20` are two assets here, not one asset with two
+   * networks. They are genuinely different tokens: different contracts on
+   * different chains, not fungible without a bridge, and tether sent to an
+   * Ethereum address over Tron is gone. A single `USDT` code made "add them up"
+   * the default behaviour of every sum in the system — a balance, a portfolio
+   * total, a withdrawal check — and each of those additions asserts a
+   * fungibility that does not exist.
+   *
+   * Separating the code rather than adding a network column to `LedgerAccount`
+   * is what makes combining them unrepresentable rather than merely discouraged:
+   * `Money` carries the code as its currency, and `Transfer.create` already
+   * refuses a set of entries that does not balance *per asset*. Two codes means
+   * the domain cannot mix them even by accident.
+   */
   readonly code: string;
   readonly name: string;
+  /**
+   * What a person calls it — `USDT` for both tethers.
+   *
+   * Display only, and never a key. Two assets may share a ticker, which is
+   * exactly why it cannot be the identity: the row says "Tether (ERC-20)" and
+   * "0 USDT", and the chain badge on the coin says the rest.
+   */
+  readonly ticker: string;
+  /**
+   * The market-data symbol that prices this asset. Defaults to `code`.
+   *
+   * Both tethers are quoted by the one `USDT` instrument, because a price is a
+   * statement about the token's dollar value and not about which chain a
+   * particular unit is sitting on. Splitting the *ledger* asset does not mean
+   * inventing a second price feed for it — see `quoteSymbolOf`.
+   */
+  readonly quoteSymbol?: string;
   /**
    * Decimal places a balance is stored at. The protocol's own precision, not a
    * display choice: 8 for bitcoin because a satoshi is 10^-8 of one.
@@ -74,6 +110,16 @@ export interface AssetNetwork {
    * it is not a substitute for the real thing — see `validateDestination`.
    */
   readonly addressPattern: RegExp;
+}
+
+/**
+ * The market-data symbol to price this asset with.
+ *
+ * A function rather than a required field, so the common case — an asset quoted
+ * under its own code — stays a catalogue entry with nothing extra on it.
+ */
+export function quoteSymbolOf(asset: LedgerAsset): string {
+  return asset.quoteSymbol ?? asset.code;
 }
 
 /** True when the address looks like it belongs on this network. */

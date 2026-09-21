@@ -111,7 +111,14 @@ async function valueBalances(
 
       return {
         asset: account.asset,
+        // Falls back to the code when the catalogue has lost an asset somebody
+        // still holds. A balance must render even when its definition has been
+        // removed from under it — that is a row somebody needs to see, not hide.
+        ticker: asset?.ticker ?? account.asset,
         name: asset?.name ?? account.asset,
+        // One network means the chain is a property of the holding and is shown
+        // on it. Several means the question has no single answer here.
+        network: asset?.networks.length === 1 ? (asset.networks[0]?.id ?? null) : null,
         scale: account.balance.scale,
         total: account.balance.toDecimalString(),
         available: account.available.toDecimalString(),

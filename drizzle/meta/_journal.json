@@ -204,6 +204,13 @@
       "when": 1790015375391,
       "tag": "0028_concerned_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790015376391,
+      "tag": "0029_split_usdt_by_chain",
+      "breakpoints": true
     }
   ]
 }

@@ -1,15 +1,12 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Check, Clock, X } from 'lucide-react';
-
-import { BRAND } from '@/modules/content';
 import type { ReceiptDto } from '@/modules/ledger';
 import { requireUser } from '@/server/auth';
 import { getReceiptFor } from '@/server/ledger';
 import { cn } from '@/shared/lib/cn';
 import { formatDate, formatTimestamp } from '@/shared/lib/format';
 
-import { PrintButton } from './_components/print-button';
 import './receipt.css';
 
 /**
@@ -107,27 +104,16 @@ export default async function ReceiptPage({
 
   return (
     <main className="mx-auto max-w-lg px-5 py-10 print:max-w-none print:px-0 print:py-0">
-      <div className="mb-6 flex items-start justify-between gap-4 print:hidden">
-        <p className="text-xs leading-relaxed text-fg-subtle">
-          Printed from your {BRAND.name} account. This is a record of a movement, not a tax
-          invoice.
-        </p>
-        <PrintButton />
-      </div>
+      
 
       <article
-        // The hook the print stylesheet hangs its paper colours on. Scoped to the
-        // document rather than declared at `:root`, so nothing else in the app
-        // inherits a print theme it was not designed for.
-        data-receipt
+         data-receipt
         className="overflow-hidden rounded-xl border border-line bg-bg-elev print:rounded-none print:border-0"
       >
         {/* ── The hero ─────────────────────────────────────────────────────── */}
         <div className="px-6 pb-8 pt-8 text-center sm:px-10">
-          {/* Issuer and document type on one line. Both belong on a printed
-              document and neither earns a line of its own above a title. */}
-          <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-            {BRAND.name} <span aria-hidden>·</span> {outcome.document}
+           <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-fg-subtle">
+             {outcome.document}
           </p>
 
           <h1 className="mt-5 text-xl font-semibold text-fg">
@@ -141,11 +127,7 @@ export default async function ReceiptPage({
           ) : null}
 
           <p
-            // `data-numeric` for tabular figures and a slashed zero — the house
-            // rule for any number on a surface, and on a document the slash is
-            // what separates a zero from an O at arm's length. `font-sans` wins
-            // back the display face from it: the figure is a headline, not code.
-            data-numeric
+           data-numeric
             className="mt-9 font-sans text-4xl font-semibold leading-tight tracking-tight text-fg sm:text-5xl"
           >
             <span className="break-words">{receipt.amount}</span>{' '}

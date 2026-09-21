@@ -38,6 +38,10 @@ export type {
 } from './application/use-cases/send-receipt';
 export type { CustomerDirectory, ReceiptSender } from './application/ports';
 
-export { LEDGER_ASSETS } from './infrastructure/catalogue/assets';
+export {
+  isRetiredAssetCode,
+  LEDGER_ASSETS,
+  quoteSymbolForAsset,
+} from './infrastructure/catalogue/assets';
 export { getRiskBoard } from './application/queries/risk-signals';
 export type { DecideRiskSignalCommand } from './application/use-cases/decide-risk-signal';

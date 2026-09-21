@@ -79,13 +79,7 @@ export function WalletIntegrationGate({
                 anything.
               </span>
             </li>
-            <li className="flex items-start gap-2.5">
-              <KeyRound className="mt-0.5 size-4 shrink-0 text-warn" />
-              <span className="text-fg">
-                Novex will never ask for your recovery phrase, seed words or private key
-                &mdash; not for this, and not for anything else.
-              </span>
-            </li>
+           
           </ul>
 
           {enableState.status === 'error' ? (

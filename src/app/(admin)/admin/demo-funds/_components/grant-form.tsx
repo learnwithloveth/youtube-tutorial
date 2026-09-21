@@ -91,7 +91,9 @@ export function GrantForm({
       >
         {assets.map((option) => (
           <option key={option.code} value={option.code}>
-            {option.code}
+            {/* The operator picks by name. "USDT" alone does not say which chain,
+                and this form credits a real ledger account. */}
+            {option.name}
           </option>
         ))}
       </select>

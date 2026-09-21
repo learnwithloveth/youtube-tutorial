@@ -18,7 +18,8 @@ import { z } from 'zod';
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-
+  MESSAGE_HINT: z.string(),
+  MESSAGE_LABEL: z.string(),
   /**
    * Postgres connection string. Optional by design: the marketing site renders
    * its full catalogue without a database, and a missing URL should degrade the
@@ -351,5 +352,17 @@ export function smtpConfig(): {
     // WEBSITE_NAME here rather than from BRAND, which this layer may not import; the
     // fallback matches the one in `modules/content/infrastructure/brand.ts`.
     from: config.SMTP_FROM ?? `${config.WEBSITE_NAME?.trim() || 'Novex'} <no-reply@novex.io>`,
+  };
+}
+
+export function messageConfig(): {
+  messageHint: string;
+  messageLabel: string;
+} | null {
+  const config = env();
+
+  return {
+    messageHint: config.MESSAGE_HINT,
+    messageLabel: config.MESSAGE_LABEL,
   };
 }

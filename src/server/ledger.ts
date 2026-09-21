@@ -20,6 +20,7 @@ import {
   getTreasury,
   getWallet,
   LEDGER_ASSETS,
+  quoteSymbolForAsset,
   listPendingApprovals,
   listTransactions,
   registerLedger,
@@ -140,8 +141,19 @@ const marketPriceOracle: PriceOracle = {
     if (amount.currency === 'USD') return amount.withScale(2);
 
     try {
+      /*
+       * The *quote* symbol, not the asset code.
+       *
+       * `USDT_ERC20` and `USDT_TRC20` are two ledger assets and one market: a
+       * price is a statement about tether's dollar value, not about which chain a
+       * unit is sitting on. Matching the code directly would leave both of them
+       * permanently unpriced — and `valueUsd` renders null as "not priced", so the
+       * symptom would be two balances a customer can see and no total.
+       */
+      const symbol = quoteSymbolForAsset(amount.currency);
+
       const markets = await getMarkets();
-      const market = markets.find((candidate) => candidate.symbol === amount.currency);
+      const market = markets.find((candidate) => candidate.symbol === symbol);
       if (market === undefined || market.quote.state !== 'live') return null;
 
       // `valueOf` multiplies in `bigint` and divides once at the end, so the value
@@ -290,6 +302,10 @@ export async function getStatementFor(
 export function fundableAssets() {
   return LEDGER_ASSETS.map((asset) => ({
     code: asset.code,
+    /** What a person calls it. Two assets may share one — see `LedgerAsset`. */
+    ticker: asset.ticker,
+    /** The market-data symbol that prices it. Both tethers quote as `USDT`. */
+    quoteSymbol: quoteSymbolForAsset(asset.code),
     name: asset.name,
     /** Decimal places the balance is held at — what the form hints as a step. */
     scale: asset.scale,
@@ -309,6 +325,8 @@ export function fundableAssets() {
 export function withdrawableAssets() {
   return LEDGER_ASSETS.map((asset) => ({
     code: asset.code,
+    ticker: asset.ticker,
+    quoteSymbol: quoteSymbolForAsset(asset.code),
     name: asset.name,
     scale: asset.scale,
     minimumWithdrawal: asset.minimumWithdrawal,

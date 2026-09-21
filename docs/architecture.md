@@ -751,6 +751,43 @@ Deposit addresses come from configuration (`DEPOSIT_ADDRESS_*`) and are absent b
 default — the panel warns rather than showing a plausible-looking string, because
 an address that is not ours is a customer's funds sent nowhere.
 
+### One asset per token *per chain*
+
+`USDT` was one catalogue row with two networks, and that made it one balance. A
+customer with 100 on Tron and 100 on Ethereum had "200 USDT" — a number that
+cannot be withdrawn, cannot be sent anywhere and describes no position anybody
+holds. They are different contracts on unconnected chains; moving value between
+them needs a bridge and a counterparty.
+
+The catalogue now lists `USDT_ERC20` and `USDT_TRC20` as separate assets, each
+with one network. The alternative — adding a network column to `LedgerAccount` —
+was rejected because it leaves the pooling *representable* and merely discouraged,
+so every sum in the system has to remember to group by chain. Separate codes make
+it unrepresentable: `Money` carries the code as its currency and `Transfer.create`
+already refuses a set of entries that does not balance **per asset**, so a transfer
+taking from one tether and giving to the other throws in the domain.
+
+Three things fall out of it:
+
+- **A code is no longer a market symbol.** Two tether assets are quoted by one
+  tether instrument, because a price is a statement about the token's dollar value
+  and not about which chain a unit sits on. `quoteSymbolOf` is the mapping, and a
+  screen that still matched on the code would render both balances "not priced".
+- **A code is no longer what a screen prints.** Nobody says "USDT_ERC20", so
+  `ticker` (`USDT` for both) is display and `name` (`Tether (ERC-20)`) carries the
+  chain. Where two rows would otherwise read alike — a filter chip, a withdrawal
+  asset picker — the *name* is shown, because those are the controls where picking
+  the wrong chain is silent.
+- **The bare ticker is ambiguous, not unknown.** `USDT` is refused with a message
+  naming both options rather than "unsupported", since anything still sending it is
+  a caller that has not been updated rather than one asking for something absent.
+
+Existing rows were split by `0029_split_usdt_by_chain.sql`. Withdrawals and deposit
+claims record their network, so those are decidable and were rewritten. Accounts
+and entries do not, so the migration **refuses** rather than guessing: a combined
+balance cannot be divided into two chains from the row itself, and choosing one
+would assign somebody's money to a chain it may not be on.
+
 ### The asset catalogue is code
 
 An asset's **storage scale** is not data that changes; it is the definition of what

@@ -26,6 +26,7 @@ import type { UserId } from '@/shared/kernel/ids';
 
 import { PageHeader, Panel, PanelHeader } from '../../../_console/components/page-header';
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
+import { assetDisplayMap, unknownAsset } from '../_lib/asset-display';
 import { usd } from '../_lib/format-usd';
 import { AllocationDonut } from './_components/allocation-donut';
 
@@ -73,6 +74,9 @@ export default async function PortfolioPage() {
   ]);
 
   const marks = new Map(markets.map((m) => [m.symbol, m]));
+  /* Ledger code → how to print it and which market prices it. Two tether assets
+     share one market, so the code is no longer a market symbol — see the module. */
+  const display = assetDisplayMap();
   const held = wallet.balances.filter((balance) => Number(balance.total) > 0);
 
   const priced = held.filter((balance) => balance.valueUsd !== null);
@@ -84,7 +88,9 @@ export default async function PortfolioPage() {
 
   const slices: DonutSlice[] = priced.map((balance) => ({
     key: balance.asset,
-    label: balance.asset,
+    /* `USDT · ethereum`, never a bare `USDT`: two slices sharing one label would
+       read as one position split in half rather than as two separate holdings. */
+    label: balance.network === null ? balance.ticker : `${balance.ticker} · ${balance.network}`,
     value: Number(balance.valueUsd),
     share: pricedTotal > 0 ? Number(balance.valueUsd) / pricedTotal : 0,
   }));
@@ -221,7 +227,8 @@ export default async function PortfolioPage() {
               </thead>
               <tbody>
                 {held.map((balance) => {
-                  const market = marks.get(balance.asset);
+                  const shown = display.get(balance.asset) ?? unknownAsset(balance.asset);
+                  const market = marks.get(shown.quoteSymbol);
                   const quote = market?.quote.state === 'live' ? market.quote : null;
                   const share =
                     balance.valueUsd !== null && pricedTotal > 0
@@ -234,12 +241,13 @@ export default async function PortfolioPage() {
                         <span className="flex items-center gap-2.5">
                           <AssetMark
                             symbol={balance.asset}
-                            glyph={market?.glyph ?? balance.asset.slice(0, 1)}
+                            glyph={market?.glyph ?? balance.ticker.slice(0, 1)}
                             hue={market?.hue ?? 'var(--chart-1)'}
+                            network={balance.network}
                             size="sm"
                           />
                           <span className="min-w-0">
-                            <span className="block text-sm text-fg">{balance.asset}</span>
+                            <span className="block text-sm text-fg">{balance.ticker}</span>
                             <span className="block text-2xs text-fg-subtle">
                               {balance.name}
                             </span>
@@ -291,7 +299,7 @@ export default async function PortfolioPage() {
 
             {unpriced.length > 0 ? (
               <p className="mt-4 border-t border-line pt-4 text-xs leading-relaxed text-fg-subtle">
-                {unpriced.map((balance) => balance.asset).join(', ')}{' '}
+                {unpriced.map((balance) => balance.name).join(', ')}{' '}
                 {unpriced.length === 1 ? 'has' : 'have'} no live quote, so{' '}
                 {unpriced.length === 1 ? 'it is' : 'they are'} excluded from the total
                 and the shares rather than counted as zero.
@@ -329,8 +337,14 @@ export default async function PortfolioPage() {
                       arrow says nothing about it. */}
                   <AssetMark
                     symbol={line.asset}
-                    glyph={marks.get(line.asset)?.glyph ?? line.asset.slice(0, 1)}
-                    hue={marks.get(line.asset)?.hue ?? 'var(--chart-1)'}
+                    glyph={
+                      marks.get(display.get(line.asset)?.quoteSymbol ?? line.asset)?.glyph ??
+                      line.asset.slice(0, 1)
+                    }
+                    hue={
+                      marks.get(display.get(line.asset)?.quoteSymbol ?? line.asset)?.hue ??
+                      'var(--chart-1)'
+                    }
                     network={line.network}
                     size="xs"
                   />
@@ -359,7 +373,8 @@ export default async function PortfolioPage() {
                       line.direction === 'in' ? 'text-up' : 'text-fg',
                     )}
                   >
-                    {shortenDecimalString(line.delta)} {line.asset}
+                    {shortenDecimalString(line.delta)}{' '}
+                    {display.get(line.asset)?.ticker ?? line.asset}
                   </span>
                 </li>
               ))}

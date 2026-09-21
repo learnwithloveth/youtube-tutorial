@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { LEDGER_ASSETS } from '@/modules/ledger/server';
 import { env } from '@/platform/env';
 import { logger } from '@/platform/observability/logger';
 
@@ -37,16 +38,43 @@ export interface DepositAddress {
   readonly demo: boolean;
 }
 
+/** Ledger code → ticker, so a variable name is spelled the way a person would. */
+const TICKERS: ReadonlyMap<string, string> = new Map(
+  LEDGER_ASSETS.map((asset) => [asset.code, asset.ticker]),
+);
+
+/** Ledger code → the networks that asset actually travels on. */
+const ROUTES: ReadonlyMap<string, ReadonlySet<string>> = new Map(
+  LEDGER_ASSETS.map((asset) => [asset.code, new Set(asset.networks.map((n) => n.id))]),
+);
+
 /**
  * The environment variable for one asset-network pair.
  *
- * `DEPOSIT_ADDRESS_<ASSET>_<NETWORK>`, e.g. `DEPOSIT_ADDRESS_USDT_TRON`. Spelled
+ * `DEPOSIT_ADDRESS_<TICKER>_<NETWORK>`, e.g. `DEPOSIT_ADDRESS_USDT_TRON`. Spelled
  * out rather than parsed from a single JSON blob because a malformed blob fails
  * for every asset at once, and because one variable per pair is greppable in a
  * deployment's configuration.
+ *
+ * ── The ticker, not the ledger code ───────────────────────────────────────────
+ * The ledger calls its two tethers `USDT_ERC20` and `USDT_TRC20`, which would give
+ * `DEPOSIT_ADDRESS_USDT_ERC20_ETHEREUM` — a name that says Ethereum twice and
+ * makes a deployment's configuration harder to read for no gain. The ticker plus
+ * the network is already unique and already how everyone writes it:
+ * `DEPOSIT_ADDRESS_USDT_ETHEREUM` and `DEPOSIT_ADDRESS_USDT_TRON`.
+ *
+ * That uniqueness is not a coincidence and is not luck. Two assets share a ticker
+ * precisely *because* they are the same token on different chains — so they cannot
+ * also share a network, or they would be the same asset. A test in the ledger's
+ * catalogue pins the invariant, because the day it breaks two assets would
+ * silently read one address, and an address for the wrong chain is funds gone.
+ *
+ * An unlisted code falls back to itself, so a catalogue and a configuration that
+ * have drifted produce "no address configured" rather than a silent substitution.
  */
 function variableFor(asset: string, network: string): string {
-  return `DEPOSIT_ADDRESS_${asset.toUpperCase()}_${network.toUpperCase()}`;
+  const ticker = TICKERS.get(asset.trim().toUpperCase()) ?? asset;
+  return `DEPOSIT_ADDRESS_${ticker.toUpperCase()}_${network.toUpperCase()}`;
 }
 
 function mode(): DepositAddressMode {
@@ -62,6 +90,30 @@ function mode(): DepositAddressMode {
  * address is available and tell them not to send anything.
  */
 export function depositAddressFor(asset: string, network: string): DepositAddress | null {
+  /*
+   * A pairing the catalogue does not offer is refused before anything is read.
+   *
+   * Since the variable name is built from the *ticker*, asking for `USDT_ERC20`
+   * on Tron would look up `DEPOSIT_ADDRESS_USDT_TRON` and hand back the Tron
+   * address for the Ethereum asset. No caller does this today — the wallet page
+   * only ever asks for an asset's own networks — but the failure it would cause
+   * is a customer sending ERC-20 tether to a Tron address, which is not late
+   * money, it is gone money. That is worth a guard rather than a convention.
+   *
+   * An unlisted code is allowed through: a configuration that is ahead of the
+   * catalogue should degrade to "no address", which the lookup below already does.
+   */
+  const routes = ROUTES.get(asset.trim().toUpperCase());
+  if (routes !== undefined && !routes.has(network.trim().toLowerCase())) {
+    logger.warn({
+      event: 'deposit_address_route_refused',
+      module: 'ledger',
+      asset,
+      network,
+    });
+    return null;
+  }
+
   const configured = process.env[variableFor(asset, network)]?.trim();
   if (configured === undefined || configured.length === 0) return null;
 

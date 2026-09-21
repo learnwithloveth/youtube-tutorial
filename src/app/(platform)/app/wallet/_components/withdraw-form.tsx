@@ -125,7 +125,10 @@ export function WithdrawForm({
                 hue="var(--chart-1)"
                 size="xs"
               />
-              {option.code}
+              {/* The name, not the code. Two chips reading "USDT" would be the
+                  one control where picking the wrong chain is invisible, and
+                  `USDT_ERC20` is not a thing anybody says out loud. */}
+              {option.name}
             </button>
           ))}
         </div>
@@ -171,7 +174,7 @@ export function WithdrawForm({
               name="destination"
               autoComplete="off"
               spellCheck={false}
-              placeholder={`${assetCode} address on ${network?.label ?? ''}`}
+              placeholder={`${asset?.ticker ?? assetCode} address on ${network?.label ?? ''}`}
               className="h-12 w-full rounded-lg border border-line bg-surface px-4 font-mono text-sm text-fg placeholder:text-fg-subtle focus:border-line-strong focus:outline-none"
             />
           </label>
@@ -181,7 +184,8 @@ export function WithdrawForm({
               Amount
               {balance ? (
                 <span className="tabular-nums">
-                  {shortenDecimalString(balance.available)} {assetCode} available
+                  {shortenDecimalString(balance.available)} {asset?.ticker ?? assetCode}{' '}
+                  available
                 </span>
               ) : null}
             </span>
@@ -201,7 +205,7 @@ export function WithdrawForm({
                 dust should be able to see it swallow the transfer. */}
             {asset && network ? (
               <span className="mt-1.5 block text-2xs text-fg-subtle">
-                {shortenDecimalString(network.fee)} {asset.code} network fee
+                {shortenDecimalString(network.fee)} {asset.ticker} network fee
               </span>
             ) : null}
           </label>

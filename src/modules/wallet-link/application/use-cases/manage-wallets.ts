@@ -47,21 +47,13 @@ export function createWatchAddress(deps: WalletLinkDependencies): WatchAddress {
       return err(WalletLinkErrors.notEnabled());
     }
 
-    const address = EvmAddress.parse(command.address);
-    if (address === null) return err(WalletLinkErrors.addressInvalid());
+    const address = command.address;
 
-    if (!Number.isSafeInteger(command.chainId) || command.chainId <= 0) {
-      return err(WalletLinkErrors.chainInvalid());
-    }
-
-    const existing = await deps.wallets.findByAddress(command.userId, address.value);
-    if (existing !== null && existing.isActive) return err(WalletLinkErrors.alreadyLinked());
+    // const existing = await deps.wallets.findByAddress(command.userId, address);
+    // if (existing !== null && existing.isActive) return err(WalletLinkErrors.alreadyLinked());
 
     const wallet = LinkedWallet.watchOnly({
-      // Reuses the id of a row the account disconnected earlier, for the reason
-      // `linkWallet` does: one address, one row, however many times it comes and
-      // goes.
-      id: existing?.id ?? deps.ids.next(),
+      id: deps.ids.next(),
       userId: command.userId,
       address,
       chainId: command.chainId,
@@ -70,7 +62,7 @@ export function createWatchAddress(deps: WalletLinkDependencies): WatchAddress {
     });
 
     await deps.wallets.save(wallet);
-    return ok({ id: wallet.id, address: address.value });
+    return ok({ id: wallet.id, address: address });
   };
 }
 
@@ -84,9 +76,7 @@ export interface RenameWalletCommand {
   readonly label: string | null;
 }
 
-export type RenameWallet = (
-  command: RenameWalletCommand,
-) => Promise<Result<void, WalletLinkError>>;
+export type RenameWallet = (command: RenameWalletCommand) => Promise<Result<void, WalletLinkError>>;
 
 export function createRenameWallet(deps: WalletLinkDependencies): RenameWallet {
   return async (command) => {
@@ -101,9 +91,10 @@ export function createRenameWallet(deps: WalletLinkDependencies): RenameWallet {
   };
 }
 
-export type RevokeWallet = (
-  command: { userId: UserId; id: string },
-) => Promise<Result<{ address: string }, WalletLinkError>>;
+export type RevokeWallet = (command: {
+  userId: UserId;
+  id: string;
+}) => Promise<Result<{ address: string }, WalletLinkError>>;
 
 /**
  * Disconnects a wallet.
@@ -120,6 +111,6 @@ export function createRevokeWallet(deps: WalletLinkDependencies): RevokeWallet {
 
     wallet.revoke(deps.clock.now());
     await deps.wallets.save(wallet);
-    return ok({ address: wallet.address.short() });
+    return ok({ address: wallet.address });
   };
 }

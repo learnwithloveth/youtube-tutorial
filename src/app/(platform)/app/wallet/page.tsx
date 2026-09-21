@@ -16,6 +16,7 @@ import { PageHeader, Panel, PanelHeader } from '../../../_console/components/pag
 import { TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { usd } from '../_lib/format-usd';
 import { ReceiptLink } from '../_components/receipt-link';
+import { assetDisplayMap, unknownAsset } from '../_lib/asset-display';
 import { networkLabelFor, networkLabels } from '../_lib/network-label';
 import { CUSTOMER_STATUS } from '../_lib/record-status';
 import { WithdrawForm } from './_components/withdraw-form';
@@ -100,6 +101,15 @@ export default async function WalletPage() {
     getInstruments(),
   ]);
   const marks = new Map(instruments.map((i) => [i.symbol, { glyph: i.glyph, hue: i.hue }]));
+
+  /* Ledger code → ticker, chain, and the market symbol that prices it. Two tether
+     assets share one tether market, so a code is no longer a market symbol and a
+     direct `marks.get(code)` would find nothing for either of them. */
+  const display = assetDisplayMap();
+  const markFor = (code: string) =>
+    marks.get((display.get(code) ?? unknownAsset(code)).quoteSymbol);
+  const tickerFor = (code: string) => (display.get(code) ?? unknownAsset(code)).ticker;
+
 
   /*
    * Only what is still going on, plus anything refused.
@@ -218,13 +228,13 @@ export default async function WalletPage() {
                           is worth less than saying *which USDT this is*. */}
                       <AssetMark
                         symbol={claim.asset}
-                        glyph={marks.get(claim.asset)?.glyph ?? claim.asset.slice(0, 1)}
-                        hue={marks.get(claim.asset)?.hue ?? 'var(--chart-1)'}
+                        glyph={markFor(claim.asset)?.glyph ?? claim.asset.slice(0, 1)}
+                        hue={markFor(claim.asset)?.hue ?? 'var(--chart-1)'}
                         network={claim.network}
                         size="xs"
                       />
                       <span className="font-mono text-sm text-fg">
-                        {shortenDecimalString(claim.claimedAmount)} {claim.asset}
+                        {shortenDecimalString(claim.claimedAmount)} {tickerFor(claim.asset)}
                       </span>
                       <span className="text-2xs text-fg-subtle">
                         {networkLabelFor(labels, claim.asset, claim.network)}
@@ -288,13 +298,13 @@ export default async function WalletPage() {
                         gone. It was rendering as the raw id next to a generic clock. */}
                     <AssetMark
                       symbol={withdrawal.asset}
-                      glyph={marks.get(withdrawal.asset)?.glyph ?? withdrawal.asset.slice(0, 1)}
-                      hue={marks.get(withdrawal.asset)?.hue ?? 'var(--chart-1)'}
+                      glyph={markFor(withdrawal.asset)?.glyph ?? withdrawal.asset.slice(0, 1)}
+                      hue={markFor(withdrawal.asset)?.hue ?? 'var(--chart-1)'}
                       network={withdrawal.network}
                       size="xs"
                     />
                     <span className="font-mono text-sm text-fg">
-                      {shortenDecimalString(withdrawal.amount)} {withdrawal.asset}
+                      {shortenDecimalString(withdrawal.amount)} {tickerFor(withdrawal.asset)}
                     </span>
                     <span className="text-2xs text-fg-subtle">
                       {networkLabelFor(labels, withdrawal.asset, withdrawal.network)} · to{' '}
@@ -349,12 +359,12 @@ export default async function WalletPage() {
                         <span className="flex items-center gap-2.5">
                           <AssetMark
                             symbol={balance.asset}
-                            glyph={marks.get(balance.asset)?.glyph ?? balance.asset.slice(0, 1)}
-                            hue={marks.get(balance.asset)?.hue ?? 'var(--chart-1)'}
+                            glyph={markFor(balance.asset)?.glyph ?? balance.asset.slice(0, 1)}
+                            hue={markFor(balance.asset)?.hue ?? 'var(--chart-1)'}
                             size="sm"
                           />
                           <span className="min-w-0">
-                            <span className="block text-sm text-fg">{balance.asset}</span>
+                            <span className="block text-sm text-fg">{balance.ticker}</span>
                             <span className="block text-2xs text-fg-subtle">{balance.name}</span>
                           </span>
                         </span>

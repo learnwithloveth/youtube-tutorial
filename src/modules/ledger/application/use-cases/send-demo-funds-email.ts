@@ -5,36 +5,6 @@ import type { UserId } from '@/shared/kernel/ids';
 import { LedgerErrors, type LedgerError } from '../../domain/errors';
 import type { LedgerDependencies } from '../ports';
 
-/**
- * Tells a student their account has been funded for the workshop.
- *
- * ── Why this is not a receipt, and does not look like one ─────────────────────
- * `send-receipt.ts` renders one document for deposits and withdrawals, from a
- * stored record, over a `ReceiptDto`. This is not that document and must not be
- * mistaken for it. A receipt attests that money moved; the whole point here is
- * that none did, and a message with a green tick and the word "Completed" under
- *
- * So the copy says what it is in the subject line, in the first sentence of the
- * body, and again in the footnote. A student who reads only the subject still
- * knows. The visual language differs too — no outcome mark, no "Reference" row
- * styled like an invoice — because a message that looks like a receipt is read as
- * one whatever the words say.
- *
- * ── It is told the facts rather than re-reading them ──────────────────────────
- * The other direction would be more consistent with `sendTransactionEmail`, which
- * re-reads its record on the grounds that a decision may have moved on between the
- * action and the message. Nothing can move on here: a grant is unconditional, it
- * has just committed, and there is no decision anywhere in it to drift. Re-reading
- * would mean adding a "fetch one transfer" query to the repository for the sole
- * benefit of an email, which is more surface than the consistency is worth.
- *
- * ── Best effort, and the caller is told plainly ───────────────────────────────
- * A failed send is a message nobody received, not a grant that did not happen. The
- * funds are on the account either way, so this returns the failure as a value and
- * the console reports both halves separately — "funded, but the email did not go"
- * is the honest sentence, and it is one an operator can act on.
- */
-
 export interface SendDemoFundsEmailCommand {
   readonly userId: UserId;
   readonly asset: string;
@@ -158,13 +128,8 @@ function htmlFor(view: DemoFundsView): string {
   const row = (label: string, value: string, mono = false): string =>
     `<tr><td style="padding:8px 0;color:#4a4a4a;border-top:1px solid #eee">${escape(label)}</td>` +
     `<td style="padding:8px 0;text-align:right;border-top:1px solid #eee;${mono ? "font-family:ui-monospace,Menlo,monospace;font-size:12px;" : ''}word-break:break-all">${escape(value)}</td></tr>`;
-
-  // The site's name, not a fixed brand: a deployment names itself through
-  // WEBSITE_NAME, and mail signed with a different name from the site it came
-  // from looks like phishing.
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#000">
   <div style="text-align:center;padding:24px 0 20px">
-    <p style="margin:0;font-size:11px;letter-spacing:0.18em;color:#4a4a4a;font-weight:600">${escape(view.siteName.toUpperCase())}</p>
     <h1 style="margin:18px 0 0;font-size:18px;font-weight:600">New Deposit</h1>
     <p style="margin:24px 0 0;font-size:34px;font-weight:600;word-break:break-word">${escape(`${view.amount} ${view.asset}`)}</p>
     <p style="margin:10px 0 0;color:#4a4a4a;font-size:13px">${escape(view.networkLabel)}</p>

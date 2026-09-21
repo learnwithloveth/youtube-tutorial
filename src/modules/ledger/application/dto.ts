@@ -10,8 +10,27 @@ import type { WithdrawalStatus } from '../domain/withdrawal';
  */
 
 export interface BalanceDto {
+  /**
+   * The ledger's asset code — `USDT_ERC20`, not `USDT`.
+   *
+   * This is the identity, and two rows never share it. It is what a screen keys
+   * on and what a withdrawal names; it is deliberately *not* what a screen prints
+   * as a unit, because nobody says "USDT_ERC20". See `ticker`.
+   */
   readonly asset: string;
+  /** What a person calls it: `USDT` for both tethers. Display only. */
+  readonly ticker: string;
+  /** `Tether (ERC-20)`. Carries the chain, because the ticker cannot. */
   readonly name: string;
+  /**
+   * The single chain this asset lives on, where it has one.
+   *
+   * Null for an asset that travels several routes — bitcoin on-chain and over
+   * Lightning is one balance, because it is one coin and the two are
+   * interchangeable. A token that exists as separate contracts on separate chains
+   * is not, which is why those are separate assets and this is set.
+   */
+  readonly network: string | null;
   readonly scale: number;
   /** Everything held, including anything reserved. */
   readonly total: string;
@@ -73,7 +92,11 @@ export interface WithdrawalDto {
 }
 
 export interface AssetOptionDto {
+  /** The ledger code — `USDT_ERC20`. What a form submits and a row stores. */
   readonly code: string;
+  /** What a person calls it — `USDT`. What a form prints beside an amount. */
+  readonly ticker: string;
+  /** `Tether (ERC-20)`. The chain is in here, because the ticker cannot carry it. */
   readonly name: string;
   readonly scale: number;
   readonly minimumWithdrawal: string;

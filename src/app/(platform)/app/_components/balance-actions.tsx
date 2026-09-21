@@ -44,10 +44,10 @@ const ACTIONS: readonly {
     hint: 'Request a withdrawal',
   },
   {
-    label: 'Markets',
-    href: '/app/trade',
+    label: 'Portfolio',
+    href: '/app/portfolio',
     icon: CandlestickChart,
-    hint: 'Live prices',
+    hint: 'Portfolio performance and market data',
   },
   {
     label: 'History',

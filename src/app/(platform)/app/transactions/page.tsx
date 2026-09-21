@@ -25,6 +25,7 @@ import { PageHeader, Panel, PanelHeader } from '../../../_console/components/pag
 import { EmptyRow, TableShell, Td, Th, Tr } from '../../../_console/components/table';
 import { ReceiptLink } from '../_components/receipt-link';
 import { TxHash } from '../_components/tx-hash';
+import { assetDisplayMap, unknownAsset } from '../_lib/asset-display';
 import { networkLabelFor, networkLabels } from '../_lib/network-label';
 import { CUSTOMER_STATUS } from '../_lib/record-status';
 
@@ -120,6 +121,14 @@ export default async function TransactionsPage({
   const instruments = await getInstruments();
   const marks = new Map(instruments.map((i) => [i.symbol, { glyph: i.glyph, hue: i.hue }]));
 
+  /* Ledger code → ticker and the market symbol that prices it. Two tether assets
+     share one tether market, so a code is no longer a market symbol. */
+  const display = assetDisplayMap();
+  const markFor = (code: string) =>
+    marks.get((display.get(code) ?? unknownAsset(code)).quoteSymbol);
+  const tickerFor = (code: string) => (display.get(code) ?? unknownAsset(code)).ticker;
+
+
   const pages = Math.max(Math.ceil(statement.total / PAGE_SIZE), 1);
   const incoming = statement.lines.filter((line) => line.direction === 'in').length;
 
@@ -148,7 +157,7 @@ export default async function TransactionsPage({
           label="Movements"
           value={String(statement.total)}
           delta={{
-            value: asset ? `filtered to ${asset}` : 'across all assets',
+            value: asset ? `filtered to ${tickerFor(asset)}` : 'across all assets',
             direction: 'flat',
             period: '',
           }}
@@ -188,14 +197,14 @@ export default async function TransactionsPage({
                       network a request is on is what the reader came to check. */}
                   <AssetMark
                     symbol={record.asset}
-                    glyph={marks.get(record.asset)?.glyph ?? record.asset.slice(0, 1)}
-                    hue={marks.get(record.asset)?.hue ?? 'var(--chart-1)'}
+                    glyph={markFor(record.asset)?.glyph ?? record.asset.slice(0, 1)}
+                    hue={markFor(record.asset)?.hue ?? 'var(--chart-1)'}
                     network={record.network}
                     size="xs"
                   />
                   <span className="min-w-0">
                     <span data-numeric className="block font-mono text-sm text-fg">
-                      {shortenDecimalString(record.settledAmount ?? record.amount)} {record.asset}
+                      {shortenDecimalString(record.settledAmount ?? record.amount)} {tickerFor(record.asset)}
                     </span>
                     <span className="block text-2xs text-fg-subtle">
                       {record.kind === 'deposit' ? 'Deposit' : 'Withdrawal'} ·{' '}
@@ -237,7 +246,11 @@ export default async function TransactionsPage({
           {assets.map((option) => (
             <AssetFilter
               key={option.code}
-              label={option.code}
+              /* The full name, not the ticker: two chips both reading "USDT"
+                 would be the one control on this page where the split is
+                 invisible, and picking the wrong one silently filters to the
+                 wrong chain. */
+              label={option.name}
               href={`/app/transactions?asset=${option.code}`}
               active={asset === option.code}
             />
@@ -261,7 +274,7 @@ export default async function TransactionsPage({
                 {statement.degraded
                   ? 'Your statement could not be read.'
                   : asset
-                    ? `No ${asset} movements yet.`
+                    ? `No ${display.get(asset)?.name ?? asset} movements yet.`
                     : 'Nothing has moved on your account yet. Deposits and withdrawals appear here.'}
               </EmptyRow>
             ) : (
@@ -285,12 +298,12 @@ export default async function TransactionsPage({
                           same balance and very much not the same transaction. */}
                       <AssetMark
                         symbol={line.asset}
-                        glyph={marks.get(line.asset)?.glyph ?? line.asset.slice(0, 1)}
-                        hue={marks.get(line.asset)?.hue ?? 'var(--chart-1)'}
+                        glyph={markFor(line.asset)?.glyph ?? line.asset.slice(0, 1)}
+                        hue={markFor(line.asset)?.hue ?? 'var(--chart-1)'}
                         network={line.network}
                         size="xs"
                       />
-                      <span className="text-xs text-fg">{line.asset}</span>
+                      <span className="text-xs text-fg">{tickerFor(line.asset)}</span>
                     </span>
                   </Td>
                   <Td>
@@ -328,7 +341,7 @@ export default async function TransactionsPage({
                     >
                       {/* The sign is already on the value — it is the ledger's own
                           signed delta, not a formatting decision made here. */}
-                      {line.delta} {line.asset}
+                      {line.delta} {tickerFor(line.asset)}
                     </span>
                   </Td>
                 </Tr>

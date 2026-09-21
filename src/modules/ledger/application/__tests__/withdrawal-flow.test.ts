@@ -482,15 +482,17 @@ describe('demo funds', () => {
   });
 
   describe('networks', () => {
-    /* "USDT" does not say whether a student is being shown a Tron deposit or an
-       Ethereum one, and picking the first listed for them would silently put a
-       stablecoin on the expensive chain. */
-    it('refuses USDT with no network, naming both options', async () => {
+    /* An asset that genuinely travels two routes still has to be asked about.
+       Bitcoin on-chain and over Lightning is one coin and one balance — the same
+       satoshis, reachable two ways — so the network is a route and the question
+       is which one. Picking the first listed would silently send a student's
+       withdrawal over a channel they did not choose. */
+    it('refuses bitcoin with no network, naming both options', async () => {
       const ctx = build();
       const result = await ctx.grantDemo({
         userId: ALICE,
-        asset: 'USDT',
-        amount: '500',
+        asset: 'BTC',
+        amount: '1',
         issuedBy: BOB,
       });
 
@@ -498,16 +500,34 @@ describe('demo funds', () => {
       if (result.ok) return;
       expect(result.error.kind).toBe('network-required');
       if (result.error.kind !== 'network-required') return;
-      expect(result.error.options).toContain('Tron');
-      expect(result.error.options).toContain('Ethereum');
+      expect(result.error.options).toContain('Bitcoin');
+      expect(result.error.options).toContain('Lightning');
+    });
+
+    /* The bare ticker is no longer an asset. It is ambiguous rather than unknown,
+       which is why the catalogue refuses it outright — answering with either
+       chain would pick one for somebody who did not say. */
+    it('refuses the retired combined USDT code', async () => {
+      const ctx = build();
+      const result = await ctx.grantDemo({
+        userId: ALICE,
+        asset: 'USDT',
+        network: 'tron',
+        amount: '500',
+        issuedBy: BOB,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe('asset-not-supported');
     });
 
     it('refuses a network the asset does not travel on', async () => {
       const ctx = build();
       const result = await ctx.grantDemo({
         userId: ALICE,
-        asset: 'USDT',
-        network: 'solana',
+        // Tether on Ethereum does not travel over Tron — that is the other asset.
+        asset: 'USDT_ERC20',
+        network: 'tron',
         amount: '500',
         issuedBy: BOB,
       });
@@ -532,30 +552,44 @@ describe('demo funds', () => {
       expect(ctx.accounts.posted[0]?.reference).toContain('on tron');
     });
 
-    /* The property the whole feature rests on: USDT over Tron and USDT over
-       Ethereum are one balance, exactly as on a real exchange. The network is the
-       route in, not a pot of its own — if this ever splits, a student will be
-       shown two USDT balances that do not add up to what they were given. */
-    it('credits one balance whichever chain it came in on', async () => {
+    /*
+     * The property the whole split rests on: the two tethers never pool.
+     *
+     * This test used to assert the opposite — that USDT over Tron and USDT over
+     * Ethereum credited one balance — and that was the bug. The combined number
+     * could not be withdrawn, could not be sent anywhere and described no
+     * position: they are different contracts on unconnected chains, and adding
+     * them asserts a fungibility that needs a bridge and a counterparty to be
+     * true. Separate asset codes make the pooling unrepresentable rather than
+     * merely discouraged, because `Money` carries the code as its currency.
+     */
+    it('keeps the two tethers in separate balances that never pool', async () => {
       const ctx = build();
 
       await ctx.grantDemo({
         userId: ALICE,
-        asset: 'USDT',
+        asset: 'USDT_TRC20',
         network: 'tron',
         amount: '400',
         issuedBy: BOB,
       });
       await ctx.grantDemo({
         userId: ALICE,
-        asset: 'USDT',
+        asset: 'USDT_ERC20',
         network: 'ethereum',
         amount: '600',
         issuedBy: BOB,
       });
 
-      const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT'));
-      expect(alice?.balance.toDecimalString()).toBe('1000.000000');
+      const tron = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT_TRC20'));
+      const ethereum = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT_ERC20'));
+
+      expect(tron?.balance.toDecimalString()).toBe('400.000000');
+      expect(ethereum?.balance.toDecimalString()).toBe('600.000000');
+
+      // And there is no third account holding the sum. A combined row appearing
+      // here would mean something is still adding them.
+      expect(await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT'))).toBeNull();
       expectBooksBalance(ctx.accounts);
     });
   });
@@ -594,13 +628,13 @@ describe('what a movement says about its chain', () => {
     return bytes;
   }
 
-  /* The statement is where a customer reads this, and USDT is why it matters: one
-     asset, one balance, two networks that are not interchangeable. */
+  /* The statement is where a customer reads this, and the two tethers are why it
+     matters: separate assets on chains whose hashes do not even look alike. */
   it('records the network and a chain-shaped hash on a demo credit', async () => {
     const ctx = build();
     const granted = await ctx.grantDemo({
       userId: ALICE,
-      asset: 'USDT',
+      asset: 'USDT_TRC20',
       network: 'tron',
       amount: '500',
       issuedBy: BOB,
@@ -621,7 +655,7 @@ describe('what a movement says about its chain', () => {
     const ctx = build();
     await ctx.grantDemo({
       userId: ALICE,
-      asset: 'USDT',
+      asset: 'USDT_ERC20',
       network: 'ethereum',
       amount: '500',
       issuedBy: BOB,
@@ -992,7 +1026,11 @@ describe('a token that cannot pay its own network fee', () => {
   const stablePrices: PriceOracle = {
     async valueInUsd(amount: Money) {
       if (amount.currency === 'USD') return amount.withScale(2);
-      if (amount.currency === 'USDT') return Money.of(amount.minorUnits / 10_000n, 'USD', 2);
+      // Both tethers price the same — they are the same token on two chains, and
+      // the split is about where a unit lives, not what it is worth.
+      if (amount.currency.startsWith('USDT')) {
+        return Money.of(amount.minorUnits / 10_000n, 'USD', 2);
+      }
       if (amount.currency === 'TRX') return Money.of(amount.minorUnits / 100_000n, 'USD', 2);
       return null;
     },
@@ -1002,7 +1040,7 @@ describe('a token that cannot pay its own network fee', () => {
     const ctx = build(stablePrices);
     await ctx.deposit({
       userId: ALICE,
-      asset: 'USDT',
+      asset: 'USDT_TRC20',
       amount: usdt,
       reference: 'seed-usdt',
       recordedBy: BOB,
@@ -1022,7 +1060,7 @@ describe('a token that cannot pay its own network fee', () => {
   const request = (ctx: ReturnType<typeof build>) =>
     ctx.request({
       userId: ALICE,
-      asset: 'USDT',
+      asset: 'USDT_TRC20',
       network: 'tron',
       destination: TRON_ADDRESS,
       amount: '20',
@@ -1039,11 +1077,11 @@ describe('a token that cannot pay its own network fee', () => {
     // The coin to go and get, named — "you need gas" is not an instruction.
     if (result.error.kind === 'gas-token-required') {
       expect(result.error.nativeAsset).toBe('TRX');
-      expect(result.error.asset).toBe('USDT');
+      expect(result.error.asset).toBe('USDT_TRC20');
     }
     // And nothing was reserved: a refused request must leave the balance alone.
     expect(ctx.withdrawals.store).toHaveLength(0);
-    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT'));
+    const alice = await ctx.accounts.find(accountIdFor(userOwner(ALICE), 'USDT_TRC20'));
     expect(alice?.available.toDecimalString()).toBe('50.000000');
   });
 

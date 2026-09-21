@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { LedgerAsset } from '../../domain/asset';
+import { quoteSymbolOf, type LedgerAsset } from '../../domain/asset';
 import type { AssetRegistry } from '../../application/ports';
 
 /**
@@ -42,6 +42,7 @@ const TRON_ADDRESS = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
 const ASSETS: readonly LedgerAsset[] = [
   {
     code: 'BTC',
+    ticker: 'BTC',
     name: 'Bitcoin',
     // A satoshi is 10^-8 BTC. This is the protocol's precision, not a display
     // choice, and it is why the number is 8 and not something rounder.
@@ -75,6 +76,7 @@ const ASSETS: readonly LedgerAsset[] = [
   },
   {
     code: 'ETH',
+    ticker: 'ETH',
     name: 'Ethereum',
     scale: 18,
     minimumWithdrawal: '0.005000000000000000',
@@ -91,13 +93,32 @@ const ASSETS: readonly LedgerAsset[] = [
       },
     ],
   },
+  /*
+   * ── Two tethers, and they are never added together ───────────────────────────
+   * USDT on Ethereum and USDT on Tron were one catalogue row with two networks.
+   * That made them one balance: a customer with 100 on Tron and 100 on Ethereum
+   * had "200 USDT", a number that cannot be withdrawn, cannot be sent anywhere,
+   * and describes no position anybody holds. They are different ERC-20 and TRC-20
+   * contracts on unconnected chains, and moving value between them needs a bridge
+   * and a counterparty.
+   *
+   * Separate `code`s make the ledger itself refuse to mix them — `Money` carries
+   * the code as its currency and `Transfer.create` balances per currency — so the
+   * separation holds in the database, in every sum, and in every screen, rather
+   * than depending on each caller remembering to group by network.
+   *
+   * They share a `ticker` and a `quoteSymbol` because both are still tether:
+   * a person calls both "USDT", and one price feed quotes both. What they do not
+   * share is a balance.
+   */
   {
-    code: 'USDT',
-    name: 'Tether',
-    // Six, because that is what the contract declares on both chains. Tether
-    // happens to use the same precision on Ethereum and Tron; that is luck rather
-    // than a rule, and an asset whose scale differed by network could not be one
-    // row here at all.
+    code: 'USDT_ERC20',
+    ticker: 'USDT',
+    name: 'Tether (ERC-20)',
+    quoteSymbol: 'USDT',
+    // Six, because that is what the contract declares. The Tron contract happens
+    // to declare six as well; that is luck rather than a rule, and the two rows
+    // are free to disagree now that they are two rows.
     scale: 6,
     minimumWithdrawal: '10.000000',
     networks: [
@@ -113,6 +134,16 @@ const ASSETS: readonly LedgerAsset[] = [
         txHashPrefix: '0x',
         addressPattern: /^0x[0-9a-fA-F]{40}$/,
       },
+    ],
+  },
+  {
+    code: 'USDT_TRC20',
+    ticker: 'USDT',
+    name: 'Tether (TRC-20)',
+    quoteSymbol: 'USDT',
+    scale: 6,
+    minimumWithdrawal: '10.000000',
+    networks: [
       {
         id: 'tron',
         label: 'Tron (TRC-20)',
@@ -129,6 +160,7 @@ const ASSETS: readonly LedgerAsset[] = [
   },
   {
     code: 'TRX',
+    ticker: 'TRX',
     name: 'TRON',
     // TRON calls the smallest unit a SUN: 10^-6 TRX.
     scale: 6,
@@ -149,6 +181,34 @@ const ASSETS: readonly LedgerAsset[] = [
 ];
 
 const BY_CODE = new Map(ASSETS.map((asset) => [asset.code, asset]));
+
+/**
+ * The bare ticker no longer identifies an asset, and asking for one is a bug.
+ *
+ * `USDT` was a valid code until the two tethers were split. Anything still
+ * passing it — a stored row, a hand-written request, a screen that was not
+ * updated — is ambiguous rather than merely unknown, and answering with either
+ * chain would silently pick one. `find` returns null for it like any other
+ * unlisted code; this list exists so the log line says which mistake it was.
+ */
+const RETIRED_CODES: ReadonlySet<string> = new Set(['USDT']);
+
+export function isRetiredAssetCode(code: string): boolean {
+  return RETIRED_CODES.has(code.trim().toUpperCase());
+}
+
+/**
+ * The market symbol that prices a ledger asset code.
+ *
+ * Both tethers resolve to `USDT`. An unrecognised code is handed back unchanged,
+ * so a caller looking it up in market-data gets "no such market" rather than a
+ * silent substitution.
+ */
+export function quoteSymbolForAsset(code: string): string {
+  const normalised = code.trim().toUpperCase();
+  const asset = BY_CODE.get(normalised);
+  return asset === undefined ? normalised : quoteSymbolOf(asset);
+}
 
 export class CatalogueAssetRegistry implements AssetRegistry {
   find(code: string): LedgerAsset | null {

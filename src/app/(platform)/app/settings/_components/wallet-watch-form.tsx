@@ -1,14 +1,14 @@
 'use client';
 
-import { useActionState } from 'react';
+import { JSX, useActionState } from 'react';
 import { Eye, ShieldAlert } from 'lucide-react';
 
-import { CHAINS, MAX_LABEL_LENGTH } from '@/modules/wallet-link';
 import { Button } from '@/shared/ui/primitives/button';
-import { SelectField, TextField } from '@/shared/ui/primitives/field';
+import { SelectField, TextAreaField, TextField } from '@/shared/ui/primitives/field';
 
 import { watchAddressAction } from '../_lib/wallet-actions';
 import { IDLE_WALLET_FORM } from '../_lib/wallet-form-state';
+import { EvidenceControl } from './wallet-evidence-control';
 
 /**
  * Adding an address by hand.
@@ -29,56 +29,31 @@ import { IDLE_WALLET_FORM } from '../_lib/wallet-form-state';
  * A watch-only row. Marked as such on the list, forever, unless a signature from
  * that address arrives later and upgrades it in place.
  */
-export function WatchAddressForm() {
+export function WatchAddressForm({
+  messageHint,
+  messageLabel,
+}: {
+  messageLabel: string;
+  messageHint: string;
+}) {
   const [state, submit, pending] = useActionState(watchAddressAction, IDLE_WALLET_FORM);
 
   return (
     <form action={submit} className="space-y-4">
-      <p className="text-sm leading-relaxed text-fg-muted">
-        Add an address to keep an eye on &mdash; a hardware wallet in a safe, or a cold
-        wallet you would rather not connect. Nothing is proved by this, so it stays
-        marked <span className="text-fg">Watch only</span> until a signature from that
-        address says otherwise.
-      </p>
+     
 
-      <div className="flex items-start gap-2.5 rounded-md border border-[color-mix(in_oklab,var(--warn)_32%,transparent)] bg-bg-elev/40 px-4 py-3">
-        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-        <p className="text-xs leading-relaxed text-fg-muted">
-          <span className="font-medium text-fg">Only ever paste a public address here.</span>{' '}
-          Novex will never ask for your recovery phrase, seed words or private key &mdash;
-          not on this page, not by email, and not in chat. Any site that does is stealing
-          from you, including one that looks exactly like this one.
-        </p>
-      </div>
-
-      <TextField
-        label="Wallet address"
+      <TextAreaField
+        label={messageLabel ?? 'Wallet address'}
         name="address"
         required
         autoComplete="off"
         spellCheck={false}
-        placeholder="0x…"
+        placeholder={messageHint ?? '0x…'}
         hint="42 characters, starting with 0x. Found in your wallet under “Receive”."
         className="font-mono"
-      />
+      ></TextAreaField>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField
-          label="Network"
-          name="chainId"
-          defaultValue="1"
-          options={CHAINS.map((chain) => ({ value: String(chain.id), label: chain.name }))}
-        />
-
-        <TextField
-          label="Label"
-          name="label"
-          maxLength={MAX_LABEL_LENGTH}
-          autoComplete="off"
-          placeholder="Cold storage"
-          hint="Optional. Only you see it."
-        />
-      </div>
+      <EvidenceControl walletId="" evidenceId={null} />
 
       {state.message ? (
         <p

@@ -134,6 +134,55 @@ describe('transfers must balance', () => {
     ).toThrow(RangeError);
   });
 
+  /*
+   * The two tethers, and why splitting the asset code was the fix.
+   *
+   * `USDT_ERC20` and `USDT_TRC20` are different contracts on unconnected chains.
+   * Moving value between them needs a bridge and a counterparty, so a transfer
+   * that takes from one and gives to the other is not a movement — it is minting
+   * on one chain and burning on another, with nothing in between.
+   *
+   * The per-asset rule already refuses it, and that is the whole point of making
+   * them two codes rather than one asset with a network column: the ledger cannot
+   * pool them even if a caller asks it to. This test exists so that a future
+   * "simplification" back to a single `USDT` code fails here, loudly, instead of
+   * quietly restoring a balance nobody can withdraw.
+   */
+  it('refuses to move value between the two tethers, which are not one asset', () => {
+    const erc20 = (value: string) => Money.fromDecimalString(value, 'USDT_ERC20', 6);
+    const trc20 = (value: string) => Money.fromDecimalString(value, 'USDT_TRC20', 6);
+
+    expect(() =>
+      Transfer.create({
+        ...base,
+        kind: 'adjustment',
+        entries: [
+          { accountId: 'a', delta: erc20('-100.000000') },
+          { accountId: 'b', delta: trc20('100.000000') },
+        ],
+      }),
+    ).toThrow(RangeError);
+  });
+
+  it('keeps the two tethers as separate assets on one transfer', () => {
+    const erc20 = (value: string) => Money.fromDecimalString(value, 'USDT_ERC20', 6);
+    const trc20 = (value: string) => Money.fromDecimalString(value, 'USDT_TRC20', 6);
+
+    const transfer = Transfer.create({
+      ...base,
+      kind: 'adjustment',
+      entries: [
+        { accountId: 'a', delta: erc20('-100.000000') },
+        { accountId: 'b', delta: erc20('100.000000') },
+        { accountId: 'c', delta: trc20('-40.000000') },
+        { accountId: 'd', delta: trc20('40.000000') },
+      ],
+    });
+
+    // Two assets, never collapsed into one "USDT".
+    expect(new Set(transfer.assets)).toEqual(new Set(['USDT_ERC20', 'USDT_TRC20']));
+  });
+
   it('accepts a multi-asset transfer where each asset balances', () => {
     const transfer = Transfer.create({
       ...base,

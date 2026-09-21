@@ -6,35 +6,6 @@ import { getReceipt, type ReceiptDto } from '../queries/receipt';
 import type { TransactionKind } from '../queries/transactions';
 import type { CustomerDirectory, LedgerDependencies, ReceiptSender } from '../ports';
 
-/**
- * Emails a customer about their deposits and withdrawals.
- *
- * ── Two ways a message goes out ────────────────────────────────────────────────
- * `sendTransactionEmail` runs by itself at every step a customer should hear
- * about: a withdrawal requested, a deposit submitted, and an operator's decision on
- * either. `sendReceipt` is the console's button, for sending the record again on
- * request. Both render the same document from the same stored facts.
- *
- * ── The wording lives here, the transport does not ─────────────────────────────
- * The port takes a rendered message rather than a template name, so what the email
- * *says* is reviewable in the same file as the rule about when it is sent — and the
- * adapter owns nothing but the connection. The same arrangement identity uses for
- * its verification mail.
- *
- * ── A receipt is only sent for something that happened ─────────────────────────
- * The button refuses anything pending. A document headed "receipt" for a deposit
- * nobody has confirmed is a customer believing money has arrived when an operator
- * has not yet agreed that it did — and the whole point of the claim/credit split is
- * that those are different states.
- *
- * A request still waiting is *acknowledged* instead, automatically, in words that
- * cannot be read as a receipt: "being reviewed" in the subject, "Awaiting a
- * decision" under the mark, what has not happened yet spelled out, and a footnote
- * saying the receipt follows.
- *
- * Rejections *are* sent, and deliberately: somebody whose deposit was refused needs
- * the reason in writing more than somebody whose deposit worked.
- */
 
 export interface SendReceiptCommand {
   readonly kind: TransactionKind;
@@ -272,12 +243,8 @@ function htmlFor(receipt: ReceiptDto, siteName: string): string {
       ? ''
       : `<p style="margin:4px 0 0;color:#4a4a4a;font-size:12px;font-family:ui-monospace,Menlo,monospace;word-break:break-all">${escape(receipt.counterparty)}</p>`;
 
-  // The site's name, not a fixed "NOVEX": the deployment names itself through
-  // WEBSITE_NAME, and mail that arrives signed with a different brand from the
-  // site it came from looks like phishing.
-  return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#000">
+      return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#000">
   <div style="text-align:center;padding:24px 0 28px">
-    <p style="margin:0;font-size:11px;letter-spacing:0.18em;color:#4a4a4a;font-weight:600">${escape(siteName.toUpperCase())}</p>
     <h1 style="margin:18px 0 0;font-size:18px;font-weight:600">${escape(titleFor(receipt))}</h1>
     ${counterparty}
     <p style="margin:28px 0 0;font-size:34px;font-weight:600;word-break:break-word">${escape(headlineFor(receipt))}</p>

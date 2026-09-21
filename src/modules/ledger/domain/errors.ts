@@ -123,7 +123,16 @@ export const LedgerErrors = {
 export function presentLedgerError(error: LedgerError): string {
   switch (error.kind) {
     case 'asset-not-supported':
-      return `${error.asset} cannot be withdrawn from this account.`;
+      /*
+       * `USDT` is ambiguous rather than unsupported, and saying so saves a
+       * support ticket. It was one asset until the two tethers were split, so
+       * anything still sending it — an old bookmark, a stored request, a screen
+       * somebody missed — needs to be told which of the two it meant, not that
+       * tether is unavailable.
+       */
+      return error.asset.trim().toUpperCase() === 'USDT'
+        ? 'USDT is held separately per chain. Choose Tether (ERC-20) or Tether (TRC-20) — they are different tokens and cannot be combined.'
+        : `${error.asset} cannot be withdrawn from this account.`;
     case 'network-not-supported':
       return `${error.network} is not a supported network for ${error.asset}.`;
     case 'network-required':

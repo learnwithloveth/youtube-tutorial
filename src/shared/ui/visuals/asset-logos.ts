@@ -23,6 +23,13 @@ export const ASSET_LOGOS: Readonly<Record<string, string>> = {
   ETH: '/ethereum.png',
   SOL: '/solana.png',
   USDC: '/usdc.png',
+  /*
+   * `USDT` is still here, and it is the market-data symbol rather than a ledger
+   * asset. The markets pages quote one tether — a price is the same token on
+   * either chain — so they ask for this mark. The *ledger* has two assets and
+   * neither of them is called `USDT`; their marks are the chain-badged pair
+   * below, which is what a balance or a withdrawal renders.
+   */
   USDT: '/usdt.png',
   XRP: '/xrp.png',
   BNB: '/bnb.png',
@@ -56,6 +63,27 @@ export const NETWORK_LOGOS: Readonly<Record<string, string>> = {
   'USDT:tron': '/usdt-trx.png',
 };
 
+/**
+ * Assets whose chain is part of their identity, and whose mark therefore never
+ * varies.
+ *
+ * ── Why these are not in either map above ─────────────────────────────────────
+ * `ASSET_LOGOS` is the *plain* branch, and plain marks are clipped to a circle —
+ * which would cut off the chain badge these files are drawn with, and the badge
+ * is the whole point. `NETWORK_LOGOS` is keyed on a network the caller supplies,
+ * and a caller that passes none would fall through to the lettered ₮ on exactly
+ * the two rows a customer most needs to tell apart.
+ *
+ * `USDT_ERC20` is tether on Ethereum whether or not anybody says so, so its mark
+ * is decided by the code alone. That also makes it authoritative: a row that
+ * somehow carried `USDT_ERC20` with a Tron network still draws the Ethereum mark,
+ * because the asset is what it is and the stray network is the wrong half.
+ */
+const CHAIN_BOUND_LOGOS: Readonly<Record<string, string>> = {
+  USDT_ERC20: '/usdt-eth.png',
+  USDT_TRC20: '/usdt-trx.png',
+};
+
 export interface AssetLogo {
   readonly src: string;
   /**
@@ -78,6 +106,11 @@ export interface AssetLogo {
  */
 export function assetLogoFor(symbol: string, network?: string | null): AssetLogo | null {
   const code = symbol.trim().toUpperCase();
+
+  // First, and regardless of the network: an asset that names its own chain has
+  // one mark, and a network argument cannot override it.
+  const bound = CHAIN_BOUND_LOGOS[code];
+  if (bound) return { src: bound, composite: true };
 
   if (network) {
     const composite = NETWORK_LOGOS[`${code}:${network.trim().toLowerCase()}`];
