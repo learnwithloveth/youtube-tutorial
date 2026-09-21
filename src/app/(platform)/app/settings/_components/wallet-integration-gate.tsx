@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, type ReactNode } from 'react';
-import { KeyRound, Link2, Power, ShieldCheck } from 'lucide-react';
+import { Link2, Power, ShieldCheck } from 'lucide-react';
 
 import { Button } from '@/shared/ui/primitives/button';
 

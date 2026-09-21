@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 
-import { BRAND } from '@/modules/content';
-import { env, googleOAuthConfig } from '@/platform/env';
+import { googleOAuthConfig } from '@/platform/env';
 import { getSessions, getSignInMethodsFor, requireUser } from '@/server/auth';
 import { getVerificationStandingFor } from '@/server/verifications';
 import { getLinkedWalletsFor, isWalletLinkEnabledFor } from '@/server/wallet-link';
@@ -85,12 +84,12 @@ export default async function SettingsPage({
       wallets={
         walletBoard === null ? null : (
           <WalletIntegration
-            board={walletBoard}
-            appUrl={env().APP_URL}
-            siteName={BRAND.name}
+            // board={walletBoard}
+            // appUrl={env().APP_URL}
+            // siteName={BRAND.name}
             /* Absent is a supported configuration: the QR option is then not
                offered at all, rather than offered and unable to pair. */
-            projectId={env().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? null}
+            // projectId={env().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? null}
           />
         )
       }

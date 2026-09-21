@@ -1,6 +1,5 @@
 import type { UserId } from '@/shared/kernel/ids';
 
-import { EvmAddress } from './address';
 
 /**
  * A wallet an account has attached to itself.

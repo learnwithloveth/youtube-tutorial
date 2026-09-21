@@ -1,7 +1,6 @@
 import { err, ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
-import { EvmAddress } from '../../domain/address';
 import { LinkedWallet } from '../../domain/linked-wallet';
 import { WalletLinkErrors, type WalletLinkError } from '../errors';
 import type { WalletLinkDependencies } from '../ports';

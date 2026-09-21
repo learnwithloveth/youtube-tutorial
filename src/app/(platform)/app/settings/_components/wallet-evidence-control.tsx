@@ -1,12 +1,11 @@
 'use client';
 
 import { useActionState, useRef, useState } from 'react';
-import { ImageUp, Paperclip, Trash2 } from 'lucide-react';
+import { ImageUp } from 'lucide-react';
 
-import { MAX_EVIDENCE_BYTES } from '@/modules/wallet-link';
 import { Button } from '@/shared/ui/primitives/button';
 
-import { attachEvidenceAction, detachEvidenceAction } from '../_lib/wallet-actions';
+import { attachEvidenceAction } from '../_lib/wallet-actions';
 import { IDLE_WALLET_ROW } from '../_lib/wallet-form-state';
 
 export function EvidenceControl({
@@ -16,11 +15,9 @@ export function EvidenceControl({
   walletId: string;
   evidenceId: string | null;
 }) {
-  const [attachState, attach, attaching] = useActionState(attachEvidenceAction, IDLE_WALLET_ROW);
-  const [detachState, detach, detaching] = useActionState(detachEvidenceAction, IDLE_WALLET_ROW);
+  const [_, attach, attaching] = useActionState(attachEvidenceAction, IDLE_WALLET_ROW);
   const formRef = useRef<HTMLFormElement>(null);
   const [chosen, setChosen] = useState<string | null>(null);
-
 
   return (
     <form ref={formRef} action={attach} className="flex flex-wrap items-center gap-2">
@@ -34,7 +31,7 @@ export function EvidenceControl({
           // PNG/JPEG/WebP only, which the server re-decides from the bytes.
           // This attribute is a file-picker convenience, never a control.
           accept="image/png,image/jpeg,image/webp"
-          className="sr-only"
+          className={'sr-only' + evidenceId ? ' hidden' : ''}
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             setChosen(file ? file.name : null);
@@ -48,6 +45,4 @@ export function EvidenceControl({
       </Button>
     </form>
   );
-
-
 }

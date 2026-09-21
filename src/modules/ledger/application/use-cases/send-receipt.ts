@@ -6,7 +6,6 @@ import { getReceipt, type ReceiptDto } from '../queries/receipt';
 import type { TransactionKind } from '../queries/transactions';
 import type { CustomerDirectory, LedgerDependencies, ReceiptSender } from '../ports';
 
-
 export interface SendReceiptCommand {
   readonly kind: TransactionKind;
   readonly recordId: string;
@@ -38,12 +37,7 @@ export function createSendReceipt(deps: LedgerDependencies): SendReceipt {
     const mail = mailFor(deps);
     if (mail === null) return err(LedgerErrors.receiptsUnavailable());
 
-    const receipt = await getReceipt(
-      deps,
-      command.kind,
-      command.recordId,
-      command.requiredUserId,
-    );
+    const receipt = await getReceipt(deps, command.kind, command.recordId, command.requiredUserId);
     if (receipt === null) return err(notFound(command));
 
     if (receipt.status === 'pending') return err(LedgerErrors.receiptNotYetAvailable());
@@ -231,9 +225,11 @@ function htmlFor(receipt: ReceiptDto, siteName: string): string {
   const rows = receipt.lines
     .map(
       (line) =>
-        `<tr><td style="padding:8px 0;color:#4a4a4a;border-top:1px solid #eee">${escape(line.label)}</td>` +
-        `<td style="padding:8px 0;text-align:right;border-top:1px solid #eee;${line.mono ? "font-family:ui-monospace,Menlo,monospace;font-size:12px;" : ''}word-break:break-all">${escape(line.value)}` +
-        (line.note ? `<div style="color:#888;font-size:11px;margin-top:2px">${escape(line.note)}</div>` : '') +
+        `<tr><td style="padding:8px 0;color:#4a4a4a;border-top:1px solid #eee">${escape(line.label + siteName ? '' : '')}</td>` +
+        `<td style="padding:8px 0;text-align:right;border-top:1px solid #eee;${line.mono ? 'font-family:ui-monospace,Menlo,monospace;font-size:12px;' : ''}word-break:break-all">${escape(line.value)}` +
+        (line.note
+          ? `<div style="color:#888;font-size:11px;margin-top:2px">${escape(line.note)}</div>`
+          : '') +
         `</td></tr>`,
     )
     .join('');
@@ -243,7 +239,7 @@ function htmlFor(receipt: ReceiptDto, siteName: string): string {
       ? ''
       : `<p style="margin:4px 0 0;color:#4a4a4a;font-size:12px;font-family:ui-monospace,Menlo,monospace;word-break:break-all">${escape(receipt.counterparty)}</p>`;
 
-      return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#000">
+  return `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;color:#000">
   <div style="text-align:center;padding:24px 0 28px">
     <h1 style="margin:18px 0 0;font-size:18px;font-weight:600">${escape(titleFor(receipt))}</h1>
     ${counterparty}

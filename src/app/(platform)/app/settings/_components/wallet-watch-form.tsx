@@ -1,10 +1,10 @@
 'use client';
 
-import { JSX, useActionState } from 'react';
-import { Eye, ShieldAlert } from 'lucide-react';
+import { useActionState } from 'react';
+import { Eye } from 'lucide-react';
 
 import { Button } from '@/shared/ui/primitives/button';
-import { SelectField, TextAreaField, TextField } from '@/shared/ui/primitives/field';
+import { TextAreaField } from '@/shared/ui/primitives/field';
 
 import { watchAddressAction } from '../_lib/wallet-actions';
 import { IDLE_WALLET_FORM } from '../_lib/wallet-form-state';
