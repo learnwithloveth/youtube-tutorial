@@ -55,6 +55,7 @@ async function seed(
     ? User.register({
         id: users.nextId(),
         email: EmailAddress.parseOrThrow('ada@example.com'),
+        externalId: "",
         accountNumber: users.nextAccountNumber(),
         passwordHash: PasswordHash.fromEncoded(`fake$${CURRENT}`),
         now: NOW,
@@ -62,6 +63,7 @@ async function seed(
     : User.registerWithProvider({
         id: users.nextId(),
         email: EmailAddress.parseOrThrow('ada@example.com'),
+        externalId: "",
         accountNumber: users.nextAccountNumber(),
         now: NOW,
       });

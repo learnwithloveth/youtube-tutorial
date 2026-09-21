@@ -30,6 +30,7 @@ function account(id: UserId, role: UserRole, status: UserStatus): User {
     accountNumber: AccountNumber.parseOrThrow(`1${String(id.length).padStart(9, '7')}`),
     passwordHash: PasswordHash.fromEncoded('scrypt$1$16384$8$1$c2FsdA$a2V5'),
     status,
+    externalId: "",
     role,
     emailVerifiedAt: NOW,
     failedAttempts: 0,

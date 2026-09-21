@@ -82,10 +82,7 @@ export function createSignInWithGoogle(deps: IdentityDependencies) {
     const created = User.registerWithProvider({
       id: deps.users.nextId(),
       email: email.value,
-      // Every account gets one, however it arrived. An account created through a
-      // provider is an account like any other the moment it exists, and a
-      // dashboard that could not state its number for one kind of sign-in would
-      // be describing how somebody registered rather than who they are.
+      externalId: "", 
       accountNumber: await allocateAccountNumber(deps.users),
       now,
     });

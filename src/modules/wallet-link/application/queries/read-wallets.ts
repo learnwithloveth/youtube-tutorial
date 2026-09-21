@@ -83,12 +83,12 @@ export async function getWalletLinkBoard(
 }
 
 function toDto(wallet: LinkedWallet, deps: WalletLinkDependencies): LinkedWalletDto {
-  const checksummed = deps.signatures.checksum(wallet.address.value);
+  const checksummed = deps.signatures.checksum(wallet.address);
 
   return {
     id: wallet.id,
     address: checksummed,
-    short: wallet.address.short(),
+    short: wallet.address,
     chainId: wallet.chainId,
     chain: chainLabel(wallet.chainId),
     explorer: explorerLink(wallet.chainId, checksummed),

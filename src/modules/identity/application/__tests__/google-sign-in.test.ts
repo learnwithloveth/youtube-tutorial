@@ -60,6 +60,7 @@ async function seedPasswordUser(users: FakeUsers, email: string): Promise<User> 
   const user = User.register({
     id: users.nextId(),
     email: EmailAddress.parseOrThrow(email),
+    externalId: "",
     accountNumber: users.nextAccountNumber(),
     passwordHash: PasswordHash.fromEncoded('fake$correct-horse-battery'),
     now: NOW,

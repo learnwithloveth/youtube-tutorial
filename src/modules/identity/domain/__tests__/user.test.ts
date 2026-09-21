@@ -20,6 +20,7 @@ function aUser(now = T0) {
   return User.register({
     id: '11111111-1111-4111-8111-111111111111' as UserId,
     email: anEmail(),
+    externalId: "",
     accountNumber: AccountNumber.parseOrThrow('1234567890'),
     passwordHash: aHash(),
     now,

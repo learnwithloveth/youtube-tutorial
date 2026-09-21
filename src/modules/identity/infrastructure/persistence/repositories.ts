@@ -44,6 +44,7 @@ function userToDomain(row: UserRow): User {
     email: EmailAddress.parseOrThrow(row.email),
     accountNumber: AccountNumber.parseOrThrow(row.accountNumber),
     // Null for an account that signs in through a provider and has set no password.
+    externalId: "",
     passwordHash: row.passwordHash === null ? null : PasswordHash.fromEncoded(row.passwordHash),
     status: row.status,
     role: row.role,

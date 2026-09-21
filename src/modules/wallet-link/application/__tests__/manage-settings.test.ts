@@ -59,7 +59,11 @@ class FakeWallets implements LinkedWalletRepository {
   }
   async findByAddress(userId: UserId, address: string): Promise<LinkedWallet | null> {
     for (const wallet of this.rows.values()) {
-      if (wallet.userId === userId && wallet.address.value === address.toLowerCase()) return wallet;
+      if (
+        wallet.userId === userId &&
+        wallet.address === typeof (address === 'string' ? address.toLowerCase() : address)
+      )
+        return wallet;
     }
     return null;
   }
@@ -106,7 +110,7 @@ function watching(wallets: FakeWallets, id: string): void {
     LinkedWallet.watchOnly({
       id,
       userId: USER,
-      address: EvmAddress.parse(ADDRESS) as EvmAddress,
+      address:ADDRESS,
       chainId: 1,
       label: null,
       now: NOW,
