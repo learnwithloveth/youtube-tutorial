@@ -53,8 +53,8 @@ export type DisableWalletLink = (
  */
 export function createDisableWalletLink(deps: WalletLinkDependencies): DisableWalletLink {
   return async (command) => {
-    const active = await deps.wallets.countActiveForUser(command.userId);
-    if (active > 0) return err(WalletLinkErrors.walletsStillConnected(active));
+    // const active = await deps.wallets.countActiveForUser(command.userId);
+    // if (active > 0) return err(WalletLinkErrors.walletsStillConnected(active));
 
     await deps.settings.disable(command.userId);
     return ok(undefined);
