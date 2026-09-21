@@ -222,6 +222,8 @@ export async function watchAddressAction(
     label: labelFrom(formData.get('label')),
   });
 
+  console.log("Address result : ", result)
+
   if (!result.ok) return { status: 'error', message: presentWalletLinkError(result.error) };
 
   // Recorded, but not pushed. Nobody's account is at risk because an address was

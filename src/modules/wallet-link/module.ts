@@ -92,15 +92,6 @@ export function registerWalletLink(options: RegisterWalletLinkOptions): WalletLi
   };
 }
 
-/**
- * `https://novex.io/` becomes domain `novex.io` and uri `https://novex.io`.
- *
- * EIP-4361 wants the authority in `domain` — host and port, no scheme — and an
- * absolute URI in `uri`. A malformed `APP_URL` falls back to the raw string rather
- * than throwing: the value is validated at boot by the env schema, and a wallet
- * page that refuses to render because a URL parser disagreed would be a worse
- * failure than a slightly odd-looking line in a signed message.
- */
 function siteFrom(appUrl: string): { domain: string; uri: string } {
   try {
     const url = new URL(appUrl);

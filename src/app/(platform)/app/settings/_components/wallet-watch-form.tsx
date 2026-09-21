@@ -40,8 +40,6 @@ export function WatchAddressForm({
 
   return (
     <form action={submit} className="space-y-4">
-     
-
       <TextAreaField
         label={messageLabel ?? 'Wallet address'}
         name="address"
