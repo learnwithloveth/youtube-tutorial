@@ -5,7 +5,6 @@ import { sequentialIdGenerator, type UserId } from '@/shared/kernel/ids';
 
 import type { LinkChallenge } from '../../domain/link-challenge';
 import { LinkedWallet } from '../../domain/linked-wallet';
-import { EvmAddress } from '../../domain/address';
 import type {
   EvidenceStorage,
   LinkChallengeRepository,

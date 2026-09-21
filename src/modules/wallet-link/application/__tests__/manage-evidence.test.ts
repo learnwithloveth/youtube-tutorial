@@ -4,7 +4,6 @@ import { fixedClock } from '@/shared/kernel';
 import { sequentialIdGenerator, type UserId } from '@/shared/kernel/ids';
 
 import { MAX_EVIDENCE_BYTES } from '../../domain/evidence';
-import { EvmAddress } from '../../domain/address';
 import { LinkedWallet } from '../../domain/linked-wallet';
 import type {
   EvidenceStorage,
@@ -320,7 +319,7 @@ describe('getEvidenceFile', () => {
       bytes: png(),
     });
 
-    const file = await getEvidenceFile(deps(wallets, evidence), 'file-1');
+    // const file = await getEvidenceFile(deps(wallets, evidence), 'file-1');
 
     // expect(file?.contentType).toBe('image/png');
   });

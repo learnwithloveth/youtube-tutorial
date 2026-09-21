@@ -53,7 +53,7 @@ export function createAttachEvidence(deps: WalletLinkDependencies): AttachEviden
       return err(WalletLinkErrors.notEnabled());
     }
 
-    const wallet = await deps.wallets.find(command.walletId, command.userId);
+    // const wallet = await deps.wallets.find(command.walletId, command.userId);
     // if (wallet === null || !wallet.isActive) return err(WalletLinkErrors.notFound());
     // if (!wallet.acceptsEvidence) return err(WalletLinkErrors.evidenceNotAccepted());
 
