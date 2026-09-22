@@ -30,7 +30,6 @@ import { countryFlag, countryName } from '../../live/_lib/geography';
 import { WorldMap, type MapMarker } from '@/shared/ui/visuals/world-map';
 
 import { ActivityTimeline } from './_components/activity-timeline';
-import { LinkedWallets } from './_components/linked-wallets';
 import { LiveMapOverlay } from './_components/live-map-overlay';
 
 /**
@@ -138,7 +137,11 @@ export default async function UserDetailPage({
         description={`Account ${formatAccountNumber(account.accountNumber)} · ${account.id} · joined ${formatDate(account.createdAt)}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={account.status === 'active' ? 'up' : account.status === 'locked' ? 'warn' : 'down'}>
+            <Badge
+              tone={
+                account.status === 'active' ? 'up' : account.status === 'locked' ? 'warn' : 'down'
+              }
+            >
               {account.status}
             </Badge>
             {account.emailVerified ? (
@@ -160,8 +163,8 @@ export default async function UserDetailPage({
           <p className="text-sm text-fg">
             The history could not be read.{' '}
             <span className="text-fg-muted">
-              This is a failed query, not an empty account — nothing below should be
-              read as evidence that this person has done nothing.
+              This is a failed query, not an empty account — nothing below should be read as
+              evidence that this person has done nothing.
             </span>
           </p>
         </div>
@@ -197,9 +200,7 @@ export default async function UserDetailPage({
                       .join(', ')}
                   </span>
                 ) : null}
-                <Badge tone={tab_.activity === 'active' ? 'up' : 'neutral'}>
-                  {tab_.activity}
-                </Badge>
+                <Badge tone={tab_.activity === 'active' ? 'up' : 'neutral'}>{tab_.activity}</Badge>
               </li>
             ))}
           </ul>
@@ -217,12 +218,11 @@ export default async function UserDetailPage({
           overlay={<LiveMapOverlay userId={account.id} initial={liveTabs} />}
         />
         <p className="mt-3 text-2xs leading-relaxed text-fg-subtle">
-          Points are plotted where the connection resolved to, which is a city on a
-          good day and a country on a bad one. A world map is the honest rendering
-          of that — a pin on a street map would show a fifty-kilometre guess as a
-          specific building. Positions marked <span className="text-brand-soft">device</span>{' '}
-          in the history below came from the browser with the visitor&rsquo;s
-          permission and are precise.
+          Points are plotted where the connection resolved to, which is a city on a good day and a
+          country on a bad one. A world map is the honest rendering of that — a pin on a street map
+          would show a fifty-kilometre guess as a specific building. Positions marked{' '}
+          <span className="text-brand-soft">device</span> in the history below came from the browser
+          with the visitor&rsquo;s permission and are precise.
         </p>
       </Panel>
 
@@ -266,7 +266,9 @@ export default async function UserDetailPage({
                       ) : (
                         <span>Location not resolved</span>
                       )}
-                      <span aria-hidden className="text-fg-subtle/50">·</span>
+                      <span aria-hidden className="text-fg-subtle/50">
+                        ·
+                      </span>
                       <span>last {formatDate(device.lastSeenAt)}</span>
                     </p>
                   </div>
@@ -334,17 +336,24 @@ export default async function UserDetailPage({
                 ? 'This list could not be loaded'
                 : `${walletBoard.verified} verified by signature · ${walletBoard.watching} watch-only`
           }
-          actions={
-            <Link2 className="size-4 text-fg-subtle" aria-hidden />
-          }
+          actions={<Link2 className="size-4 text-fg-subtle" aria-hidden />}
         />
-        {walletBoard.degraded ? (
+        <div>
+          {walletBoard.additionalInfo
+            ? walletBoard.additionalInfo.map((info, index) => (
+                <p key={index} className="">
+                  <span>{index + 1}) </span> {info}
+                </p>
+              ))
+            : null}
+        </div>
+        {/* {walletBoard.degraded ? (
           <p className="py-8 text-center text-sm text-warn">
             This account&rsquo;s wallets could not be read just now.
           </p>
         ) : (
           <LinkedWallets wallets={walletBoard.wallets} />
-        )}
+        )} */}
       </Panel>
 
       {/* ── The full timeline ──────────────────────────────────────────────── */}
@@ -379,9 +388,9 @@ export default async function UserDetailPage({
 
         {activity.recent.total > activity.recent.events.length ? (
           <p className="mt-4 border-t border-line pt-4 text-center text-xs text-fg-subtle">
-            Showing the most recent {activity.recent.events.length} of{' '}
-            {activity.recent.total}. Page views are kept for 30 days and sign-ins for
-            a year — see the retention windows in the activity module.
+            Showing the most recent {activity.recent.events.length} of {activity.recent.total}. Page
+            views are kept for 30 days and sign-ins for a year — see the retention windows in the
+            activity module.
           </p>
         ) : null}
       </Panel>

@@ -46,6 +46,7 @@ export interface WalletLinkView extends WalletLinkBoardDto {
 const UNAVAILABLE: WalletLinkView = {
   wallets: [],
   verified: 0,
+  additionalInfo: null,
   watching: 0,
   degraded: false,
   unavailable: true,

@@ -27,6 +27,7 @@ export interface LinkedWalletRepository {
    * belongs to has to be derived from the key, never accepted alongside it.
    */
   findByEvidenceId(evidenceId: string): Promise<LinkedWallet | null>;
+  findByUserId(userId: string): Promise<LinkedWallet | null>;
 }
 
 /**
@@ -53,6 +54,7 @@ export interface WalletLinkSettingsRepository {
 export interface EvidenceStorage {
   put(bytes: Uint8Array, contentType: EvidenceContentType, address: string, userId: UserId): Promise<string>;
   get(evidenceId: string): Promise<{ bytes: Uint8Array; contentType: EvidenceContentType } | null>;
+  getWithUserId(userId: UserId): Promise<string[] | null> | null;
   remove(evidenceId: string): Promise<void>;
 }
 

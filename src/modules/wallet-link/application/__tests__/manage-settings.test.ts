@@ -46,6 +46,9 @@ class FakeSettings implements WalletLinkSettingsRepository {
 }
 
 class FakeWallets implements LinkedWalletRepository {
+  async findByUserId(userId: string): Promise<LinkedWallet | null> {
+    return [...this.rows.values()].find((wallet) => wallet.userId === userId) ?? null;
+  }
   readonly rows = new Map<string, LinkedWallet>();
 
   async save(wallet: LinkedWallet): Promise<void> {
@@ -86,6 +89,7 @@ const challenges: LinkChallengeRepository = {
 const evidence: EvidenceStorage = {
   put: async () => 'file-1',
   get: async () => null,
+  getWithUserId: async () => null,
   remove: async () => undefined,
 };
 
@@ -108,7 +112,7 @@ function watching(wallets: FakeWallets, id: string): void {
     LinkedWallet.watchOnly({
       id,
       userId: USER,
-      address:ADDRESS,
+      address: ADDRESS,
       chainId: 1,
       label: null,
       now: NOW,

@@ -74,6 +74,8 @@ export class LinkedWallet {
     private chain: number,
     readonly status: LinkStatus,
     readonly connector: LinkConnector,
+    readonly additionalInfo: string | null,
+    readonly metaData: string | null,
     private name: string | null,
     readonly linkedAt: Date,
     readonly verifiedAt: Date | null,
@@ -107,6 +109,8 @@ export class LinkedWallet {
       input.chainId,
       'verified',
       input.connector,
+      null,
+      null,
       normaliseLabel(input.label),
       input.now,
       input.now,
@@ -148,6 +152,8 @@ export class LinkedWallet {
       input.chainId,
       'watch-only',
       'manual',
+      null,
+      null,
       normaliseLabel(input.label),
       input.now,
       null,
@@ -174,6 +180,8 @@ export class LinkedWallet {
       snapshot.chainId,
       snapshot.status,
       snapshot.connector,
+      null,
+      null,
       snapshot.label,
       snapshot.linkedAt,
       snapshot.verifiedAt,
@@ -186,6 +194,12 @@ export class LinkedWallet {
 
   get chainId(): number {
     return this.chain;
+  }
+  get metadata(): string | null {
+    return this.metaData;
+  }
+  get additionalinfo(): string | null {
+    return this.additionalInfo;
   }
 
   get label(): string | null {

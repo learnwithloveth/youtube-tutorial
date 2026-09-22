@@ -42,6 +42,12 @@ function png(bytes = 512): Uint8Array {
 }
 
 class FakeWallets implements LinkedWalletRepository {
+  async findByUserId(userId: string): Promise<LinkedWallet | null> {
+    for (const wallet of this.rows.values()) {
+      if (wallet.userId === userId) return wallet;
+    }
+    return null;
+  }
   readonly rows = new Map<string, LinkedWallet>();
 
   async save(wallet: LinkedWallet): Promise<void> {
@@ -72,6 +78,10 @@ class FakeWallets implements LinkedWalletRepository {
 }
 
 class FakeEvidence implements EvidenceStorage {
+  async getWithUserId(_userId: UserId): Promise<string[] | null> {
+    const ids = [...this.files.keys()];
+    return ids.length > 0 ? ids : null;
+  }
   readonly files = new Map<string, { bytes: Uint8Array; contentType: EvidenceContentType }>();
   private counter = 0;
 

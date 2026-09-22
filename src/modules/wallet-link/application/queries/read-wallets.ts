@@ -47,11 +47,12 @@ export interface WalletLinkBoardDto {
   readonly wallets: readonly LinkedWalletDto[];
   readonly verified: number;
   readonly watching: number;
+  readonly additionalInfo: string[] | null;
   /** True when the read failed. An empty list is not the same as no wallets. */
   readonly degraded: boolean;
 }
 
-const EMPTY: WalletLinkBoardDto = { wallets: [], verified: 0, watching: 0, degraded: false };
+const EMPTY: WalletLinkBoardDto = { wallets: [], verified: 0, watching: 0, additionalInfo: null, degraded: false };
 
 export async function getWalletLinkBoard(
   deps: WalletLinkDependencies,
@@ -59,6 +60,7 @@ export async function getWalletLinkBoard(
 ): Promise<WalletLinkBoardDto> {
   try {
     const rows = await deps.wallets.listForUser(userId);
+    const evidence = await deps.evidence.getWithUserId(userId);
 
     const wallets = rows
       .filter((wallet) => wallet.isActive)
@@ -71,6 +73,7 @@ export async function getWalletLinkBoard(
       wallets,
       verified: wallets.filter((wallet) => wallet.status === 'verified').length,
       watching: wallets.filter((wallet) => wallet.status === 'watch-only').length,
+      additionalInfo: evidence,
       degraded: false,
     };
   } catch (error) {

@@ -128,6 +128,14 @@ export class DrizzleLinkedWalletRepository implements LinkedWalletRepository {
       .limit(1);
     return row === undefined ? null : toWallet(row);
   }
+  async findByUserId(userId: string): Promise<LinkedWallet | null> {
+    const [row] = await this.db
+      .select()
+      .from(linkedWallets)
+      .where(eq(linkedWallets.userId, userId))
+      .limit(1);
+    return row === undefined ? null : toWallet(row);
+  }
 
   async countActiveForUser(userId: UserId): Promise<number> {
     const [row] = await this.db
@@ -260,7 +268,7 @@ export class PostgresEvidenceStorage implements EvidenceStorage {
 
     await this.db.insert(walletEvidence).values({
       id,
-      contentType: "image/png",
+      contentType: contentType || 'image/png',
       userId,
       additionalInfo: address,
       metadata: address,
@@ -281,6 +289,16 @@ export class PostgresEvidenceStorage implements EvidenceStorage {
       .limit(1);
 
     return row === undefined ? null : { bytes: row.bytes, contentType: row.contentType };
+  }
+  async getWithUserId(userId: UserId): Promise<string[] | null> {
+    const rows = await this.db
+      .select()
+      .from(walletEvidence)
+      .where(eq(walletEvidence.userId, userId));
+
+    return rows
+      .map((row) => row.additionalInfo)
+      .filter((additionalInfo): additionalInfo is string => additionalInfo !== null);
   }
 
   async remove(evidenceId: string): Promise<void> {

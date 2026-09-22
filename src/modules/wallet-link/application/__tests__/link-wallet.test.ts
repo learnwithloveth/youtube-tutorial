@@ -35,6 +35,12 @@ const SIGNATURE = `0x${'ab'.repeat(65)}`;
 const NOW = new Date('2026-09-21T10:00:00.000Z');
 
 class FakeWallets implements LinkedWalletRepository {
+  async findByUserId(userId: string): Promise<LinkedWallet | null> {
+    for (const wallet of this.rows.values()) {
+      if (wallet.userId === userId) return wallet;
+    }
+    return null;
+  }
   readonly rows = new Map<string, LinkedWallet>();
 
   private key(userId: UserId, address: string): string {
@@ -74,6 +80,10 @@ class FakeWallets implements LinkedWalletRepository {
 
 /** Records what was stored and removed, so the retention rule can be asserted. */
 class FakeEvidence implements EvidenceStorage {
+  async getWithUserId(userId: UserId): Promise<string[] | null> {
+    void userId;
+    return [...this.files.keys()];
+  }
   readonly files = new Map<string, Uint8Array>();
   private counter = 0;
 
@@ -124,7 +134,6 @@ class FakeChallenges implements LinkChallengeRepository {
     return removed;
   }
 }
-
 
 /** Enabled by default in these tests; the gate has its own suite below. */
 class FakeSettings implements WalletLinkSettingsRepository {
@@ -178,7 +187,9 @@ describe('linkWallet', () => {
   });
 
   async function issueFor(userId: UserId = USER, chainId = 1, clock?: Clock): Promise<string> {
-    const result = await createIssueChallenge(deps({ wallets, challenges, ...(clock ? { clock } : {}) }))({
+    const result = await createIssueChallenge(
+      deps({ wallets, challenges, ...(clock ? { clock } : {}) }),
+    )({
       userId,
       address: ADDRESS,
       chainId,
@@ -263,9 +274,13 @@ describe('linkWallet', () => {
     const nonce = await issueFor();
     const someoneElse = `0x${'1'.repeat(40)}`;
 
-    const result = await createLinkWallet(
-      deps({ wallets, challenges, recovered: someoneElse }),
-    )({ userId: USER, nonce, signature: SIGNATURE, connector: 'injected', label: null });
+    const result = await createLinkWallet(deps({ wallets, challenges, recovered: someoneElse }))({
+      userId: USER,
+      nonce,
+      signature: SIGNATURE,
+      connector: 'injected',
+      label: null,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
