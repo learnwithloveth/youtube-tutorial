@@ -1,0 +1,1 @@
+ALTER TABLE "wallet_link"."wallet_evidence" ADD COLUMN "user_id" text NOT NULL;

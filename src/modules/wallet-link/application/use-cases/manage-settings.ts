@@ -1,7 +1,7 @@
-import { err, ok, type Result } from '@/shared/kernel';
+import {  ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
 
-import { WalletLinkErrors, type WalletLinkError } from '../errors';
+import { type WalletLinkError } from '../errors';
 import type { WalletLinkDependencies } from '../ports';
 
 /**

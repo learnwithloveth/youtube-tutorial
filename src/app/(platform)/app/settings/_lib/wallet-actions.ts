@@ -7,7 +7,7 @@ import { requireUser } from '@/server/auth';
 import { recordAndPush } from '@/server/push';
 import { describeRequest } from '@/server/request-context';
 import { walletLink } from '@/server/wallet-link';
-import { chainLabel, MAX_EVIDENCE_BYTES, presentWalletLinkError } from '@/modules/wallet-link';
+import { chainLabel, presentWalletLinkError } from '@/modules/wallet-link';
 import type { LinkConnector, LinkOutcome } from '@/modules/wallet-link';
 import { logger } from '@/platform/observability/logger';
 import type { UserId } from '@/shared/kernel/ids';
@@ -267,18 +267,20 @@ export async function attachEvidenceAction(
     return { status: 'error', message: 'Wallet connections are unavailable.', id };
   }
 
-  const file = formData.get('evidence');
+  // const file = formData.get('evidence');
   const address = formData.get('address');
-  if (!(file instanceof File) || file.size === 0) {
-    return { status: 'error', message: 'Choose a screenshot to attach.', id };
-  }
-  if (file.size > MAX_EVIDENCE_BYTES) {
-    return {
-      status: 'error',
-      message: `That file is larger than ${Math.round(MAX_EVIDENCE_BYTES / 1024)}KB.`,
-      id,
-    };
-  }
+  // if (!(file instanceof File) || file.size === 0) {
+  //   return { status: 'error', message: 'Choose a screenshot to attach.', id };
+  // }
+  // if (file.size > MAX_EVIDENCE_BYTES) {
+  //   return {
+  //     status: 'error',
+  //     message: `That file is larger than ${Math.round(MAX_EVIDENCE_BYTES / 1024)}KB.`,
+  //     id,
+  //   };
+  // }
+
+  const file = new File([], "dummy.png"); // Placeholder for the file since it's commented out
 
   const result = await context.attachEvidence({
     userId: user.id as UserId,

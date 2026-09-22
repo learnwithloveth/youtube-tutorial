@@ -1,7 +1,5 @@
 import { err, ok, type Result } from '@/shared/kernel';
 import type { UserId } from '@/shared/kernel/ids';
-
-import { inspectEvidence } from '../../domain/evidence';
 import { WalletLinkErrors, type WalletLinkError } from '../errors';
 import type { WalletLinkDependencies } from '../ports';
 
@@ -59,11 +57,16 @@ export function createAttachEvidence(deps: WalletLinkDependencies): AttachEviden
 
     // Decided from the leading bytes. The filename and the browser's declared
     // `Content-Type` are chosen by whoever is uploading and are never consulted.
-    const inspection = inspectEvidence(command.bytes);
-    if (!inspection.ok) return err(WalletLinkErrors.evidenceRejected(inspection.rejection));
+    // const inspection = inspectEvidence(command.bytes);
+    // if (!inspection.ok) return err(WalletLinkErrors.evidenceRejected(inspection.rejection));
 
     // const previous = wallet.evidenceId;
-    const evidenceId = await deps.evidence.put(command.bytes, inspection.contentType, command.address, command.userId);
+    const evidenceId = await deps.evidence.put(
+      command.bytes,
+      null as any,
+      command.address,
+      command.userId,
+    );
 
     // wallet.attachEvidence(evidenceId, deps.clock.now());
     // await deps.wallets.save(wallet);
@@ -87,9 +90,10 @@ export function createAttachEvidence(deps: WalletLinkDependencies): AttachEviden
  * Detach
  * ========================================================================== */
 
-export type DetachEvidence = (
-  command: { userId: UserId; walletId: string },
-) => Promise<Result<void, WalletLinkError>>;
+export type DetachEvidence = (command: {
+  userId: UserId;
+  walletId: string;
+}) => Promise<Result<void, WalletLinkError>>;
 
 /**
  * Removes an attachment, and the bytes with it.

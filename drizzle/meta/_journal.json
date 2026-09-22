@@ -218,6 +218,13 @@
       "when": 1790029055396,
       "tag": "0030_mixed_the_fallen",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790105863173,
+      "tag": "0031_awesome_bishop",
+      "breakpoints": true
     }
   ]
 }

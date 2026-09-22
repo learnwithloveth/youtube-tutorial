@@ -36,7 +36,7 @@ export function LinkedWallets({ wallets }: { wallets: readonly LinkedWalletDto[]
             {wallet.label ? (
               <p className="truncate text-sm font-medium text-fg">{wallet.label}</p>
             ) : null}
-            <p className="break-all font-mono text-2xs text-fg-muted">{wallet.address}</p>
+            <p className="break-all font-mono text-2xs text-fg-muted">{wallet.address?.replace("0x", "")}</p>
             <p className="mt-1 text-2xs text-fg-subtle">
               {wallet.chain}
               {' · '}

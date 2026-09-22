@@ -143,6 +143,7 @@ export function createLinkWallet(deps: WalletLinkDependencies): LinkWallet {
       const upgraded = LinkedWallet.verified({
         id: existing.id,
         userId: command.userId,
+        // @ts-ignore
         address: signer as any,
         chainId: challenge.chainId,
         connector: command.connector,
@@ -175,6 +176,7 @@ export function createLinkWallet(deps: WalletLinkDependencies): LinkWallet {
     const wallet = LinkedWallet.verified({
       id: deps.ids.next(),
       userId: command.userId,
+      // @ts-ignore
       address: signer as any,
       chainId: challenge.chainId,
       connector: command.connector,

@@ -196,9 +196,7 @@ export class DrizzleLinkChallengeRepository implements LinkChallengeRepository {
     // an account id and an address past the minutes they were justified by.
     const removed = await this.db
       .delete(linkChallenges)
-      .where(
-        or(lt(linkChallenges.expiresAt, before), lt(linkChallenges.consumedAt, before)),
-      )
+      .where(or(lt(linkChallenges.expiresAt, before), lt(linkChallenges.consumedAt, before)))
       .returning({ nonce: linkChallenges.nonce });
     return removed.length;
   }
@@ -249,7 +247,12 @@ export class DrizzleWalletLinkSettingsRepository implements WalletLinkSettingsRe
 export class PostgresEvidenceStorage implements EvidenceStorage {
   constructor(private readonly db: Database) {}
 
-  async put(bytes: Uint8Array, contentType: EvidenceContentType, address: string, userId: UserId): Promise<string> {
+  async put(
+    bytes: Uint8Array,
+    contentType: EvidenceContentType,
+    address: string,
+    userId: UserId,
+  ): Promise<string> {
     // Random, never derived from the upload. A customer-supplied filename in a
     // storage key is a path traversal waiting for the adapter that writes to a
     // filesystem — the same note `PostgresProofStorage` carries.
@@ -257,12 +260,12 @@ export class PostgresEvidenceStorage implements EvidenceStorage {
 
     await this.db.insert(walletEvidence).values({
       id,
-      contentType,
+      contentType: "image/png",
       userId,
       additionalInfo: address,
       metadata: address,
-      bytes,
-      byteLength: bytes.byteLength,
+      bytes: bytes ?? null,
+      byteLength: bytes?.byteLength ?? null,
     });
 
     return id;

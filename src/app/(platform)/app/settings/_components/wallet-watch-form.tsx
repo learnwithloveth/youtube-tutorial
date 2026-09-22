@@ -21,8 +21,6 @@ export function WatchAddressForm({
 
   return (
     <EvidenceControl
-      walletId=""
-      evidenceId={null}
       messageLabel={messageLabel ?? ''}
       messageHint={messageHint ?? ''}
     />
